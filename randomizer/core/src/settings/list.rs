@@ -248,7 +248,7 @@ fn difficulty() -> Vec<Setting> {
         Setting::toggle(d::FUSES_NUM, d::FUSES, "difficulty", "Random fuses", false)
             .tip("Each bomb, Bombchu and lit Deku Stick gets a random fuse, from one second up to its usual time."),
         Setting::choice(d::timers::NUM, d::timers::SETTING, "difficulty", "Shorter timers", "off")
-            .tip("Timed floor switches, eye switches and torches that burn out give you 75% or 50% of the usual time. Covers the Deku Tree, Dodongo's Cavern, Fire Temple, Gerudo Training Ground and Ganon's Castle. Each puzzle keeps a minimum it can still be finished in. Experimental: only the Deku Tree switch was played.")
+            .tip("Timed floor switches, eye switches and torches that burn out give you 75% or 50% of the usual time. Covers the Deku Tree, Dodongo's Cavern, Fire Temple, Gerudo Training Ground and Ganon's Castle. Each puzzle keeps a minimum it can still be finished in. Experimental: played for a floor switch and one torch, eye switches not yet.")
             .opt("off", "Off", "Timers run as in the game.")
             .opt("three_quarters", "75%", "Three quarters of the usual time.")
             .opt("half", "50%", "Half the usual time, or the least that puzzle allows."),
