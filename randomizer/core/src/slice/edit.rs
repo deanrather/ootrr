@@ -488,6 +488,13 @@ pub fn build_with(seed: &SeedFile, romfs: &P, load: &P, mod_name: &str, host: Ho
     } else {
         Vec::new()
     };
+    let mega_lines: Vec<String> = if p.difficulty.mega_like {
+        let (n, l): (usize, Vec<String>) = crate::difficulty::mega_like::write(&mut rf, &pk, &mut rst)?;
+        extra += n;
+        l
+    } else {
+        Vec::new()
+    };
     if p.open.epona {
         extra += crate::open_world::write_epona_event(&mut rf, &pk, &mut rst)?;
     }
@@ -580,6 +587,10 @@ pub fn build_with(seed: &SeedFile, romfs: &P, load: &P, mod_name: &str, host: Ho
     if !volvagia_lines.is_empty() {
         notes.push("Volvagia roams, files made:".to_string());
         notes.extend(volvagia_lines.iter().map(|l| format!("  {l}")));
+    }
+    if !mega_lines.is_empty() {
+        notes.push("Mega Like Likes, files made:".to_string());
+        notes.extend(mega_lines.iter().map(|l| format!("  {l}")));
     }
     if let Some((_, a)) = &loads {
         notes.push(format!("{} events now load the flows their edited events call:", a.len()));
