@@ -247,6 +247,11 @@ fn difficulty() -> Vec<Setting> {
             .tip("Three bigger, tougher Like Likes wait in the Deku Tree meadow of Kokiri Forest, as a child and as an adult. When one swallows you it takes one of your shields, any of them, the Mirror Shield first, then the Hylian Shield, then the Deku Shield. The shield stays gone until a mega Like Like is killed: any one of them gives back one shield you have owned and no longer have, the Mirror Shield first. Nothing is saved for this: the missing shield is the record. They come back every time the area loads. A shield that a normal Like Like swallowed, or a Deku Shield that burned, is also given back by a mega Like Like. If you build without this setting while a shield is missing, nothing gives it back. Experimental, untested in the game."),
         Setting::toggle(d::FUSES_NUM, d::FUSES, "difficulty", "Random fuses", false)
             .tip("Each bomb, Bombchu and lit Deku Stick gets a random fuse, from one second up to its usual time."),
+        Setting::choice(d::timers::NUM, d::timers::SETTING, "difficulty", "Shorter timers", "off")
+            .tip("Timed floor switches, eye switches and torches that burn out give you 75% or 50% of the usual time. Covers the Deku Tree, Dodongo's Cavern, Fire Temple, Gerudo Training Ground and Ganon's Castle. Each puzzle keeps a minimum it can still be finished in. Experimental: played for a floor switch and one torch, eye switches not yet.")
+            .opt("off", "Off", "Timers run as in the game.")
+            .opt("three_quarters", "75%", "Three quarters of the usual time.")
+            .opt("half", "50%", "Half the usual time, or the least that puzzle allows."),
         Setting::toggle(d::RANDOMIZER_NUM, d::RANDOMIZER, "difficulty", "Enemy randomizer", false)
             .tip("Enemies are swapped for other kinds that live on the same kind of ground. Enemies a door or puzzle counts are left alone."),
         Setting::choice(d::SIZES_NUM, d::SIZES, "difficulty", "Random enemy sizes", "off")
