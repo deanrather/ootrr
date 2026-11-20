@@ -238,7 +238,7 @@ fn difficulty() -> Vec<Setting> {
         Setting::toggle(d::BOWLING_NUM, d::BOWLING, "difficulty", "Unbreakable Bombchu Bowling grass", false)
             .tip("The grass in the Bombchu Bowling lanes can't be broken, so steer your Bombchus around it."),
         Setting::toggle(d::FIREBALLS_NUM, d::FIREBALLS, "difficulty", "Fireball storms", false)
-            .tip("Burning rocks rain down on a few quiet stretches of Hyrule Field and the Hyrule Castle garden, like on Death Mountain. Dodge them."),
+            .tip("Burning rocks rain down on quiet stretches of Hyrule Field, Desert Colossus, the Haunted Wasteland and the Castle garden, and on every visit to the Death Mountain Trail. Dodge them."),
         Setting::toggle(d::SPAWN_COMBO_NUM, d::SPAWN_COMBO, "difficulty", "Spawn enemies (sticks + D-pad)", false)
             .tip("For fun and practice. Hold both sticks in and press D-pad Down for a random enemy in front of Link, or Up for the same kind again. Up to twelve at once."),
         Setting::toggle(d::FAIRY_HELPS_NUM, d::FAIRY_HELPS, "difficulty", "Fairies help enemies too", false)
