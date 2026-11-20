@@ -1,4 +1,4 @@
-use super::drops::{Cut, AMMO, HEART};
+use super::drops::{Cut, HEART};
 use crate::error::{Error, Res};
 
 pub const FILE: &str = "GameParameter/DropGlobalParam/Default.game__drop__DropGlobalParam.bgyml";
@@ -8,7 +8,6 @@ pub const BOOST: &str = "AddProbability";
 pub const SWAPS: &str = "ReplaceSetting";
 pub const SWAP_LIST: &str = "ReplaceActor";
 pub const HEART_SLOTS: [&str; 1] = ["HpActor"];
-pub const AMMO_SLOTS: [&str; 8] = ["ArrowActor", "ArrowActorMid", "BombActor", "BombchuActor", "DekuNutActor", "DekuSeedActor", "DekuSeedActorMid", "DekuStickActor"];
 pub const HEART_ACTOR: &str = "Work/Actor/Obj_Heart.engine__actor__ActorParam.gyml";
 pub const FILLER: &str = "Work/Actor/Obj_Rupee_Green.engine__actor__ActorParam.gyml";
 
@@ -141,7 +140,7 @@ pub fn edit(raw: &[u8], c: Cut) -> Res<Option<Vec<u8>>> {
     let top: Vec<(String, Slot)> = d.map(d.root()?)?;
     let master: Vec<(String, Slot)> = d.map(find(&top, MASTER).ok_or(Error::Format("difficulty: the drop lottery file has no master data"))?)?;
     let filler: u32 = d.strs.iter().position(|s| s == FILLER).ok_or(Error::Format("difficulty: the drop lottery file never names the green rupee"))? as u32;
-    let wanted = |t: u32| -> bool { (c.hearts && t == HEART) || (c.ammo && AMMO.contains(&t)) };
+    let wanted = |t: u32| -> bool { c.hearts && t == HEART };
     let mut puts: Vec<(usize, u32)> = Vec::new();
     for name in NEEDS {
         let Some(s) = find(&master, name) else {
@@ -164,9 +163,6 @@ pub fn edit(raw: &[u8], c: Cut) -> Res<Option<Vec<u8>>> {
     let mut slots: Vec<&str> = Vec::new();
     if c.hearts {
         slots.extend(HEART_SLOTS);
-    }
-    if c.ammo {
-        slots.extend(AMMO_SLOTS);
     }
     for k in slots {
         if let Some(x) = find(&master, k)
@@ -207,6 +203,8 @@ mod tests {
     use super::*;
     use crate::romfs::Romfs;
 
+    pub const AMMO_SLOTS: [&str; 8] = ["ArrowActor", "ArrowActorMid", "BombActor", "BombchuActor", "DekuNutActor", "DekuSeedActor", "DekuSeedActorMid", "DekuStickActor"];
+
     fn boosts(raw: &[u8]) -> Res<Vec<(u32, i32)>> {
         let d: Doc = Doc::open(raw)?;
         let master: Vec<(String, Slot)> = d.map(find(&d.map(d.root()?)?, MASTER).ok_or_else(cut)?)?;
@@ -243,7 +241,7 @@ mod tests {
     }
 
     #[test]
-    fn the_game_lottery_stops_handing_out_hearts_and_ammo_when_supplies_are_low() {
+    fn the_game_lottery_stops_handing_out_hearts_but_keeps_the_ammo_boost() {
         let Some(raw) = game() else {
             eprintln!("skipped: set OOTRR_ROMFS");
             return;
@@ -261,13 +259,20 @@ mod tests {
         assert_eq!(actor_of(&hearts, "MpActor").unwrap(), actor_of(&raw, "MpActor").unwrap());
         assert!(!String::from_utf8_lossy(&hearts).is_empty());
         let both: Vec<u8> = edit(&raw, Cut { hearts: true, ammo: true }).unwrap().unwrap();
+        assert_eq!(both, hearts, "cutting ammo leaves the lottery alone so the boss fights keep the game's low-ammo help");
+        assert!(edit(&raw, Cut { hearts: false, ammo: true }).unwrap().is_none());
+        let ammo_types: [u32; 5] = [super::super::drops::SHOTS, super::super::drops::BOMB, super::super::drops::NUT, super::super::drops::STICK, super::super::drops::ARROWS];
+        let kept: Vec<(u32, i32)> = boosts(&both).unwrap();
+        for (t, v) in kept.iter().filter(|(t, _)| ammo_types.contains(t)) {
+            assert!(*v > 0, "type {t} keeps its low-supply boost");
+        }
         for (t, v) in boosts(&both).unwrap() {
-            if t == HEART || [super::super::drops::SHOTS, super::super::drops::BOMB, super::super::drops::NUT, super::super::drops::STICK, super::super::drops::ARROWS].contains(&t) {
+            if t == HEART {
                 assert_eq!(v, 0, "type {t}");
             }
         }
         for k in AMMO_SLOTS {
-            assert_eq!(actor_of(&both, k).unwrap().as_deref(), Some(FILLER), "{k}");
+            assert_eq!(actor_of(&both, k).unwrap(), actor_of(&raw, k).unwrap(), "{k} keeps its actor so boss drops still resolve");
         }
         assert_eq!(actor_of(&both, "MpActor").unwrap(), actor_of(&raw, "MpActor").unwrap());
         assert_eq!(actor_of(&both, "FairyActorName").unwrap(), actor_of(&raw, "FairyActorName").unwrap());

@@ -212,8 +212,8 @@ fn difficulty() -> Vec<Setting> {
             .tip("Enemies, pots and grass never drop recovery hearts. Hearts placed as items in the seed are still there."),
         Setting::toggle(d::NO_FAIRIES_NUM, d::NO_FAIRIES, "difficulty", "No gossip fairies", false)
             .tip("Playing a song at a gossip stone no longer brings out a healing fairy."),
-        Setting::toggle(d::NO_AMMO_NUM, d::NO_AMMO, "difficulty", "No ammo drops", false)
-            .tip("Enemies, pots and grass never drop arrows, seeds, bombs, nuts or sticks. Shops and chests still have them, and the logic does not plan for this. Tested on grass only."),
+        Setting::toggle(d::NO_AMMO_NUM, d::NO_AMMO, "difficulty", "Limited ammo", false)
+            .tip("Enemies, pots and grass never drop arrows, seeds, bombs, nuts or sticks, except where a boss fight stocks them: Gohma's larvae and eggs, the pots before the boss doors, the final battle rubble and Poe Meg. Shops and chests still have them, and the logic does not plan for this. Not played in the game yet."),
         Setting::toggle(d::LOSE_HEART_NUM, d::LOSE_HEART, "difficulty", "Lose heart on death", false)
             .tip("Each game over costs a heart container, down to three. Being saved by a bottled fairy does not count. Quitting to the title screen gives the hearts back."),
         Setting::toggle(d::NO_BOTTLES_NUM, d::NO_BOTTLES, "difficulty", "No bottles during combat", false)

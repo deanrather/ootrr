@@ -205,8 +205,8 @@ impl Opts {
             out.push("Enemies, pots, grass and other random drops never give recovery hearts. Where the game would hand you a heart because you're low, you get a green rupee.".to_string());
         }
         if self.no_ammo {
-            let shops: &str = if self.shops { " Shopsanity is on: a special deal can take the place of a shelf that sold ammo, and the logic doesn't check that ammo can still be bought, so the only arrows may be in a shop you can't afford or reach yet." } else { "" };
-            out.push(format!("Enemies, pots, grass and other random drops never give arrows, seeds, bombs, Deku Nuts or Deku Sticks.{shops} Seen working on grass; pots and enemy drops are untested."));
+            let shops: &str = if self.shops { " Shopsanity is on: a special deal can take the place of a shelf that sold arrows, bombs or seeds, and the logic does not check that any ammo can still be bought, so you may find a seed where the only arrows are in the shops you cannot afford or cannot reach." } else { "" };
+            out.push(format!("Enemies, pots, grass and other random drops never give arrows, seeds, bombs, Deku Nuts or Deku Sticks, except where the game stocks a boss fight: the Gohma larvae and eggs, the pots before the boss doors, the Ganon castle rubble and the Poe Meg fight.{shops} Round 2 is not played in the game yet."));
         }
         if self.no_fairies {
             out.push("Playing a song at a gossip stone no longer brings out a fairy.".to_string());
@@ -361,7 +361,7 @@ fn edit_entry(e: &Entry, o: &Opts) -> Res<Option<Vec<u8>>> {
         return if stats::is_enemy(s) { stats::pace(&e.data, o.speed) } else { Ok(None) };
     }
     if n.starts_with(drops::DIR) {
-        return drops::edit(&e.data, o.cut());
+        return drops::edit(&e.data, drops::for_table(n, o.cut()));
     }
     if o.no_target
         && let Some(s) = stats::stem(n, target::DIR, target::EXT)
