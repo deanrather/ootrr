@@ -563,7 +563,7 @@ mod tests {
         s.set(ENTRANCES, Value::s("dungeons")).unwrap();
         let o: Opts = read(&s, &mut bad);
         assert!(o.entrances == gates::Shuffle::Dungeons && o.gates());
-        assert_eq!(o.gate_list().iter().map(|g| g.id).collect::<Vec<u8>>(), vec![3, 4, 5, 9, 11, 12, 13]);
+        assert_eq!(o.gate_list().iter().map(|g| g.id).collect::<Vec<u8>>(), vec![3, 4, 5, 9, 11, 12, 13, 23]);
         assert!(o.notes().iter().any(|n| n.contains("dungeon entrances are shuffled")));
         s.set(ENTRANCES, Value::s("everything")).unwrap();
         let o: Opts = read(&s, &mut bad);
