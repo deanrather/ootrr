@@ -1,6 +1,6 @@
 # 29. Fireball storms
 
-Setting `fireball_storms` (number 140), toggle, default off. Difficulty page, new section "Hazards" (it is a danger of the place, not an enemy). Branch `feature/fireball-storms`, worktree `wt\fireballs`. Not played yet.
+Setting `fireball_storms` (number 140), toggle, default off. Difficulty page, new section "Hazards" (it is a danger of the place, not an enemy). Branch `feature/fireball-storms`, worktree `wt\fireballs`. Not played yet. Extended on `feature/fireball-storms-2` (see "Extension 2" at the end).
 
 ## What was asked (user, 20 Nov)
 
@@ -86,3 +86,43 @@ In rc 16 as setting 140 (the "Setting and menu" section above still says 134, wh
 - **Played by hand** (session 6, 20 Nov): the middle-road storm (rocks arc in and burn; slow to start, about 5 s) and the castle garden storm (the guards behave).
 - **Seen:** the frame rate in child Hyrule Field was about 30 to 37 with more enemies at 5x plus the storm (60 before). Not measured with the storm alone.
 - **Not played:** `field_south_central`, `field_west_road`, and the adult field.
+
+## Extension 2 (20 Nov): the Trail on every visit, and four more spots
+
+Branch `feature/fireball-storms-2`. Not played yet.
+
+### What was asked (user, 20 Nov)
+The Death Mountain Trail storm should also run on every visit, child and adult, not only on the first child visit. And four more places: Desert Colossus (child), two in Hyrule Field (child) and the Haunted Wasteland (child; the game spells it `HountedWasteland`), each also in the adult map if the ground is the same.
+
+### How the Trail storm is freed
+The Trail's five `Obj_FallingRockManager_A_04` (per age) each have a Logic module `DeathMountainTrail_<Age>_Prefab_<tag>`. Four per age are the plain shape described above: an `Area` whose `Logic_Delete` input is an OR of a "story is past" flag, so the area is deleted for good and the storm stops. Child: `MountainTrail_HasReachedPeak_Child` and the Great Fairy flag. Adult: `MountainTrail_HasReachedPeak_Adult` and `HavePlayedEvent.Dm_Kakariko_0025`. With the setting on the build rewrites those 8 graphs (`TRAIL` in `fireballs.rs`) and turns that one `Logic_Delete` input into the constant false (the same graph edit `force_bool` the other features use). Nothing else in the graph changes, the flag nodes stay, and the story events that set the flags are untouched, so the storm now runs whenever Link stands in its area, on every visit and in both ages. Map files are not written; the Trail maps stay byte-identical.
+
+Left vanilla on purpose: the fifth A_04 per age (`DeathMountainTrail_Child_Prefab_128e`, `_Adult_Prefab_e4bd`), the `A_05` fan (`..._4399`, `..._f137`) and the `A_01` rail rocks. They are wired to the demo flags `MountainTrail_ChildFallingRockDemoActivated` / `MountainTrail_AdultFallingRockDemoActivated` (set and cleared by the cutscene), so freeing them would fire them without the demo. The test checks that exactly these are the ones not rewritten and that each is demo-gated.
+
+The adult Trail has the same managers (same positions), so adult gets the same four.
+
+### New spots
+Positions come from the actor the user pointed at (hash `id=` in the object map), read from the map file; the ground height from the navigation mesh. Child and adult navmesh agree within 0.3 at every point (the Haunted Wasteland meshes are identical). All four exist in both ages, so every spot is in both. Each box is 32 x 12 x 30 (the desert box 28 wide); landing spots 0.5 above the ground, at least 4 from any navmesh wall, at least 9 from NPCs and enemies at the same height and at least 12 from arrival points, entrances and holes.
+
+| Spot | Maps | Anchor actor | Trigger centre | Manager | Landing spots (x, z) |
+|---|---|---|---|---|---|
+| `desert_colossus_flats` | `DesertColossus_Child`, `_Adult` | `0x19a1413932e31971`, a liftable rock at (-144.2, 95.0, -43.1) | (-137, 98.7, -43), 28 x 12 x 30 | (-60, 160, -70) | (-137,-43) (-131,-47) (-131,-38) (-141,-48) (-137,-33) (-126,-43) |
+| `field_south_east` | `HyruleField_Child`, `_Adult` | `0xcc590b2369acd50c`, an insect effect at (135.4, 159.6, 218.6) next to a navmesh obstacle | (133, 162.8, 214) | (60, 225, 235) | (145,218) (145,208) (135,205) (120,208) (120,218) (145,228) |
+| `field_near_market` | same | `0x92db1c457b586c10`, a rock at (-7.4, 148.4, 94.8) | (-33, 152.8, 92) | (-110, 212, 70) | (-26,92) (-36,88) (-41,98) (-31,100) (-26,106) (-36,80) |
+| `wasteland_dunes` | `HountedWasteland_Child`, `_Adult` | `0x864c47bd60c6787e`, a forbid-auto-placement box at (-56.0, 102.1, -55.3) | (-56, 103.4, -55) | (-125, 165, -100) | (-52,-47) (-46,-52) (-66,-50) (-45,-67) (-61,-42) (-44,-60) |
+
+Why the centres moved from the pointed-at place:
+- `field_near_market`: the Lake Hylia arrival point `HyruleField_FromLakeHylia` is at (0.1, 149.7, 98.6), 8 from the pointed-at place, and the adult Big Poe stands at (-0.5, 156.8, 108.6). The box moved 25 to the west so neither is inside it and no rock lands within 17 of the arrival; adult landing spots are at least 25 from the Poe.
+- `field_south_east`: a navmesh obstacle (probably a tree) sits at about (132, 218); landing spots ring it.
+- `desert_colossus_flats`: the Guay flock manager stands at (-152.2, 100.8, -44.6) and Guay spawn anchors lie west of the rock; box and landing spots sit east of it. No landing spot is on the liftable rock.
+- `wasteland_dunes`: the adult map has five `Enemy_Leever_Fixed`, one at (-59.0, 99.2, -59.6), so the centre landing spot of the child layout was moved off it (all at least 12 from every leever). The Wasteland ground is open in a 40-unit radius.
+
+The Wasteland sandstorm may hide the rocks until they are close: that is a view question for the playtest.
+
+### Tests added (`difficulty/fireballs.rs`, game files)
+- `the_trail_storms_run_on_every_visit_only_with_the_setting_on`: the five A_04 modules per age are found from the Trail maps; four are in `TRAIL`, the fifth has the demo flag and is not written; each rewritten graph keeps its node count and audits clean, its one deletable area is linked before and not after, the manager and flag nodes are intact, and building twice gives the same bytes. Setting off writes no Trail file; on writes exactly the 8.
+- `the_new_spots_have_open_ground_and_the_ages_they_claim`: every anchor at least 4 from a navmesh wall in both ages; each new spot lists both ages.
+- Extended: the map test (now 8 spots, 7 map files) also checks that no trigger box holds an arrival point, entrance or hole and no landing spot is within 12 of one (static and dynamic actors); the setting-off/on file lists; the anchors-on-the-ground test covers every age of the new spots.
+
+### How to test it in the game
+Load each map (child and adult), stand in each box, and run up the Trail on a save that has already been to the peak (child) and as an adult before the Kakariko event.

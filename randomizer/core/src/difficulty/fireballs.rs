@@ -19,7 +19,7 @@ pub const PREFIX: &str = "Hazard_FireballStorm_";
 pub const SEED: &str = "ootrr fireball storms";
 pub const LIFT: f32 = 0.5;
 
-pub const NOTE: &str = "Burning rocks rain down, as on the Death Mountain Trail, while you stand in three quiet stretches of Hyrule Field (child and adult) or the Hyrule Castle garden (child), and stop when you leave. A rock hits as hard as on the mountain.";
+pub const NOTE: &str = "Burning rocks rain down, as on the Death Mountain Trail, while you stand in quiet stretches of Hyrule Field, Desert Colossus and the Haunted Wasteland (child and adult) or the Hyrule Castle garden (child), and stop when you leave. The Death Mountain Trail storms run on every visit, child and adult. A rock hits as hard as on the mountain.";
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Spot {
@@ -29,6 +29,7 @@ pub struct Spot {
     pub area: [f32; 3],
     pub size: [f32; 3],
     pub manager: [f32; 3],
+    pub volcano: [f32; 2],
     pub anchors: &'static [[f32; 3]],
     pub interval: f32,
     pub fall: f32,
@@ -36,15 +37,34 @@ pub struct Spot {
 
 pub const FIELD: &[&str] = &["HyruleField_Child", "HyruleField_Adult"];
 pub const CASTLE: &[&str] = &["HyruleCastle"];
+pub const DESERT: &[&str] = &["DesertColossus_Child", "DesertColossus_Adult"];
+pub const WASTELAND: &[&str] = &["HountedWasteland_Child", "HountedWasteland_Adult"];
 
-pub const SPOTS: [Spot; 4] = [
+pub const FIELD_VOLCANO: [f32; 2] = [801.0, -370.0];
+pub const CASTLE_VOLCANO: [f32; 2] = [1468.0, 478.0];
+pub const DESERT_VOLCANO: [f32; 2] = [187.0, -10.0];
+pub const WASTELAND_VOLCANO: [f32; 2] = [182.0, 87.0];
+
+pub const TRAIL: [&str; 8] = [
+    "Logic/DeathMountainTrail_Child_Prefab_0656.logic.module.ainb",
+    "Logic/DeathMountainTrail_Child_Prefab_2eb6.logic.module.ainb",
+    "Logic/DeathMountainTrail_Child_Prefab_7fa0.logic.module.ainb",
+    "Logic/DeathMountainTrail_Child_Prefab_90f5.logic.module.ainb",
+    "Logic/DeathMountainTrail_Adult_Prefab_3212.logic.module.ainb",
+    "Logic/DeathMountainTrail_Adult_Prefab_f25f.logic.module.ainb",
+    "Logic/DeathMountainTrail_Adult_Prefab_f378.logic.module.ainb",
+    "Logic/DeathMountainTrail_Adult_Prefab_fb7b.logic.module.ainb",
+];
+
+pub const SPOTS: [Spot; 8] = [
     Spot {
         name: "field_middle_road",
         dir: "HyruleField",
         maps: FIELD,
         area: [75.0, 152.9, 95.0],
         size: [32.0, 12.0, 30.0],
-        manager: [170.0, 216.0, 60.0],
+        manager: [157.0, 216.0, 36.0],
+        volcano: FIELD_VOLCANO,
         anchors: &[[75.0, 149.4, 95.0], [85.0, 149.9, 100.0], [65.0, 149.7, 100.0], [80.0, 149.1, 85.0], [70.0, 150.2, 105.0], [85.0, 149.3, 90.0]],
         interval: 45.0,
         fall: 3.5,
@@ -55,7 +75,8 @@ pub const SPOTS: [Spot; 4] = [
         maps: FIELD,
         area: [55.0, 163.0, 190.0],
         size: [32.0, 12.0, 30.0],
-        manager: [150.0, 226.0, 160.0],
+        manager: [136.0, 226.0, 132.0],
+        volcano: FIELD_VOLCANO,
         anchors: &[[55.0, 159.5, 190.0], [65.0, 158.3, 195.0], [45.0, 161.1, 195.0], [60.0, 158.1, 180.0], [50.0, 160.2, 200.0], [65.0, 157.7, 185.0]],
         interval: 45.0,
         fall: 3.5,
@@ -66,7 +87,8 @@ pub const SPOTS: [Spot; 4] = [
         maps: FIELD,
         area: [-170.0, 137.1, 170.0],
         size: [32.0, 12.0, 30.0],
-        manager: [-75.0, 200.0, 135.0],
+        manager: [-80.0, 200.0, 123.0],
+        volcano: FIELD_VOLCANO,
         anchors: &[[-170.0, 133.6, 170.0], [-160.0, 133.0, 175.0], [-180.0, 132.7, 175.0], [-165.0, 134.3, 160.0], [-175.0, 132.7, 180.0], [-160.0, 133.5, 165.0]],
         interval: 45.0,
         fall: 3.5,
@@ -77,9 +99,58 @@ pub const SPOTS: [Spot; 4] = [
         maps: CASTLE,
         area: [14.0, 118.0, -76.0],
         size: [44.0, 10.0, 26.0],
-        manager: [14.0, 186.0, -165.0],
+        manager: [100.0, 186.0, -55.0],
+        volcano: CASTLE_VOLCANO,
         anchors: &[[25.0, 114.5, -74.0], [28.0, 114.5, -80.0], [4.0, 114.5, -71.0], [25.0, 114.5, -89.0], [-14.0, 114.5, -86.0]],
         interval: 60.0,
+        fall: 3.5,
+    },
+    Spot {
+        name: "desert_colossus_flats",
+        dir: "DesertColossus",
+        maps: DESERT,
+        area: [-137.0, 98.7, -43.0],
+        size: [28.0, 12.0, 30.0],
+        manager: [-56.0, 160.0, -47.0],
+        volcano: DESERT_VOLCANO,
+        anchors: &[[-137.0, 95.2, -43.0], [-131.0, 95.1, -47.0], [-131.0, 95.3, -38.0], [-141.0, 95.2, -48.0], [-137.0, 95.2, -33.0], [-126.0, 95.4, -43.0]],
+        interval: 45.0,
+        fall: 3.5,
+    },
+    Spot {
+        name: "field_south_east",
+        dir: "HyruleField",
+        maps: FIELD,
+        area: [133.0, 162.8, 214.0],
+        size: [32.0, 12.0, 30.0],
+        manager: [192.0, 225.0, 167.0],
+        volcano: FIELD_VOLCANO,
+        anchors: &[[145.0, 158.8, 218.0], [145.0, 159.9, 208.0], [135.0, 160.4, 205.0], [120.0, 160.4, 208.0], [120.0, 158.3, 218.0], [145.0, 157.5, 228.0]],
+        interval: 45.0,
+        fall: 3.5,
+    },
+    Spot {
+        name: "field_near_market",
+        dir: "HyruleField",
+        maps: FIELD,
+        area: [-33.0, 152.8, 92.0],
+        size: [32.0, 12.0, 30.0],
+        manager: [35.0, 212.0, 49.0],
+        volcano: FIELD_VOLCANO,
+        anchors: &[[-26.0, 149.3, 92.0], [-36.0, 149.4, 88.0], [-41.0, 149.2, 98.0], [-31.0, 149.3, 100.0], [-26.0, 149.4, 106.0], [-36.0, 149.0, 80.0]],
+        interval: 45.0,
+        fall: 3.5,
+    },
+    Spot {
+        name: "wasteland_dunes",
+        dir: "HountedWasteland",
+        maps: WASTELAND,
+        area: [-56.0, 103.4, -55.0],
+        size: [32.0, 12.0, 30.0],
+        manager: [18.0, 165.0, -19.0],
+        volcano: WASTELAND_VOLCANO,
+        anchors: &[[-52.0, 99.6, -47.0], [-46.0, 99.4, -52.0], [-66.0, 98.6, -50.0], [-45.0, 100.6, -67.0], [-61.0, 99.3, -42.0], [-44.0, 99.2, -60.0]],
+        interval: 45.0,
         fall: 3.5,
     },
 ];
@@ -193,6 +264,25 @@ pub fn graph(raw: &[u8], s: &Spot) -> Res<Out> {
     Ok(Out { path: p.graph, old: 0, new: g.len(), z: g })
 }
 
+pub fn free(raw: &[u8]) -> Res<Out> {
+    let mut a: Ainb = Ainb::parse(raw)?;
+    let managers: Vec<usize> = a.find_els(NODE);
+    if managers.len() != 1 {
+        return Err(E::Msg(format!("fireball storms: a Trail module holds {} falling rock managers, not 1", managers.len())));
+    }
+    let linked: Vec<usize> = a.find_els(AREA_NODE).into_iter().filter(|i| a.find_in(*i, BOOL, DELETE).and_then(|g| a.input(BOOL, g)).is_some_and(|x| x.src != -1)).collect();
+    if linked.len() != 1 {
+        return Err(E::Msg(format!("fireball storms: a Trail module has {} areas that can be deleted by a flag, not 1", linked.len())));
+    }
+    a.force_bool(linked[0], DELETE, false)?;
+    let bad: Vec<String> = audit(&a);
+    if !bad.is_empty() {
+        return Err(E::Msg(format!("the freed Trail module no longer checks out: {}", bad.join(", "))));
+    }
+    let g: Vec<u8> = a.write()?;
+    Ok(Out { path: String::new(), old: raw.len(), new: g.len(), z: g })
+}
+
 fn next(raws: &[&[u8]], taken: &mut Vec<u64>, seed: &str) -> u64 {
     let mut n: u32 = 0;
     loop {
@@ -278,6 +368,11 @@ pub fn stage(rf: &mut Romfs, have: Have) -> Res<Vec<Out>> {
     for s in SPOTS.iter() {
         outs.push(graph(&was, s)?);
     }
+    for path in TRAIL.iter() {
+        let mut o: Out = free(&source(rf, have, path)?)?;
+        o.path = path.to_string();
+        outs.push(o);
+    }
     for f in files() {
         let mut here: Vec<(&Spot, &str)> = Vec::new();
         for s in SPOTS.iter() {
@@ -315,7 +410,7 @@ mod tests {
 
     #[test]
     fn spots_are_laid_out_to_be_dodged() {
-        assert_eq!(SPOTS.len(), 4);
+        assert_eq!(SPOTS.len(), 8);
         for s in SPOTS.iter() {
             assert!(s.anchors.len() >= 3 && s.anchors.len() <= 8, "{}", s.name);
             assert!(s.interval >= 30.0 && s.fall >= 3.0, "{}", s.name);
@@ -336,6 +431,45 @@ mod tests {
         seen.sort();
         seen.dedup();
         assert_eq!(seen.len(), SPOTS.len());
+    }
+
+    fn bearing(from: [f32; 3], to: [f32; 2], toward: bool) -> f32 {
+        let d: [f32; 2] = if toward { [to[0] - from[0], to[1] - from[2]] } else { to };
+        d[1].atan2(d[0]).to_degrees()
+    }
+
+    #[test]
+    fn the_rocks_come_in_from_the_volcano() {
+        for s in SPOTS.iter() {
+            let far: bool = s.dir == "HyruleField" || s.dir == "HyruleCastle";
+            let want: f32 = bearing(s.area, s.volcano, far);
+            let got: f32 = bearing(s.area, [s.manager[0] - s.area[0], s.manager[2] - s.area[2]], false);
+            let off: f32 = ((got - want + 540.0) % 360.0 - 180.0).abs();
+            assert!(off <= 30.0, "{} thrower is {off} degrees off the volcano bearing", s.name);
+        }
+    }
+
+    #[test]
+    fn the_volcano_reference_is_the_maps_own_backdrop_and_the_thrower_clears_the_ground() {
+        let Some(root) = dump() else {
+            eprintln!("skipped: set OOTRR_ROMFS");
+            return;
+        };
+        let mut rf: Romfs = Romfs::open(&root).unwrap();
+        for (dir, map, at) in [("HyruleField", "HyruleField_Child", FIELD_VOLCANO), ("HyruleField", "HyruleField_Adult", FIELD_VOLCANO), ("HyruleCastle", "HyruleCastle", CASTLE_VOLCANO)] {
+            let y: Byml = rf.read_byml(&format!("Banc/{dir}/{map}_Static.bcett.byml.zs")).unwrap();
+            let far: &Node = y.root.get("Actors").unwrap().as_arr().unwrap().iter().find(|a| text(a, "Gyaml") == "Land_DeathMountainFar_A_01").unwrap();
+            let t: [f32; 3] = vec3(far, "Translate").unwrap();
+            assert!((t[0] - at[0]).abs() < 1.0 && (t[2] - at[1]).abs() < 1.0, "{map} backdrop is at {t:?}");
+        }
+        for s in SPOTS.iter() {
+            for m in s.maps {
+                let g: crate::difficulty::ground::Ground = crate::difficulty::ground::load(&mut rf, m).unwrap().unwrap();
+                for (y, _) in g.floors(s.manager[0], s.manager[2]) {
+                    assert!(s.manager[1] - y >= 20.0, "{} thrower is {} above the ground in {m}", s.name, s.manager[1] - y);
+                }
+            }
+        }
     }
 
     #[test]
@@ -372,7 +506,7 @@ mod tests {
         let mut rf: Romfs = Romfs::open(&root).unwrap();
         let all: Vec<Out> = stage(&mut rf, &none).unwrap();
         let (graphs, maps): (Vec<Out>, Vec<Out>) = all.into_iter().partition(|o| o.path.ends_with(".ainb"));
-        assert_eq!(graphs.len(), SPOTS.len());
+        assert_eq!(graphs.len(), SPOTS.len() + TRAIL.len());
         assert_eq!(maps.iter().map(|o| o.path.clone()).collect::<Vec<String>>(), files());
         assert!(maps.iter().all(|o| !o.path.contains("DeathMountain")));
         for o in &maps {
@@ -404,6 +538,15 @@ mod tests {
                 assert_eq!(refs[0].get("Reference"), m.get("Hash"));
                 assert_eq!(m.get("Links").unwrap().as_arr().unwrap().len(), s.anchors.len());
                 assert_eq!(m.get("Dynamic").and_then(|d| d.get("FallTime")), Some(&Node::F32(s.fall)));
+                let dynamic: Byml = rf.read_byml(&o.path.replace("_Static", "_Dynamic")).unwrap();
+                let every: Vec<&Node> = old.iter().chain(dynamic.root.get("Actors").unwrap().as_arr().unwrap().iter()).collect();
+                for n in every.iter().filter(|n| text(n, "Gyaml") == "StartPos" || text(n, "Gyaml").contains("Entrance") || text(n, "Gyaml").contains("HidingHole")) {
+                    let t: [f32; 3] = vec3(n, "Translate").unwrap();
+                    assert!(!(s.area[0] - s.size[0] / 2.0..=s.area[0] + s.size[0] / 2.0).contains(&t[0]) || !(s.area[2] - s.size[2] / 2.0..=s.area[2] + s.size[2] / 2.0).contains(&t[2]) || (t[1] - s.area[1]).abs() > 12.0, "{} trigger box holds {} at {t:?}", s.name, text(n, "Gyaml"));
+                    for at in s.anchors {
+                        assert!(near(*at, t) >= 12.0 || (at[1] - t[1]).abs() > 12.0, "{} anchor {at:?} lands within 12 of {} at {t:?}", s.name, text(n, "Gyaml"));
+                    }
+                }
                 for at in s.anchors {
                     for n in old.iter().filter(|n| text(n, "Gyaml").starts_with("Npc_") || text(n, "Gyaml").starts_with("Enemy_")) {
                         let t: [f32; 3] = vec3(n, "Translate").unwrap();
@@ -431,7 +574,7 @@ mod tests {
         assert!(off.is_empty());
         let on: Vec<Out> = crate::difficulty::stage(&mut rf, &crate::difficulty::Opts { fireballs: true, ..crate::difficulty::Opts::default() }, &none, "seed").unwrap();
         let mut paths: Vec<String> = on.iter().map(|o| o.path.clone()).collect();
-        let mut want: Vec<String> = SPOTS.iter().map(|s| s.plan().graph).chain(files()).collect();
+        let mut want: Vec<String> = SPOTS.iter().map(|s| s.plan().graph).chain(TRAIL.iter().map(|t| t.to_string())).chain(files()).collect();
         paths.sort();
         want.sort();
         assert_eq!(paths, want);
@@ -450,6 +593,74 @@ mod tests {
                 for a in s.anchors {
                     let (y, _): (f32, u32) = g.floor_near(a[0], a[1], a[2], 2.0, 2.0).unwrap_or_else(|| panic!("{} anchor {a:?} is off the ground in {m}", s.name));
                     assert!((a[1] - LIFT - y).abs() < 1.0, "{} anchor {a:?} is {} above the ground in {m}", s.name, a[1] - y);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_trail_storms_run_on_every_visit_only_with_the_setting_on() {
+        let Some(root) = dump() else {
+            eprintln!("skipped: set OOTRR_ROMFS");
+            return;
+        };
+        let mut rf: Romfs = Romfs::open(&root).unwrap();
+        let on: Vec<Out> = stage(&mut rf, &none).unwrap();
+        for age in ["Child", "Adult"] {
+            let y: Byml = rf.read_byml(&format!("Banc/DeathMountainTrail/DeathMountainTrail_{age}_Static.bcett.byml.zs")).unwrap();
+            let acts: &[Node] = y.root.get("Actors").unwrap().as_arr().unwrap();
+            let gs: &[Node] = y.root.get("AiGroups").unwrap().as_arr().unwrap();
+            let mut found: Vec<String> = Vec::new();
+            for m in acts.iter().filter(|a| text(a, "Gyaml") == MANAGER) {
+                for g in gs.iter().filter(|g| g.get("References").unwrap().as_arr().unwrap().iter().any(|r| r.get("Reference") == m.get("Hash"))) {
+                    let base: &str = text(g, "Logic").rsplit('/').next().unwrap().trim_end_matches(".ain");
+                    found.push(format!("Logic/{base}.ainb"));
+                }
+            }
+            assert_eq!(found.len(), 5, "{age}");
+            let mut freed: Vec<&String> = found.iter().filter(|f| TRAIL.contains(&f.as_str())).collect();
+            freed.sort();
+            assert_eq!(freed.len(), 4, "{age}");
+            for f in found.iter().filter(|f| !TRAIL.contains(&f.as_str())) {
+                let a: Ainb = Ainb::parse(&rf.read(f).unwrap()).unwrap();
+                let flags: Vec<&str> = a.find_els("HoldGameDataGetBoolSimple").into_iter().filter_map(|i| a.in_str(i, "GameDataNameBool")).collect();
+                assert!(flags.iter().any(|n| n.contains("FallingRockDemoActivated")), "{f} is not tied to the demo: {flags:?}");
+                assert!(on.iter().all(|o| &o.path != f), "{f} is the demo-gated storm and must stay vanilla");
+            }
+        }
+        for path in TRAIL.iter() {
+            let was: Ainb = Ainb::parse(&rf.read(path).unwrap()).unwrap();
+            let o: &Out = on.iter().find(|o| o.path == *path).unwrap();
+            let now: Ainb = Ainb::parse(&o.z).unwrap();
+            assert_eq!(now.els.len(), was.els.len(), "{path}");
+            assert!(audit(&now).is_empty());
+            let delete = |a: &Ainb| -> Vec<bool> { a.find_els(AREA_NODE).into_iter().map(|i| a.input(BOOL, a.find_in(i, BOOL, DELETE).unwrap()).unwrap().src != -1).collect() };
+            assert_eq!(delete(&was), vec![true], "{path}");
+            assert_eq!(delete(&now), vec![false], "{path}");
+            let m: usize = now.find_els(NODE)[0];
+            assert_eq!(now.prop_str(m, NAME), was.prop_str(was.find_els(NODE)[0], NAME));
+            assert_eq!(was.find_els("HoldGameDataGetBoolSimple").len(), now.find_els("HoldGameDataGetBoolSimple").len());
+            assert_eq!(free(&rf.read(path).unwrap()).unwrap().z, o.z);
+        }
+        let off: Vec<Out> = crate::difficulty::stage(&mut rf, &crate::difficulty::Opts::default(), &none, "seed").unwrap();
+        assert!(off.iter().all(|o| !o.path.contains("DeathMountainTrail")));
+        let again: Vec<Out> = crate::difficulty::stage(&mut rf, &crate::difficulty::Opts { fireballs: true, ..crate::difficulty::Opts::default() }, &none, "seed").unwrap();
+        assert_eq!(again.iter().filter(|o| o.path.contains("DeathMountainTrail")).count(), TRAIL.len());
+    }
+
+    #[test]
+    fn the_new_spots_have_open_ground_and_the_ages_they_claim() {
+        let Some(root) = dump() else {
+            eprintln!("skipped: set OOTRR_ROMFS");
+            return;
+        };
+        let mut rf: Romfs = Romfs::open(&root).unwrap();
+        for s in SPOTS.iter().filter(|s| s.dir != "HyruleCastle") {
+            assert_eq!(s.maps.len(), 2, "{}", s.name);
+            for m in s.maps {
+                let g: crate::difficulty::ground::Ground = crate::difficulty::ground::load(&mut rf, m).unwrap().unwrap();
+                for a in s.anchors {
+                    assert!(g.clear(*a) >= 4.0, "{} anchor {a:?} is {} from a wall in {m}", s.name, g.clear(*a));
                 }
             }
         }
