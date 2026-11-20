@@ -481,6 +481,13 @@ pub fn build_with(seed: &SeedFile, romfs: &P, load: &P, mod_name: &str, host: Ho
     extra += cow_files;
     let leever_classes: Vec<&str> = if p.difficulty.gate_list().iter().any(|g| g.new_kind == crate::difficulty::gates::LEEVER_GIANT) { vec![crate::difficulty::leevers::SMALL_CLASS, crate::difficulty::leevers::GIANT_CLASS] } else { Vec::new() };
     extra += crate::difficulty::leevers::write(&mut rf, &pk, &mut rst, &leever_classes)?;
+    let volvagia_lines: Vec<String> = if p.difficulty.volvagia {
+        let (n, l): (usize, Vec<String>) = crate::difficulty::volvagia::write(&mut rf, &pk, &mut rst)?;
+        extra += n;
+        l
+    } else {
+        Vec::new()
+    };
     if p.open.epona {
         extra += crate::open_world::write_epona_event(&mut rf, &pk, &mut rst)?;
     }
@@ -569,6 +576,10 @@ pub fn build_with(seed: &SeedFile, romfs: &P, load: &P, mod_name: &str, host: Ho
     if !cow_lines.is_empty() {
         notes.push("Cows made into actor classes of their own, untested in the game:".to_string());
         notes.extend(cow_lines.iter().map(|l| format!("  {l}")));
+    }
+    if !volvagia_lines.is_empty() {
+        notes.push("Volvagia roams, files made:".to_string());
+        notes.extend(volvagia_lines.iter().map(|l| format!("  {l}")));
     }
     if let Some((_, a)) = &loads {
         notes.push(format!("{} events now load the flows their edited events call:", a.len()));
