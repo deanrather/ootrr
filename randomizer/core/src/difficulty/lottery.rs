@@ -21,17 +21,17 @@ fn cut() -> Error {
     Error::Format("difficulty: the drop lottery file is truncated")
 }
 
-struct Doc<'a> {
+pub(super) struct Doc<'a> {
     b: &'a [u8],
     keys: Vec<String>,
     strs: Vec<String>,
 }
 
 #[derive(Clone, Copy)]
-struct Slot {
-    ty: u8,
-    val: u32,
-    at: usize,
+pub(super) struct Slot {
+    pub(super) ty: u8,
+    pub(super) val: u32,
+    pub(super) at: usize,
 }
 
 impl<'a> Doc<'a> {
@@ -62,7 +62,7 @@ impl<'a> Doc<'a> {
         Ok(out)
     }
 
-    fn open(b: &'a [u8]) -> Res<Doc<'a>> {
+    pub(super) fn open(b: &'a [u8]) -> Res<Doc<'a>> {
         if b.get(..2) != Some(b"YB") {
             return Err(Error::Format("difficulty: the drop lottery file is not a little endian byml"));
         }
@@ -72,12 +72,12 @@ impl<'a> Doc<'a> {
         Ok(d)
     }
 
-    fn root(&self) -> Res<Slot> {
+    pub(super) fn root(&self) -> Res<Slot> {
         let o: usize = self.u32(12)? as usize;
         Ok(Slot { ty: self.u8(o)?, val: o as u32, at: 12 })
     }
 
-    fn map(&self, s: Slot) -> Res<Vec<(String, Slot)>> {
+    pub(super) fn map(&self, s: Slot) -> Res<Vec<(String, Slot)>> {
         let mut out: Vec<(String, Slot)> = Vec::new();
         if s.ty != MAP {
             return Ok(out);
@@ -92,7 +92,7 @@ impl<'a> Doc<'a> {
         Ok(out)
     }
 
-    fn hash(&self, s: Slot) -> Res<Vec<(u32, Slot)>> {
+    pub(super) fn hash(&self, s: Slot) -> Res<Vec<(u32, Slot)>> {
         let mut out: Vec<(u32, Slot)> = Vec::new();
         if s.ty != HASH {
             return Ok(out);
@@ -106,7 +106,7 @@ impl<'a> Doc<'a> {
         Ok(out)
     }
 
-    fn arr(&self, s: Slot) -> Res<Vec<Slot>> {
+    pub(super) fn arr(&self, s: Slot) -> Res<Vec<Slot>> {
         let mut out: Vec<Slot> = Vec::new();
         if s.ty != ARR {
             return Ok(out);
@@ -120,7 +120,7 @@ impl<'a> Doc<'a> {
         Ok(out)
     }
 
-    fn text(&self, s: Slot) -> Option<&str> {
+    pub(super) fn text(&self, s: Slot) -> Option<&str> {
         if s.ty != STR {
             return None;
         }
@@ -128,7 +128,7 @@ impl<'a> Doc<'a> {
     }
 }
 
-fn find(m: &[(String, Slot)], k: &str) -> Option<Slot> {
+pub(super) fn find(m: &[(String, Slot)], k: &str) -> Option<Slot> {
     m.iter().find(|e| e.0 == k).map(|e| e.1)
 }
 
