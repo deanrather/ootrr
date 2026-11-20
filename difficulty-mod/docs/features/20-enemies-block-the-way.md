@@ -199,3 +199,67 @@ In rc 16: the entrance-shuffle rule above, on top of the sword condition (child 
 
 - **By script** (checks-1120, entrances Dungeons, closed forest): gate 9 in the Lost Woods is present and holds Link at its barrier; gate 2 on Death Mountain Trail is absent.
 - **Not tested:** that gates 1 and 6 are absent (vanilla enemies stand at both spots, so a script could not tell).
+
+
+## Gates 14 to 22 (20 Nov, branch `feature/gate-crater`, not played)
+Your requests (20 Nov), each a line and dots drawn on an object-map screenshot:
+- Death Mountain Crater, child: "put a Dodongo guard and wall here".
+- Death Mountain Trail, child: "and here as child. 4x Dodongo as adult."
+- Graveyard (no age named): "put 3 Poes as a guard here".
+- Hyrule Field, child, the neck down to Lake Hylia: "put 3 Lizalfos guards here".
+- Lon Lon Ranch north gate, child: "put a giant peahat and 5 small peahats as guards here".
+- Lake Hylia, the lab bridge (no age named): "put a like like and 4 keeze as guards here".
+- Ganon's Castle entrance, adult: "add a dark link guard here". Not built, see below.
+
+### From screenshot to world coordinates
+The object map draws north up, x to the right, z downward, at one scale, so each screenshot is `px = s * x + cx`, `py = s * z + cz`. The scale and offset come from landmarks found both in the picture and in the map files; then the map's navmesh was drawn over the picture to check the whole outline.
+- Crater: Bolero warp pad (the hexagon), the two lava rings (their smoke emitters), the Fire Temple door and the Goron City passage. s = 13.41, 5 landmarks, residuals 0.05 to 0.78 units.
+- Trail: the Kakariko and Goron City loading zones. s = 6.95. The navmesh outline lies on the drawn trail within about 1 unit.
+- Graveyard: the Nocturne warp pad and the Kakariko gate. s = 12.87. The outline matches.
+- Hyrule Field: the lake laboratory and the castle drawbridge. s = 3.06. The outline matches. The ranch screenshot was read through the oval track (about 3.2), then the wall was put on the gate posts drawn in the field screenshot (the track reading was about 8 units off in z, so the posts and the navmesh decided). The lake screenshot: the laboratory and the owl island, s = 8.03 in both axes.
+
+Each barrier end was then moved to where the navmesh floor along the drawn line ends (the passage walls), at floor height, and each guard to open floor on the side the dots were drawn, at least 4.5 units from the wall so the trigger box fits. A connectivity check cut the navmesh with the barrier pieces and confirmed the two sides no longer join (trail, field neck, lake shore with the lake drained).
+
+### The gates
+| Id | Where | Map | Wall ends | Guards |
+|---|---|---|---|---|
+| 14 | Crater, west ledge by the Deku Scrub | DeathMountainCrater_Child | (-26.75, 119.34, 33.22) to (-25.12, 119.32, 32.05) | 1 Dodongo at (-19.5, 119.58, 35.5), trigger radius 5 |
+| 15 | Trail, the way up past the junction | DeathMountainTrail_Child | (-16.99, 122.43, -29.2) to (-8.78, 122.67, -29.2) | 1 Dodongo at (-14.0, 123.61, -24.0) |
+| 16 | the same | DeathMountainTrail_Adult | (-16.82, 122.28, -29.2) to (-8.89, 122.7, -29.2) | 4 Dodongos: (-14.0, 123.13, -24.0), (-12.5, 123.05, -26.3), (-16.5, 121.79, -20.5), (-17.5, 123.69, -17.0) |
+| 17 | Graveyard, the way to the Shadow Temple | Graveyard_Child | (72.35, 108.56, 0.62) to (72.35, 108.46, 4.34) | 3 Poes (`Enemy_Poe`): (67.6, 108.64, 2.5), (69.0, 108.62, 0.9), (69.0, 108.54, 4.3) |
+| 18 | the same | Graveyard_Adult | the same | 3 Poes, same places at adult floor height |
+| 19 | Field, the way down to Lake Hylia | HyruleField_Child | (-104.13, 139.6, 371.34) to (-61.78, 139.6, 401.59) | 3 Lizalfos: (-80.6, 141.11, 374.0), (-88.8, 141.48, 371.7), (-75.1, 140.86, 379.9) |
+| 20 | Lon Lon Ranch, the north gate | HyruleField_Child | (-65.5, 150.0, 183.5) to (-56.5, 150.0, 184.5) | `Enemy_Peahat` at (-60.5, 150.02, 168.0) and 5 `Enemy_Peahat_Larva_Independent` round it |
+| 21 | Lake Hylia, the bridge by the laboratory | HyruleField_Child | (-166.92, 137.64, 421.84) to (-158.52, 137.32, 427.94) | 1 Like Like at (-153.5, 136.16, 423.0) |
+| 22 | the same | HyruleField_Adult | the same | 1 Like Like at (-153.5, 135.93, 423.0) |
+
+New in the table: `more_kind`, the kind of the extra guards when it differs from the first (only the ranch uses it). Every guard is created by the trigger, as in gates 1 to 5, and each guard has its own barrier stack, so all must die.
+
+Changes from the drawings:
+- Crater: the drawn guard dot stood on the Deku Scrub; the Dodongo is 3.6 units further along the ledge. The drawn line was 8 units; the floor there is about 2 units wide, between the hammer boulder and the ledge edge.
+- Field neck: the drawn line left a strip of floor open past its east end, beyond the rock cluster (the navmesh joins the lake road there), so the wall was extended to that strip (52 units, 14 pieces per guard).
+- Graveyard: the Poes are 1 to 5 units west of the dots, so the trigger box fits between the wall and the Nocturne pad.
+- Lake: Like Like only. The 4 Keese are left out: a Fire Keese did not appear when created in Hyrule Field (feature 10), and a guard that never appears keeps its barrier up. Question below.
+
+### What each gate blocks and why it is safe
+Child gates wait for the Kokiri Sword, as all child gates do; adult gates rely on the Master Sword.
+- 14, crater ledge: beyond the wall are only the hammer boulder (an adult item) and the path past it. In the logic the child never reaches this part of the crater (`DMC Lower Nearby` to `DMC Lower Local`, and on to the ladder area, needs the Goron Tunic, an adult item), and the Deku Scrub stays on the guard side. Child only: for the adult this passage is a logic route (hover boots or hammer), and you marked the child map.
+- 15 and 16, trail: beyond the wall are Dodongo's Cavern, the summit, the Great Fairy and the crater. The logic's enemy rules say the Kokiri Sword kills a Dodongo (gate 2 relies on the same); the adult has the Master Sword for four of them. The grotto beside the trail joins the trail north of the wall.
+- 17 and 18, graveyard: beyond the wall is only the Shadow Temple door. The Nocturne pad and the gossip stone are on the guard side. Arriving by Nocturne puts you inside the trigger box, so the Poes and the barrier come at once (the way back to the graveyard stays open). Coming out of the temple puts you 0.45 units east of the wall line, outside the box. Both ages: the passage is the same. `Enemy_Poe` is placed by the game in the adult graveyard only; in the child graveyard it is away from home (a big Poe did not appear away from home, feature 10). The child gets nothing behind this wall in the logic (the temple needs adult items).
+- 19, field neck: beyond it is Lake Hylia. `Hyrule Field` to `Lake Hylia` is free in the logic, so a child with the sword must beat three Lizalfos (the logic's rule text says the Kokiri Sword kills them, as at gates 3 to 5). Fire storm spot field_south_central (55, 163, 190) is 240 units away; the lake's warp pad, owl and arrival points are over 120 units away.
+- 20, ranch: beyond it are Malon, Epona's Song and the ranch checks. Both guard kinds are already placed in the child field, so they are at home. Risk: in the original game the Peahat burrows at night; if it does here, the gate cannot be opened at night (leave and come back by day).
+- 21 and 22, lake bridge: beyond it are the owl island, the warp pad island and the Water Temple door. The lake can be swum (both ages), so the gate is a fight, not a lock. The ground at the bridge end has the same height with the lake full or drained (137.4 to 137.7 on all three navmeshes).
+- Entrance shuffle: with dungeon entrances shuffled all nine are left out, because a dungeon door lies beyond each wall line (Fire Temple, Dodongo's Cavern, Shadow Temple, Water Temple). For the ranch that is only the test's straight-line rule (the Water Temple lies far beyond the line, not in the ranch); left as the rule says.
+
+### Dark Link: not built
+`Enemy_MiddleBoss_DarkLink` is placed only in the Water Temple and in his own boss stage, runs room logic, and feature 10 lists every `MiddleBoss_` as scripted and never placed elsewhere. Whether a clone fights, takes damage and reports `Dead` outside his room cannot be read from the files, and a guard that never dies keeps the barrier up. Closest alternatives: an Iron Knuckle (gate 13's knight) or two Stalfos (gate 12, seen working).
+
+### Questions
+1. Lake: add the 4 Keese anyway (with the risk), or leave the Like Like alone?
+2. Ganon's Castle entrance: an Iron Knuckle, two Stalfos, or first a test of a Dark Link clone?
+
+### How it was tested
+`cargo test -p ootrr-core difficulty` (210) and `settings` (109) with `OOTRR_ROMFS`. The game-file test stages every gate from the game files: each map takes its groups, barriers and areas, the old actors are untouched, every graph audits clean, child graphs read the sword flag. New test: each new gate makes the marked kinds and counts, and the child and adult copies share the wall. Every guard kind's actor pack exists. Not played.
+
+### In the game
+For each gate: warp to the approach point in `playtest/gate14/PLAN.md` (just outside the trigger, facing the wall), with the Kokiri Sword for the child ones. Check: the map loads; nothing appears until you walk in; then the guards and the barrier; the barrier spans the passage with no gap at the ends; it drops when all guards are dead. Then: whether a child can climb out of the crater ledge pocket, the ranch at night, the Like Like in the field, the Poes in the child graveyard.

@@ -2,6 +2,7 @@ pub mod ambush;
 pub mod fireballs;
 pub mod gates;
 pub mod hook;
+pub mod leevers;
 pub mod backup;
 pub mod battle_bgm;
 pub mod bowling;
@@ -250,6 +251,9 @@ impl Opts {
                 out.push("Enemies block the way is on, but no gate fits these entrance and forest settings, so nothing is blocked.".to_string());
             } else {
                 out.push(format!("A barrier blocks the way at {} while its guards are alive, and drops when they are beaten. At Zora's River the guards are Lizalfos added for this. The barrier and guards come back whenever the area reloads.", names.join(", ")));
+            }
+            if self.gate_list().iter().any(|g| g.new_kind == gates::LEEVER_GIANT) {
+                out.push(leevers::NOTE.to_string());
             }
             if let Some(n) = gates::shuffle_note(self.entrances) {
                 out.push(n);
@@ -552,7 +556,7 @@ mod tests {
         let o: Opts = read(&s, &mut bad);
         assert!(bad.is_empty() && o.gates() && o.any() && !o.packs());
         assert_eq!(o.gate_list().len(), gates::GATES.len() - gates::HELD.len());
-        assert_eq!(o.notes().len(), 1);
+        assert_eq!(o.notes().len(), 2);
         s.set(FOREST, Value::s("open")).unwrap();
         let o: Opts = read(&s, &mut bad);
         assert!(o.gates() && o.gate_list().len() == gates::GATES.len() - gates::HELD.len() - 1);
@@ -563,7 +567,7 @@ mod tests {
         s.set(ENTRANCES, Value::s("dungeons")).unwrap();
         let o: Opts = read(&s, &mut bad);
         assert!(o.entrances == gates::Shuffle::Dungeons && o.gates());
-        assert_eq!(o.gate_list().iter().map(|g| g.id).collect::<Vec<u8>>(), vec![3, 4, 5, 9, 11, 12, 13]);
+        assert_eq!(o.gate_list().iter().map(|g| g.id).collect::<Vec<u8>>(), vec![3, 4, 5, 9, 11, 12, 13, 23]);
         assert!(o.notes().iter().any(|n| n.contains("dungeon entrances are shuffled")));
         s.set(ENTRANCES, Value::s("everything")).unwrap();
         let o: Opts = read(&s, &mut bad);
@@ -604,7 +608,7 @@ mod tests {
         assert!(bad.is_empty());
         assert_eq!(o, Opts { health: 250, damage: 50, speed: 200, no_hearts: true, no_fairies: true, no_ammo: true, lose_heart: true, no_bottles: true, no_target: true, no_dupes: true, extra: 50, respawn: true, minibosses: true, regen: true, minions: true, fairy_helps: true, backup: true, gates: true, encounters: true, cucco: true, bowling: true, fireballs: true, spawn_combo: true, ..Opts::default() });
         assert!(o.any() && o.packs());
-        assert_eq!(o.notes().len(), 25);
+        assert_eq!(o.notes().len(), 26);
         assert_eq!(o.notes().iter().collect::<std::collections::BTreeSet<&String>>().len(), o.notes().len());
         assert!(o.notes().iter().any(|n| n.contains("About 50 in 100")));
         assert!(Opts { extra: 100, ..Opts::default() }.any() && !Opts { extra: 100, ..Opts::default() }.packs());
