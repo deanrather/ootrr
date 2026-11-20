@@ -29,6 +29,7 @@ pub struct Spot {
     pub area: [f32; 3],
     pub size: [f32; 3],
     pub manager: [f32; 3],
+    pub volcano: [f32; 2],
     pub anchors: &'static [[f32; 3]],
     pub interval: f32,
     pub fall: f32,
@@ -38,6 +39,11 @@ pub const FIELD: &[&str] = &["HyruleField_Child", "HyruleField_Adult"];
 pub const CASTLE: &[&str] = &["HyruleCastle"];
 pub const DESERT: &[&str] = &["DesertColossus_Child", "DesertColossus_Adult"];
 pub const WASTELAND: &[&str] = &["HountedWasteland_Child", "HountedWasteland_Adult"];
+
+pub const FIELD_VOLCANO: [f32; 2] = [801.0, -370.0];
+pub const CASTLE_VOLCANO: [f32; 2] = [1468.0, 478.0];
+pub const DESERT_VOLCANO: [f32; 2] = [187.0, -10.0];
+pub const WASTELAND_VOLCANO: [f32; 2] = [182.0, 87.0];
 
 pub const TRAIL: [&str; 8] = [
     "Logic/DeathMountainTrail_Child_Prefab_0656.logic.module.ainb",
@@ -57,7 +63,8 @@ pub const SPOTS: [Spot; 8] = [
         maps: FIELD,
         area: [75.0, 152.9, 95.0],
         size: [32.0, 12.0, 30.0],
-        manager: [170.0, 216.0, 60.0],
+        manager: [157.0, 216.0, 36.0],
+        volcano: FIELD_VOLCANO,
         anchors: &[[75.0, 149.4, 95.0], [85.0, 149.9, 100.0], [65.0, 149.7, 100.0], [80.0, 149.1, 85.0], [70.0, 150.2, 105.0], [85.0, 149.3, 90.0]],
         interval: 45.0,
         fall: 3.5,
@@ -68,7 +75,8 @@ pub const SPOTS: [Spot; 8] = [
         maps: FIELD,
         area: [55.0, 163.0, 190.0],
         size: [32.0, 12.0, 30.0],
-        manager: [150.0, 226.0, 160.0],
+        manager: [136.0, 226.0, 132.0],
+        volcano: FIELD_VOLCANO,
         anchors: &[[55.0, 159.5, 190.0], [65.0, 158.3, 195.0], [45.0, 161.1, 195.0], [60.0, 158.1, 180.0], [50.0, 160.2, 200.0], [65.0, 157.7, 185.0]],
         interval: 45.0,
         fall: 3.5,
@@ -79,7 +87,8 @@ pub const SPOTS: [Spot; 8] = [
         maps: FIELD,
         area: [-170.0, 137.1, 170.0],
         size: [32.0, 12.0, 30.0],
-        manager: [-75.0, 200.0, 135.0],
+        manager: [-80.0, 200.0, 123.0],
+        volcano: FIELD_VOLCANO,
         anchors: &[[-170.0, 133.6, 170.0], [-160.0, 133.0, 175.0], [-180.0, 132.7, 175.0], [-165.0, 134.3, 160.0], [-175.0, 132.7, 180.0], [-160.0, 133.5, 165.0]],
         interval: 45.0,
         fall: 3.5,
@@ -90,7 +99,8 @@ pub const SPOTS: [Spot; 8] = [
         maps: CASTLE,
         area: [14.0, 118.0, -76.0],
         size: [44.0, 10.0, 26.0],
-        manager: [14.0, 186.0, -165.0],
+        manager: [100.0, 186.0, -55.0],
+        volcano: CASTLE_VOLCANO,
         anchors: &[[25.0, 114.5, -74.0], [28.0, 114.5, -80.0], [4.0, 114.5, -71.0], [25.0, 114.5, -89.0], [-14.0, 114.5, -86.0]],
         interval: 60.0,
         fall: 3.5,
@@ -101,7 +111,8 @@ pub const SPOTS: [Spot; 8] = [
         maps: DESERT,
         area: [-137.0, 98.7, -43.0],
         size: [28.0, 12.0, 30.0],
-        manager: [-60.0, 160.0, -70.0],
+        manager: [-56.0, 160.0, -47.0],
+        volcano: DESERT_VOLCANO,
         anchors: &[[-137.0, 95.2, -43.0], [-131.0, 95.1, -47.0], [-131.0, 95.3, -38.0], [-141.0, 95.2, -48.0], [-137.0, 95.2, -33.0], [-126.0, 95.4, -43.0]],
         interval: 45.0,
         fall: 3.5,
@@ -112,7 +123,8 @@ pub const SPOTS: [Spot; 8] = [
         maps: FIELD,
         area: [133.0, 162.8, 214.0],
         size: [32.0, 12.0, 30.0],
-        manager: [60.0, 225.0, 235.0],
+        manager: [192.0, 225.0, 167.0],
+        volcano: FIELD_VOLCANO,
         anchors: &[[145.0, 158.8, 218.0], [145.0, 159.9, 208.0], [135.0, 160.4, 205.0], [120.0, 160.4, 208.0], [120.0, 158.3, 218.0], [145.0, 157.5, 228.0]],
         interval: 45.0,
         fall: 3.5,
@@ -123,7 +135,8 @@ pub const SPOTS: [Spot; 8] = [
         maps: FIELD,
         area: [-33.0, 152.8, 92.0],
         size: [32.0, 12.0, 30.0],
-        manager: [-110.0, 212.0, 70.0],
+        manager: [35.0, 212.0, 49.0],
+        volcano: FIELD_VOLCANO,
         anchors: &[[-26.0, 149.3, 92.0], [-36.0, 149.4, 88.0], [-41.0, 149.2, 98.0], [-31.0, 149.3, 100.0], [-26.0, 149.4, 106.0], [-36.0, 149.0, 80.0]],
         interval: 45.0,
         fall: 3.5,
@@ -134,7 +147,8 @@ pub const SPOTS: [Spot; 8] = [
         maps: WASTELAND,
         area: [-56.0, 103.4, -55.0],
         size: [32.0, 12.0, 30.0],
-        manager: [-125.0, 165.0, -100.0],
+        manager: [18.0, 165.0, -19.0],
+        volcano: WASTELAND_VOLCANO,
         anchors: &[[-52.0, 99.6, -47.0], [-46.0, 99.4, -52.0], [-66.0, 98.6, -50.0], [-45.0, 100.6, -67.0], [-61.0, 99.3, -42.0], [-44.0, 99.2, -60.0]],
         interval: 45.0,
         fall: 3.5,
@@ -417,6 +431,45 @@ mod tests {
         seen.sort();
         seen.dedup();
         assert_eq!(seen.len(), SPOTS.len());
+    }
+
+    fn bearing(from: [f32; 3], to: [f32; 2], toward: bool) -> f32 {
+        let d: [f32; 2] = if toward { [to[0] - from[0], to[1] - from[2]] } else { to };
+        d[1].atan2(d[0]).to_degrees()
+    }
+
+    #[test]
+    fn the_rocks_come_in_from_the_volcano() {
+        for s in SPOTS.iter() {
+            let far: bool = s.dir == "HyruleField" || s.dir == "HyruleCastle";
+            let want: f32 = bearing(s.area, s.volcano, far);
+            let got: f32 = bearing(s.area, [s.manager[0] - s.area[0], s.manager[2] - s.area[2]], false);
+            let off: f32 = ((got - want + 540.0) % 360.0 - 180.0).abs();
+            assert!(off <= 30.0, "{} thrower is {off} degrees off the volcano bearing", s.name);
+        }
+    }
+
+    #[test]
+    fn the_volcano_reference_is_the_maps_own_backdrop_and_the_thrower_clears_the_ground() {
+        let Some(root) = dump() else {
+            eprintln!("skipped: set OOTRR_ROMFS");
+            return;
+        };
+        let mut rf: Romfs = Romfs::open(&root).unwrap();
+        for (dir, map, at) in [("HyruleField", "HyruleField_Child", FIELD_VOLCANO), ("HyruleField", "HyruleField_Adult", FIELD_VOLCANO), ("HyruleCastle", "HyruleCastle", CASTLE_VOLCANO)] {
+            let y: Byml = rf.read_byml(&format!("Banc/{dir}/{map}_Static.bcett.byml.zs")).unwrap();
+            let far: &Node = y.root.get("Actors").unwrap().as_arr().unwrap().iter().find(|a| text(a, "Gyaml") == "Land_DeathMountainFar_A_01").unwrap();
+            let t: [f32; 3] = vec3(far, "Translate").unwrap();
+            assert!((t[0] - at[0]).abs() < 1.0 && (t[2] - at[1]).abs() < 1.0, "{map} backdrop is at {t:?}");
+        }
+        for s in SPOTS.iter() {
+            for m in s.maps {
+                let g: crate::difficulty::ground::Ground = crate::difficulty::ground::load(&mut rf, m).unwrap().unwrap();
+                for (y, _) in g.floors(s.manager[0], s.manager[2]) {
+                    assert!(s.manager[1] - y >= 20.0, "{} thrower is {} above the ground in {m}", s.name, s.manager[1] - y);
+                }
+            }
+        }
     }
 
     #[test]
