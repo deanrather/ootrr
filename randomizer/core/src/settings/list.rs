@@ -249,6 +249,13 @@ fn difficulty() -> Vec<Setting> {
             .tip("Each bomb, Bombchu and lit Deku Stick gets a random fuse, from one second up to its usual time."),
         Setting::toggle(d::RANDOMIZER_NUM, d::RANDOMIZER, "difficulty", "Enemy randomizer", false)
             .tip("Enemies are swapped for other kinds that live on the same kind of ground. Enemies a door or puzzle counts are left alone."),
+        Setting::choice(d::SIZES_NUM, d::SIZES, "difficulty", "Random enemy sizes", "off")
+            .opt("off", "Off", "Enemies are their usual size.")
+            .opt("mild", "Mild", "Each enemy is 0.75 to 1.5 times its usual size.")
+            .opt("wild", "Wild", "Each enemy is 0.5 to 2.5 times its usual size.")
+            .tip("Every ordinary enemy gets its own size, the same for the same seed. Bosses, minibosses and the enemies a door or puzzle counts keep theirs, and indoors the biggest sizes are capped so nothing is wedged into a wall. Experimental, untested by hand."),
+        Setting::toggle(d::SIZES_HEALTH_NUM, d::SIZES_HEALTH, "difficulty", "Health follows size", false)
+            .tip("With random enemy sizes on, an enemy's health is multiplied by its size, so a double-size Stalfos has twice the health and a half-size one half, never less than one. Sizes then come in a few steps. It stacks with the enemy health setting."),
         Setting::toggle(d::FAIRY_HELPS_NUM, d::FAIRY_HELPS, "difficulty", "Fairies help enemies too", false)
             .tip("When you use a bottled fairy, or one revives you, every awake enemy and boss heals to full too."),
     ]

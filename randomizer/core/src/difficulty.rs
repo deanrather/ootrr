@@ -28,6 +28,7 @@ pub mod respawn;
 pub mod spawn;
 pub mod stats;
 pub mod surprises;
+pub mod sizes;
 pub mod swap;
 pub mod target;
 pub mod volvagia;
@@ -75,6 +76,8 @@ pub const VOLVAGIA: &str = "volvagia_roams";
 pub const MEGA_LIKE: &str = "mega_like_likes";
 pub const FUSES: &str = "random_fuses";
 pub const RANDOMIZER: &str = "enemy_randomizer";
+pub const SIZES: &str = "enemy_sizes";
+pub const SIZES_HEALTH: &str = "enemy_sizes_health";
 
 pub const HEALTH_NUM: u16 = 110;
 pub const DAMAGE_NUM: u16 = 111;
@@ -105,6 +108,8 @@ pub const VOLVAGIA_NUM: u16 = 143;
 pub const MEGA_LIKE_NUM: u16 = 144;
 pub const FUSES_NUM: u16 = 142;
 pub const RANDOMIZER_NUM: u16 = 138;
+pub const SIZES_NUM: u16 = 145;
+pub const SIZES_HEALTH_NUM: u16 = 146;
 
 pub const NORMAL: i64 = 100;
 pub const STAT_RANGE: (i64, i64) = (50, 500);
@@ -144,6 +149,8 @@ pub struct Opts {
     pub volvagia: bool,
     pub mega_like: bool,
     pub randomizer: bool,
+    pub sizes: sizes::Range,
+    pub sized_health: bool,
     pub forest_open: bool,
     pub shops: bool,
     pub mido_gone: bool,
@@ -152,7 +159,7 @@ pub struct Opts {
 
 impl Default for Opts {
     fn default() -> Opts {
-        Opts { health: NORMAL, damage: NORMAL, speed: NORMAL, no_hearts: false, no_fairies: false, no_ammo: false, lose_heart: false, no_bottles: false, no_target: false, no_dupes: false, extra: 0, respawn: false, minibosses: false, regen: false, minions: false, fairy_helps: false, backup: false, gates: false, encounters: false, cucco: false, bowling: false, fireballs: false, spawn_combo: false, randomizer: false, fuses: false, mega_like: false, volvagia: false, forest_open: false, shops: false, mido_gone: false, entrances: gates::Shuffle::Off }
+        Opts { health: NORMAL, damage: NORMAL, speed: NORMAL, no_hearts: false, no_fairies: false, no_ammo: false, lose_heart: false, no_bottles: false, no_target: false, no_dupes: false, extra: 0, respawn: false, minibosses: false, regen: false, minions: false, fairy_helps: false, backup: false, gates: false, encounters: false, cucco: false, bowling: false, fireballs: false, spawn_combo: false, randomizer: false, sizes: sizes::Range::Off, sized_health: false, fuses: false, mega_like: false, volvagia: false, forest_open: false, shops: false, mido_gone: false, entrances: gates::Shuffle::Off }
     }
 }
 
@@ -182,7 +189,7 @@ impl Opts {
     }
 
     pub fn any(&self) -> bool {
-        self.packs() || self.no_fairies || self.lose_heart || self.no_bottles || self.no_dupes || self.extra > 0 || self.respawn || self.minibosses || self.regen || self.minions || self.fairy_helps || self.backup || self.encounters || self.cucco || self.bowling || self.fireballs || self.spawn_combo || self.randomizer || self.fuses || self.mega_like || self.volvagia || self.gates()
+        self.packs() || self.no_fairies || self.lose_heart || self.no_bottles || self.no_dupes || self.extra > 0 || self.respawn || self.minibosses || self.regen || self.minions || self.fairy_helps || self.backup || self.encounters || self.cucco || self.bowling || self.fireballs || self.spawn_combo || self.randomizer || self.sizes.on() || self.fuses || self.mega_like || self.volvagia || self.gates()
     }
 
     pub fn notes(&self) -> Vec<String> {
@@ -271,6 +278,12 @@ impl Opts {
         if self.randomizer {
             out.push(swap::NOTE.to_string());
         }
+        if self.sizes.on() {
+            out.push(sizes::NOTE.to_string());
+            if self.sized_health {
+                out.push(sizes::NOTE_HEALTH.to_string());
+            }
+        }
         if self.fairy_helps {
             out.push("When you use a bottled fairy, or one revives you, every enemy and boss that is awake heals to full health too.".to_string());
         }
@@ -326,13 +339,14 @@ pub fn read(s: &Settings, bad: &mut Vec<String>) -> Opts {
             false
         })
     };
-    let o: Opts = Opts { health, damage, speed, no_hearts: flag(NO_HEARTS), no_fairies: flag(NO_FAIRIES), no_ammo: flag(NO_AMMO), lose_heart: flag(LOSE_HEART), no_bottles: flag(NO_BOTTLES), no_target: flag(NO_TARGET), no_dupes: flag(NO_DUPES), extra: 0, respawn: flag(RESPAWN), minibosses: flag(MINIBOSSES), regen: flag(REGEN), minions: flag(MINIONS), fairy_helps: flag(FAIRY_HELPS), backup: flag(BACKUP), gates: flag(GATES), encounters: false, cucco: flag(CUCCO), bowling: flag(BOWLING), fireballs: flag(FIREBALLS), spawn_combo: flag(SPAWN_COMBO), randomizer: flag(RANDOMIZER), fuses: flag(FUSES), mega_like: flag(MEGA_LIKE), volvagia: flag(VOLVAGIA), forest_open: false, shops: false, mido_gone: false, entrances: gates::Shuffle::Off };
+    let o: Opts = Opts { health, damage, speed, no_hearts: flag(NO_HEARTS), no_fairies: flag(NO_FAIRIES), no_ammo: flag(NO_AMMO), lose_heart: flag(LOSE_HEART), no_bottles: flag(NO_BOTTLES), no_target: flag(NO_TARGET), no_dupes: flag(NO_DUPES), extra: 0, respawn: flag(RESPAWN), minibosses: flag(MINIBOSSES), regen: flag(REGEN), minions: flag(MINIONS), fairy_helps: flag(FAIRY_HELPS), backup: flag(BACKUP), gates: flag(GATES), encounters: false, cucco: flag(CUCCO), bowling: flag(BOWLING), fireballs: flag(FIREBALLS), spawn_combo: flag(SPAWN_COMBO), randomizer: flag(RANDOMIZER), sizes: sizes::Range::Off, sized_health: flag(SIZES_HEALTH), fuses: flag(FUSES), mega_like: flag(MEGA_LIKE), volvagia: flag(VOLVAGIA), forest_open: false, shops: false, mido_gone: false, entrances: gates::Shuffle::Off };
     let forest_open: bool = chosen(s.text(FOREST), bad).map(|t| t == "open").unwrap_or(true);
     let entrances: gates::Shuffle = chosen(s.text(ENTRANCES), bad).map(|t| gates::Shuffle::from_setting(t)).unwrap_or(gates::Shuffle::Wide);
     let shops: bool = chosen(s.text(crate::shops::plan::SETTING), bad).map(|t| t != "off").unwrap_or(false);
     let closed: bool = s.text(FOREST).map(|t| t == "closed").unwrap_or(true);
     let mido_gone: bool = !closed && s.text(KAKARIKO).map(|t| t == "open").unwrap_or(false);
-    Opts { extra, encounters: extra > 0, forest_open, mido_gone, entrances, shops, ..o }
+    let sizes: sizes::Range = chosen(s.text(SIZES), bad).map(sizes::Range::from_setting).unwrap_or_default();
+    Opts { extra, sizes, encounters: extra > 0, forest_open, mido_gone, entrances, shops, ..o }
 
 }
 
@@ -543,6 +557,9 @@ pub fn stage_noted(rf: &mut Romfs, o: &Opts, have: Have, seed: &str, notes: &mut
     if o.extra > horde::FROM {
         step(rf, &mut outs, have, |rf, have| horde::stage(rf, have, seed, o.extra, o.encounters))?;
     }
+    if o.sizes.on() {
+        step(rf, &mut outs, have, |rf, have| sizes::stage(rf, have, seed, o.sizes, o.sized_health, notes))?;
+    }
     Ok(outs)
 }
 
@@ -586,6 +603,23 @@ mod tests {
         s.set(BACKUP, Value::Bool(false)).unwrap();
         s.set(GATES, Value::Bool(false)).unwrap();
         assert_eq!(s.encode().unwrap(), Settings::default().encode().unwrap());
+    }
+
+    #[test]
+    fn the_size_settings_are_read_and_default_off() {
+        let mut bad: Vec<String> = Vec::new();
+        let o: Opts = read(&Settings::default(), &mut bad);
+        assert!(bad.is_empty() && o.sizes == sizes::Range::Off && !o.sized_health && !o.any());
+        let mut s: Settings = Settings::default();
+        s.set(SIZES, Value::s("wild")).unwrap();
+        let o: Opts = read(&s, &mut bad);
+        assert!(bad.is_empty() && o.sizes == sizes::Range::Wild && !o.sized_health && o.any() && !o.packs());
+        assert_eq!(o.notes().len(), 1);
+        s.set(SIZES, Value::s("mild")).unwrap();
+        s.set(SIZES_HEALTH, Value::Bool(true)).unwrap();
+        let o: Opts = read(&s, &mut bad);
+        assert!(o.sizes == sizes::Range::Mild && o.sized_health);
+        assert_eq!(o.notes().len(), 2);
     }
 
     #[test]

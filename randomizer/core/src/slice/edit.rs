@@ -498,6 +498,13 @@ pub fn build_with(seed: &SeedFile, romfs: &P, load: &P, mod_name: &str, host: Ho
     } else {
         Vec::new()
     };
+    let size_lines: Vec<String> = if p.difficulty.sizes.on() && p.difficulty.sized_health {
+        let (n, l): (usize, Vec<String>) = crate::difficulty::sizes::write(&mut rf, &pk, &mut rst)?;
+        extra += n;
+        l
+    } else {
+        Vec::new()
+    };
     if p.open.epona {
         extra += crate::open_world::write_epona_event(&mut rf, &pk, &mut rst)?;
     }
@@ -595,6 +602,10 @@ pub fn build_with(seed: &SeedFile, romfs: &P, load: &P, mod_name: &str, host: Ho
     if !mega_lines.is_empty() {
         notes.push("Mega Like Likes, files made:".to_string());
         notes.extend(mega_lines.iter().map(|l| format!("  {l}")));
+    }
+    if !size_lines.is_empty() {
+        notes.push("Random enemy sizes, files made:".to_string());
+        notes.extend(size_lines.iter().map(|l| format!("  {l}")));
     }
     if let Some((_, a)) = &loads {
         notes.push(format!("{} events now load the flows their edited events call:", a.len()));
