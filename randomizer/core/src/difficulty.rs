@@ -503,6 +503,8 @@ pub fn stage_noted(rf: &mut Romfs, o: &Opts, have: Have, seed: &str, notes: &mut
     }
     if o.regen || o.fairy_helps {
         step(rf, &mut outs, have, fx::link_stage)?;
+    } else if o.mega_like {
+        step(rf, &mut outs, have, |rf, have| fx::link_stage_for(rf, have, vec![mega_like::BASE.to_string()]))?;
     }
     if o.backup {
         step(rf, &mut outs, have, |rf, have| Ok(backup::stage(rf, have, ACTOR_PACKS)?.1))?;
