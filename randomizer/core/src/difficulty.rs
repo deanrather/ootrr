@@ -29,6 +29,7 @@ pub mod stats;
 pub mod surprises;
 pub mod swap;
 pub mod target;
+pub mod timers;
 pub mod volvagia;
 pub mod wake;
 
@@ -147,11 +148,12 @@ pub struct Opts {
     pub shops: bool,
     pub mido_gone: bool,
     pub entrances: gates::Shuffle,
+    pub timers: i64,
 }
 
 impl Default for Opts {
     fn default() -> Opts {
-        Opts { health: NORMAL, damage: NORMAL, speed: NORMAL, no_hearts: false, no_fairies: false, no_ammo: false, lose_heart: false, no_bottles: false, no_target: false, no_dupes: false, extra: 0, respawn: false, minibosses: false, regen: false, minions: false, fairy_helps: false, backup: false, gates: false, encounters: false, cucco: false, bowling: false, fireballs: false, spawn_combo: false, randomizer: false, fuses: false, mega_like: false, volvagia: false, forest_open: false, shops: false, mido_gone: false, entrances: gates::Shuffle::Off }
+        Opts { health: NORMAL, damage: NORMAL, speed: NORMAL, no_hearts: false, no_fairies: false, no_ammo: false, lose_heart: false, no_bottles: false, no_target: false, no_dupes: false, extra: 0, respawn: false, minibosses: false, regen: false, minions: false, fairy_helps: false, backup: false, gates: false, encounters: false, cucco: false, bowling: false, fireballs: false, spawn_combo: false, randomizer: false, fuses: false, mega_like: false, volvagia: false, forest_open: false, shops: false, mido_gone: false, entrances: gates::Shuffle::Off, timers: NORMAL }
     }
 }
 
@@ -181,7 +183,7 @@ impl Opts {
     }
 
     pub fn any(&self) -> bool {
-        self.packs() || self.no_fairies || self.lose_heart || self.no_bottles || self.no_dupes || self.extra > 0 || self.respawn || self.minibosses || self.regen || self.minions || self.fairy_helps || self.backup || self.encounters || self.cucco || self.bowling || self.fireballs || self.spawn_combo || self.randomizer || self.fuses || self.mega_like || self.volvagia || self.gates()
+        self.packs() || self.no_fairies || self.lose_heart || self.no_bottles || self.no_dupes || self.extra > 0 || self.respawn || self.minibosses || self.regen || self.minions || self.fairy_helps || self.backup || self.encounters || self.cucco || self.bowling || self.fireballs || self.spawn_combo || self.randomizer || self.fuses || self.mega_like || self.volvagia || self.timers != NORMAL || self.gates()
     }
 
     pub fn notes(&self) -> Vec<String> {
@@ -258,6 +260,9 @@ impl Opts {
         if self.fuses {
             out.push(fuses::NOTE.to_string());
         }
+        if self.timers != NORMAL {
+            out.push(timers::NOTE.to_string());
+        }
         if self.spawn_combo {
             out.push(spawn::NOTE.to_string());
         }
@@ -325,13 +330,14 @@ pub fn read(s: &Settings, bad: &mut Vec<String>) -> Opts {
             false
         })
     };
-    let o: Opts = Opts { health, damage, speed, no_hearts: flag(NO_HEARTS), no_fairies: flag(NO_FAIRIES), no_ammo: flag(NO_AMMO), lose_heart: flag(LOSE_HEART), no_bottles: flag(NO_BOTTLES), no_target: flag(NO_TARGET), no_dupes: flag(NO_DUPES), extra: 0, respawn: flag(RESPAWN), minibosses: flag(MINIBOSSES), regen: flag(REGEN), minions: flag(MINIONS), fairy_helps: flag(FAIRY_HELPS), backup: flag(BACKUP), gates: flag(GATES), encounters: false, cucco: flag(CUCCO), bowling: flag(BOWLING), fireballs: flag(FIREBALLS), spawn_combo: flag(SPAWN_COMBO), randomizer: flag(RANDOMIZER), fuses: flag(FUSES), mega_like: flag(MEGA_LIKE), volvagia: flag(VOLVAGIA), forest_open: false, shops: false, mido_gone: false, entrances: gates::Shuffle::Off };
+    let o: Opts = Opts { health, damage, speed, no_hearts: flag(NO_HEARTS), no_fairies: flag(NO_FAIRIES), no_ammo: flag(NO_AMMO), lose_heart: flag(LOSE_HEART), no_bottles: flag(NO_BOTTLES), no_target: flag(NO_TARGET), no_dupes: flag(NO_DUPES), extra: 0, respawn: flag(RESPAWN), minibosses: flag(MINIBOSSES), regen: flag(REGEN), minions: flag(MINIONS), fairy_helps: flag(FAIRY_HELPS), backup: flag(BACKUP), gates: flag(GATES), encounters: false, cucco: flag(CUCCO), bowling: flag(BOWLING), fireballs: flag(FIREBALLS), spawn_combo: flag(SPAWN_COMBO), randomizer: flag(RANDOMIZER), fuses: flag(FUSES), mega_like: flag(MEGA_LIKE), volvagia: flag(VOLVAGIA), forest_open: false, shops: false, mido_gone: false, entrances: gates::Shuffle::Off, timers: NORMAL };
     let forest_open: bool = chosen(s.text(FOREST), bad).map(|t| t == "open").unwrap_or(true);
     let entrances: gates::Shuffle = chosen(s.text(ENTRANCES), bad).map(|t| gates::Shuffle::from_setting(t)).unwrap_or(gates::Shuffle::Wide);
     let shops: bool = chosen(s.text(crate::shops::plan::SETTING), bad).map(|t| t != "off").unwrap_or(false);
     let closed: bool = s.text(FOREST).map(|t| t == "closed").unwrap_or(true);
     let mido_gone: bool = !closed && s.text(KAKARIKO).map(|t| t == "open").unwrap_or(false);
-    Opts { extra, encounters: extra > 0, forest_open, mido_gone, entrances, shops, ..o }
+    let timers: i64 = chosen(s.text(timers::SETTING), bad).and_then(timers::percent).unwrap_or(NORMAL);
+    Opts { extra, encounters: extra > 0, forest_open, mido_gone, entrances, shops, timers, ..o }
 
 }
 
@@ -528,6 +534,9 @@ pub fn stage_noted(rf: &mut Romfs, o: &Opts, have: Have, seed: &str, notes: &mut
     }
     if o.fuses {
         step(rf, &mut outs, have, fuses::stage)?;
+    }
+    if o.timers != NORMAL {
+        step(rf, &mut outs, have, |rf, have| timers::stage(rf, have, o.timers))?;
     }
     if o.spawn_combo {
         step(rf, &mut outs, have, spawn::stage)?;

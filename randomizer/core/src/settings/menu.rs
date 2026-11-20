@@ -767,7 +767,7 @@ pub const MENU: &[Page] = &[
             sec("Enemies", &["enemy_health", "enemy_damage", "enemy_speed", "enemy_regen", "enemy_backup", "no_z_targeting", "more_enemies", "enemy_randomizer", "enemies_respawn_sooner", "enemy_gates", "cucco_revenge", "volvagia_roams", "mega_like_likes"]),
             sec("Drops and healing", &["no_heart_drops", "no_ammo_drops", "no_gossip_fairies", "no_bottles_in_combat", "no_dupe_items", "fairy_helps_enemies"]),
             sec("Boss fights", &["boss_minibosses", "boss_minions"]),
-            sec("Hazards", &["fireball_storms", "random_fuses"]),
+            sec("Hazards", &["fireball_storms", "random_fuses", "shorter_timers"]),
             sec("Game over", &["lose_heart_on_death"]),
             sec("Minigames", &["unbreakable_bowling_grass"]),
             sec("Just for fun", &["enemy_spawn_combo"]),
