@@ -2,6 +2,7 @@ pub mod ambush;
 pub mod fireballs;
 pub mod gates;
 pub mod hook;
+pub mod hurt;
 pub mod leevers;
 pub mod mega_like;
 pub mod backup;
@@ -44,6 +45,7 @@ use crate::zs;
 
 pub const HEALTH: &str = "enemy_health";
 pub const DAMAGE: &str = "enemy_damage";
+pub const HURT: &str = "damage_taken";
 pub const SPEED: &str = "enemy_speed";
 pub const NO_HEARTS: &str = "no_heart_drops";
 pub const NO_FAIRIES: &str = "no_gossip_fairies";
@@ -77,6 +79,7 @@ pub const RANDOMIZER: &str = "enemy_randomizer";
 
 pub const HEALTH_NUM: u16 = 110;
 pub const DAMAGE_NUM: u16 = 111;
+pub const HURT_NUM: u16 = 148;
 pub const SPEED_NUM: u16 = 112;
 pub const NO_HEARTS_NUM: u16 = 113;
 pub const NO_FAIRIES_NUM: u16 = 114;
@@ -118,6 +121,7 @@ pub const MORE_STEP: i64 = 50;
 pub struct Opts {
     pub health: i64,
     pub damage: i64,
+    pub hurt: hurt::Hurt,
     pub speed: i64,
     pub no_hearts: bool,
     pub no_fairies: bool,
@@ -151,7 +155,7 @@ pub struct Opts {
 
 impl Default for Opts {
     fn default() -> Opts {
-        Opts { health: NORMAL, damage: NORMAL, speed: NORMAL, no_hearts: false, no_fairies: false, no_ammo: false, lose_heart: false, no_bottles: false, no_target: false, no_dupes: false, extra: 0, respawn: false, minibosses: false, regen: false, minions: false, fairy_helps: false, backup: false, gates: false, encounters: false, cucco: false, bowling: false, fireballs: false, spawn_combo: false, randomizer: false, fuses: false, mega_like: false, volvagia: false, forest_open: false, shops: false, mido_gone: false, entrances: gates::Shuffle::Off }
+        Opts { health: NORMAL, damage: NORMAL, hurt: hurt::Hurt::Normal, speed: NORMAL, no_hearts: false, no_fairies: false, no_ammo: false, lose_heart: false, no_bottles: false, no_target: false, no_dupes: false, extra: 0, respawn: false, minibosses: false, regen: false, minions: false, fairy_helps: false, backup: false, gates: false, encounters: false, cucco: false, bowling: false, fireballs: false, spawn_combo: false, randomizer: false, fuses: false, mega_like: false, volvagia: false, forest_open: false, shops: false, mido_gone: false, entrances: gates::Shuffle::Off }
     }
 }
 
@@ -166,7 +170,7 @@ impl Opts {
     }
 
     pub fn packs(&self) -> bool {
-        self.health != NORMAL || self.damage != NORMAL || self.speed != NORMAL || self.cut().any() || self.no_target || self.no_bottles
+        self.health != NORMAL || self.damage != NORMAL || self.hurt != hurt::Hurt::Normal || self.speed != NORMAL || self.cut().any() || self.no_target || self.no_bottles
     }
 
     pub fn gate_list(&self) -> Vec<gates::Gate> {
@@ -191,6 +195,9 @@ impl Opts {
         }
         if self.damage != NORMAL {
             out.push(format!("Enemies and their projectiles hit {} times as hard. Grabs, traps, lava and falls do their usual damage.", times(self.damage)));
+        }
+        if self.hurt != hurt::Hurt::Normal {
+            out.push(hurt::note(self.hurt));
         }
         if self.speed != NORMAL {
             out.push(format!("Enemies are set to move and attack {} times as fast. Experimental: most enemies ignore it, and in our tests only Lizalfos clearly sped up.", times(self.speed)));
@@ -319,13 +326,14 @@ pub fn read(s: &Settings, bad: &mut Vec<String>) -> Opts {
     let damage: i64 = num(DAMAGE, STAT_RANGE);
     let speed: i64 = num(SPEED, SPEED_RANGE);
     let extra: i64 = num(MORE, MORE_RANGE) - NORMAL;
+    let hurt: hurt::Hurt = chosen(s.text(HURT), bad).map(hurt::Hurt::from_setting).unwrap_or(hurt::Hurt::Normal);
     let mut flag = |id: &str| -> bool {
         s.flag(id).unwrap_or_else(|e| {
             bad.push(e.to_string());
             false
         })
     };
-    let o: Opts = Opts { health, damage, speed, no_hearts: flag(NO_HEARTS), no_fairies: flag(NO_FAIRIES), no_ammo: flag(NO_AMMO), lose_heart: flag(LOSE_HEART), no_bottles: flag(NO_BOTTLES), no_target: flag(NO_TARGET), no_dupes: flag(NO_DUPES), extra: 0, respawn: flag(RESPAWN), minibosses: flag(MINIBOSSES), regen: flag(REGEN), minions: flag(MINIONS), fairy_helps: flag(FAIRY_HELPS), backup: flag(BACKUP), gates: flag(GATES), encounters: false, cucco: flag(CUCCO), bowling: flag(BOWLING), fireballs: flag(FIREBALLS), spawn_combo: flag(SPAWN_COMBO), randomizer: flag(RANDOMIZER), fuses: flag(FUSES), mega_like: flag(MEGA_LIKE), volvagia: flag(VOLVAGIA), forest_open: false, shops: false, mido_gone: false, entrances: gates::Shuffle::Off };
+    let o: Opts = Opts { health, damage, hurt, speed, no_hearts: flag(NO_HEARTS), no_fairies: flag(NO_FAIRIES), no_ammo: flag(NO_AMMO), lose_heart: flag(LOSE_HEART), no_bottles: flag(NO_BOTTLES), no_target: flag(NO_TARGET), no_dupes: flag(NO_DUPES), extra: 0, respawn: flag(RESPAWN), minibosses: flag(MINIBOSSES), regen: flag(REGEN), minions: flag(MINIONS), fairy_helps: flag(FAIRY_HELPS), backup: flag(BACKUP), gates: flag(GATES), encounters: false, cucco: flag(CUCCO), bowling: flag(BOWLING), fireballs: flag(FIREBALLS), spawn_combo: flag(SPAWN_COMBO), randomizer: flag(RANDOMIZER), fuses: flag(FUSES), mega_like: flag(MEGA_LIKE), volvagia: flag(VOLVAGIA), forest_open: false, shops: false, mido_gone: false, entrances: gates::Shuffle::Off };
     let forest_open: bool = chosen(s.text(FOREST), bad).map(|t| t == "open").unwrap_or(true);
     let entrances: gates::Shuffle = chosen(s.text(ENTRANCES), bad).map(|t| gates::Shuffle::from_setting(t)).unwrap_or(gates::Shuffle::Wide);
     let shops: bool = chosen(s.text(crate::shops::plan::SETTING), bad).map(|t| t != "off").unwrap_or(false);
@@ -349,6 +357,12 @@ fn edit_entry(e: &Entry, o: &Opts) -> Res<Option<Vec<u8>>> {
         && let Some(s) = stats::stem(n, stats::ATTACK_DIR, stats::ATTACK_EXT)
     {
         return if stats::is_enemy_attack(s) { stats::attack(&e.data, o.damage) } else { Ok(None) };
+    }
+    if n == hurt::FILE && o.hurt != hurt::Hurt::Normal {
+        return hurt::edit(&e.data, o.hurt);
+    }
+    if o.hurt != hurt::Hurt::Normal && hurt::is_grab(n) {
+        return hurt::grab(&e.data, o.hurt);
     }
     if o.speed != NORMAL
         && let Some(s) = stats::stem(n, stats::MOVE_DIR, stats::MOVE_EXT)
@@ -751,6 +765,65 @@ mod tests {
 
     fn none(_p: &str) -> Option<Vec<u8>> {
         None
+    }
+
+    #[test]
+    fn the_damage_taken_setting_is_read_and_survives_the_settings_string() {
+        let mut s: Settings = Settings::default();
+        s.set(HURT, Value::s("normal")).unwrap();
+        assert_eq!(s.encode().unwrap(), Settings::default().encode().unwrap());
+        for (id, h) in [("double", hurt::Hurt::Double), ("quadruple", hurt::Hurt::Quadruple), ("one_hit", hurt::Hurt::OneHit)] {
+            s.set(HURT, Value::s(id)).unwrap();
+            let back: Settings = Settings::decode(&s.encode().unwrap()).unwrap().settings;
+            let mut bad: Vec<String> = Vec::new();
+            let o: Opts = read(&back, &mut bad);
+            assert!(bad.is_empty());
+            assert_eq!(o, Opts { hurt: h, ..Opts::default() });
+            assert!(o.any() && o.packs() && o.notes().len() == 1);
+        }
+    }
+
+    #[test]
+    fn one_hit_kills_changes_the_players_damage_file_and_the_grab_files_in_the_game() {
+        let Some(root) = dump() else {
+            eprintln!("skipped: set OOTRR_ROMFS");
+            return;
+        };
+        let mut rf: Romfs = Romfs::open(&root).unwrap();
+        assert!(stage(&mut rf, &Opts::default(), &none, "seed").unwrap().is_empty());
+        let o: Opts = Opts { hurt: hurt::Hurt::OneHit, ..Opts::default() };
+        let outs: Vec<Out> = stage(&mut rf, &o, &none, "seed").unwrap();
+        for p in ["Pack/Actor/Player_Base.pack.zs", "Pack/Actor/Player_Child.pack.zs", "Pack/Actor/Player_Adult.pack.zs"] {
+            let out: &Out = outs.iter().find(|x| x.path == p).unwrap_or_else(|| panic!("{p} was not staged"));
+            let es: Vec<Entry> = sarc::parse(&rf.zs.decompress(&out.z).unwrap()).unwrap();
+            let old: Vec<Entry> = sarc::parse(&rf.read_zs(p).unwrap()).unwrap();
+            let raw: &[u8] = &sarc::get(&es, hurt::FILE).unwrap().data;
+            let was: &[u8] = &sarc::get(&old, hurt::FILE).unwrap().data;
+            assert_eq!(raw.len(), was.len());
+            let d: lottery::Doc = lottery::Doc::open(raw).unwrap();
+            let top: Vec<(String, lottery::Slot)> = d.map(d.root().unwrap()).unwrap();
+            let ext: Vec<(String, lottery::Slot)> = d.map(lottery::find(&top, hurt::EXTERNAL).unwrap()).unwrap();
+            let rates: Vec<(u32, lottery::Slot)> = d.hash(lottery::find(&ext, hurt::RATES).unwrap()).unwrap();
+            assert_eq!(rates.len(), 19);
+            assert!(rates.iter().all(|r| f32::from_bits(r.1.val) == hurt::KILL_RATE));
+            let int: Vec<(String, lottery::Slot)> = d.map(lottery::find(&top, hurt::INTERNAL).unwrap()).unwrap();
+            let fall: Vec<(String, lottery::Slot)> = d.map(lottery::find(&int, hurt::FALL).unwrap()).unwrap();
+            assert_eq!(lottery::find(&fall, hurt::FALL_MIN).unwrap().val as i32, hurt::KILL_INT);
+            let lava: Vec<(String, lottery::Slot)> = d.map(lottery::find(&int, "LavaDamageParameters").unwrap()).unwrap();
+            assert_eq!(lottery::find(&lava, "Damage").unwrap().val as i32, hurt::KILL_INT);
+            assert_eq!(lottery::find(&lava, "ContinuousDamage").unwrap().val, 0);
+        }
+        let mut grabber = |p: &str, stem: &str| -> Option<Node> {
+            let out: &Out = outs.iter().find(|x| x.path == p)?;
+            let es: Vec<Entry> = sarc::parse(&rf.zs.decompress(&out.z).unwrap()).unwrap();
+            let e: &Entry = sarc::get(&es, &format!("{}{stem}{}", hurt::GRAB_DIR, hurt::GRAB_EXT))?;
+            Byml::parse(&e.data).unwrap().root.get(hurt::GRAB_KEY).cloned()
+        };
+        for (p, stem) in [("Pack/Actor/Enemy_ReDead.pack.zs", "Enemy_ReDead"), ("Pack/Actor/Enemy_LikeLike.pack.zs", "Enemy_LikeLike"), ("Pack/Actor/Enemy_DeadHand_Hand.pack.zs", "Enemy_DeadHand_Hand"), ("Pack/Actor/Enemy_Floormaster_Little.pack.zs", "Enemy_Floormaster_Little")] {
+            assert_eq!(grabber(p, stem), Some(Node::I32(hurt::KILL_INT)), "{stem}");
+        }
+        assert_eq!(grabber("Pack/Actor/Enemy_Wallmaster.pack.zs", "Enemy_Wallmaster"), None);
+        assert_eq!(o.notes(), vec![hurt::note(hurt::Hurt::OneHit)]);
     }
 
     #[test]

@@ -201,6 +201,12 @@ fn difficulty() -> Vec<Setting> {
         Setting::number(d::DAMAGE_NUM, d::DAMAGE, "difficulty", "Enemy damage", d::NORMAL, d::STAT_RANGE.0, d::STAT_RANGE.1)
             .multiplier(d::STAT_STEP, d::NORMAL)
             .tip("How hard enemies and their projectiles hit, from 0.5x to 5x. Traps, lava, falls and grabs do their usual damage."),
+        Setting::choice(d::HURT_NUM, d::HURT, "difficulty", "Damage Link takes", "normal")
+            .opt("normal", "Normal", "Enemies, traps and falls hurt as usual.")
+            .opt("double", "Double", "Everything that hurts Link, enemy hits, grabs and falls, does twice the damage.")
+            .opt("quadruple", "Quadruple", "Everything that hurts Link does four times the damage.")
+            .opt("one_hit", "One hit kills", "Any hit takes all of Link's hearts. A bottled fairy still revives him.")
+            .tip("How much damage Link takes from enemy hits, boss attacks, grabs, projectiles and falls. Double and Quadruple multiply it. One hit kills takes every heart at once, and a bottled fairy still revives you. Falling into a pit or lava still costs one heart. Stacks with Enemy damage."),
         Setting::number(d::SPEED_NUM, d::SPEED, "difficulty", "Enemy speed", d::NORMAL, d::SPEED_RANGE.0, d::SPEED_RANGE.1)
             .multiplier(d::SPEED_STEP, d::NORMAL)
             .tip("How fast enemies move and attack, from 0.75x to 2x. Experimental: most enemies ignore it so far, and only Lizalfos clearly speed up."),
