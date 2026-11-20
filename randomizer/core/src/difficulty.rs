@@ -252,7 +252,7 @@ impl Opts {
             } else {
                 out.push(format!("A barrier blocks the way at {} while its guards are alive, and drops when they are beaten. At Zora's River the guards are Lizalfos added for this. The barrier and guards come back whenever the area reloads.", names.join(", ")));
             }
-            if self.gate_list().iter().any(|g| g.new_kind == gates::LEEVER_GUARD) {
+            if self.gate_list().iter().any(|g| g.new_kind == gates::LEEVER_GIANT) {
                 out.push(leevers::NOTE.to_string());
             }
             if let Some(n) = gates::shuffle_note(self.entrances) {
@@ -500,9 +500,6 @@ pub fn stage(rf: &mut Romfs, o: &Opts, have: Have, seed: &str) -> Res<Vec<Out>> 
     let gl: Vec<gates::Gate> = o.gate_list();
     if !gl.is_empty() {
         step(rf, &mut outs, have, |rf, have| gates::stage(rf, have, &gl))?;
-        if gl.iter().any(|g| g.new_kind == gates::LEEVER_GUARD) {
-            step(rf, &mut outs, have, leevers::stage)?;
-        }
     }
     if o.extra > horde::FROM {
         step(rf, &mut outs, have, |rf, have| horde::stage(rf, have, seed, o.extra, o.encounters))?;

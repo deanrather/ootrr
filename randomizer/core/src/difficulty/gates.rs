@@ -60,7 +60,8 @@ pub const DODONGO_GUARD: &str = "Enemy_Dodongo";
 pub const POE_GUARD: &str = "Enemy_Poe";
 pub const LIKELIKE_GUARD: &str = "Enemy_LikeLike";
 pub const GIANT: f32 = 2.5;
-pub const LEEVER_GUARD: &str = "Enemy_Leever_Fixed";
+pub const LEEVER_GUARD: &str = "Enemy_Leever_Gate";
+pub const LEEVER_GIANT: &str = "Enemy_Leever_Gate_Giant";
 pub const KEESE_GUARD: &str = "Enemy_Keese";
 pub const DARKLINK_GUARD: &str = "Enemy_MiddleBoss_DarkLink";
 pub const BARRIER_HALF: f32 = 1.0;
@@ -128,7 +129,7 @@ pub const GATES: [Gate; 21] = [
     Gate { id: 17, name: "the Graveyard, the way to the Shadow Temple", map: "Graveyard_Child", a: [72.35, 108.56, 0.62], b: [72.35, 108.46, 4.34], spot: [67.6, 108.64, 2.5], more: &[[69.0, 108.62, 0.9], [69.0, 108.54, 4.3]], also: &[], sink: 0.0, radius: RADIUS, new_kind: POE_GUARD, more_kind: "", scale: 1.0, closed_forest_only: false },
     Gate { id: 18, name: "the Graveyard, the way to the Shadow Temple", map: "Graveyard_Adult", a: [72.35, 108.56, 0.62], b: [72.35, 108.46, 4.34], spot: [67.6, 109.03, 2.5], more: &[[69.0, 109.27, 0.9], [69.0, 108.22, 4.3]], also: &[], sink: 0.0, radius: RADIUS, new_kind: POE_GUARD, more_kind: "", scale: 1.0, closed_forest_only: false },
     Gate { id: 19, name: "Hyrule Field, the way down to Lake Hylia", map: "HyruleField_Child", a: [-104.13, 139.6, 371.34], b: [-61.78, 139.6, 401.59], spot: [-80.6, 141.11, 374.0], more: &[[-88.8, 141.48, 371.7], [-75.1, 140.86, 379.9]], also: &[], sink: 0.0, radius: RADIUS, new_kind: ZORA_GUARD, more_kind: "", scale: 1.0, closed_forest_only: false },
-    Gate { id: 20, name: "Lon Lon Ranch, the north gate", map: "HyruleField_Child", a: [-65.5, 150.0, 183.5], b: [-56.5, 150.0, 184.5], spot: [-60.5, 150.02, 168.0], more: &[[-64.0, 150.2, 166.0], [-57.0, 149.91, 166.0], [-62.5, 150.2, 162.0], [-58.5, 149.89, 162.0], [-60.5, 150.11, 172.5]], also: &[], sink: 0.0, radius: RADIUS, new_kind: LEEVER_GUARD, more_kind: LEEVER_GUARD, scale: GIANT, closed_forest_only: false },
+    Gate { id: 20, name: "Lon Lon Ranch, the north gate", map: "HyruleField_Child", a: [-65.5, 150.0, 183.5], b: [-56.5, 150.0, 184.5], spot: [-60.5, 150.02, 168.0], more: &[[-64.0, 150.2, 166.0], [-57.0, 149.91, 166.0], [-62.5, 150.2, 162.0], [-58.5, 149.89, 162.0], [-60.5, 150.11, 172.5]], also: &[], sink: 0.0, radius: RADIUS, new_kind: LEEVER_GIANT, more_kind: LEEVER_GUARD, scale: GIANT, closed_forest_only: false },
     Gate { id: 21, name: "Lake Hylia, the bridge by the laboratory", map: "HyruleField_Child", a: [-166.92, 137.64, 421.84], b: [-158.52, 137.32, 427.94], spot: [-153.5, 136.16, 423.0], more: &[[-149.5, 138.2, 419.5], [-149.5, 138.2, 426.5], [-146.5, 139.0, 423.0], [-150.5, 140.0, 430.0]], also: &[], sink: 0.0, radius: RADIUS, new_kind: LIKELIKE_GUARD, more_kind: KEESE_GUARD, scale: 1.0, closed_forest_only: false },
     Gate { id: 22, name: "Lake Hylia, the bridge by the laboratory", map: "HyruleField_Adult", a: [-166.92, 137.64, 421.84], b: [-158.52, 137.32, 427.94], spot: [-153.5, 135.93, 423.0], more: &[[-149.5, 138.2, 419.5], [-149.5, 138.2, 426.5], [-146.5, 139.0, 423.0], [-150.5, 140.0, 430.0]], also: &[], sink: 0.0, radius: RADIUS, new_kind: LIKELIKE_GUARD, more_kind: KEESE_GUARD, scale: 1.0, closed_forest_only: false },
     Gate { id: 23, name: "Ganon's Castle, the north exit of the first round room", map: "InsideGanonCastle", a: [-4.0, 110.3, 60.0], b: [4.0, 110.3, 60.0], spot: [0.0, 110.3, 76.0], more: &[], also: &[], sink: 0.0, radius: RADIUS, new_kind: DARKLINK_GUARD, more_kind: "", scale: 1.0, closed_forest_only: false },
@@ -1206,7 +1207,7 @@ mod tests {
         let mut rf: Romfs = Romfs::open(&root).unwrap();
         assert!(rf.read("Pack/Actor/Obj_EnemyCounter_A_08.pack.zs").is_ok());
         assert!(rf.read(&format!("Pack/Actor/{ZORA_GUARD}.pack.zs")).is_ok());
-        for k in GATES.iter().flat_map(|g| [g.new_kind, g.more_kind]).filter(|k| !k.is_empty()) {
+        for k in GATES.iter().flat_map(|g| [g.new_kind, g.more_kind]).filter(|k| !k.is_empty() && *k != LEEVER_GUARD && *k != LEEVER_GIANT) {
             assert!(rf.read(&format!("Pack/Actor/{k}.pack.zs")).is_ok(), "{k}");
         }
         let meadow: Byml = rf.read_byml(&file(&GATES[0], "Static")).unwrap();
@@ -1249,7 +1250,7 @@ mod tests {
             (17, "Graveyard_Child", POE_GUARD, 3),
             (18, "Graveyard_Adult", POE_GUARD, 3),
             (19, "HyruleField_Child", ZORA_GUARD, 3),
-            (20, "HyruleField_Child", LEEVER_GUARD, 6),
+            (20, "HyruleField_Child", LEEVER_GIANT, 6),
             (21, "HyruleField_Child", LIKELIKE_GUARD, 5),
             (22, "HyruleField_Adult", LIKELIKE_GUARD, 5),
         ];
@@ -1297,7 +1298,7 @@ mod tests {
         assert_eq!(f.guards.len(), 1);
         assert_eq!(text(&f.guards[0], "Gyaml"), "Enemy_MiddleBoss_DarkLink");
         let ranch: &Gate = GATES.iter().find(|g| g.id == 20).unwrap();
-        assert_eq!((ranch.new_kind, ranch.more_kind, ranch.scale), (LEEVER_GUARD, LEEVER_GUARD, GIANT));
+        assert_eq!((ranch.new_kind, ranch.more_kind, ranch.scale), (LEEVER_GIANT, LEEVER_GUARD, GIANT));
         for id in [21u8, 22] {
             let lake: &Gate = GATES.iter().find(|g| g.id == id).unwrap();
             assert_eq!((lake.new_kind, lake.more_kind, lake.more.len()), (LIKELIKE_GUARD, KEESE_GUARD, 4));
