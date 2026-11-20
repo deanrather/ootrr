@@ -746,7 +746,7 @@ pub const MENU: &[Page] = &[
         label: "Time savers",
         heading: GAMEPLAY,
         sections: &[
-            sec("Cutscenes", &["skip_intro", "skip_cutscenes", "skip_story_scenes", "faster_chests", "skip_first_pickup_text"]),
+            sec("Cutscenes", &["skip_intro", "skip_cutscenes", "skip_story_scenes", "faster_chests", "skip_first_pickup_text", "skip_area_intros"]),
             sec("Side quests", &["skip_mask_quest", "anju_one_cucco"]),
             sec("Dungeons", &["deku_bridge_safe"]),
             sec("Puzzles", &["faster_blocks"]),

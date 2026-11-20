@@ -430,6 +430,10 @@ pub fn build() -> Schema {
             .tip("No \"You got X!\" box the first time you pick up a rupee, a heart, a magic jar, arrows or Deku seeds. Chests and real items still show theirs."),
     );
     s.push(
+        Setting::toggle(crate::area_intros::NUM, crate::area_intros::SETTING, "world", "Skip area intros", false)
+            .tip("The short scene that shows off an area the first time you enter it is skipped."),
+    );
+    s.push(
         Setting::number(31, "trials", "goal", "Ganon's Trials", 6, 0, 6)
             .tip("How many of the six trials in Ganon's Castle must be cleared. Any of the six count: below 6, the barrier is dispelled once that many trials are cleared, whichever they are.")
             .when_off(crate::ganon_trials::SKIP),
