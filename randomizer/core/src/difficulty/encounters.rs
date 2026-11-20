@@ -20,7 +20,8 @@ pub const NIGHT: &str = "Enemy_Guay_Nocturnal";
 pub const OCTO: &str = "Enemy_Octorok";
 pub const SCRUB: &str = "Enemy_Scrub_Mad";
 pub const LEAF: &str = "Enemy_Scrub_Mad_Leaf";
-pub const BEAMOS: &str = "Enemy_Beamos";
+pub const BEAMOS: &str = crate::difficulty::beamos::CLASS;
+pub const BEAMOS_SCALE: f32 = 1.6;
 pub const FIRST_ADULT: &str = "HavePlayedEvent.Dm_TimeTemple_0065";
 pub const LAKE_FULL: &str = "HavePlayedEvent.Dm_LakeHrl_0020";
 pub const ADULT: &str = "HyruleField_Adult";
@@ -28,7 +29,7 @@ pub const SEED: &str = "ootrr special encounters";
 pub const GROUPS: [&str; 2] = ["FarDeleteGroups", "SimultaneousGroups"];
 pub const RING: f32 = 3.0;
 pub const APPEAR: f32 = 3.5;
-pub const NOTE: &str = "Special encounters: a Dead Hand waits in the dark hole in east Hyrule Field (by the ReDead and the chest) and in the foggy hole at the foot of the Death Mountain Trail (with the Baby Dodongos), and an Iron Knuckle stands in the open field between Kakariko, Lon Lon Ranch and Kokiri Forest and gets up when you come close. Nine Like Likes wait around Lake Hylia, child and adult. Child Hyrule Field gets 24 more Guays in six loose flocks over the open grass. Twelve Octoroks swim in the open water of Lake Hylia, along the two rope bridges and off the fishing pond shore, child and adult (once the lake is full again). Ten Mad Scrubs hide in the trees south west of Lon Lon Ranch, in both maps. Ten Beamos stand between the pillars of the adult Temple of Time hall and are only there after the first adult scenes in the temple. They come back whenever the area reloads.";
+pub const NOTE: &str = "Special encounters: a Dead Hand waits in the dark hole in east Hyrule Field (by the ReDead and the chest) and in the foggy hole at the foot of the Death Mountain Trail (with the Baby Dodongos), and an Iron Knuckle stands in the open field between Kakariko, Lon Lon Ranch and Kokiri Forest and gets up when you come close. Nine Like Likes wait around Lake Hylia, child and adult. Child Hyrule Field gets 24 more Guays in six loose flocks over the open grass. Twelve Octoroks swim in the open water of Lake Hylia, along the two rope bridges and off the fishing pond shore, child and adult (once the lake is full again). Ten Mad Scrubs hide in the trees south west of Lon Lon Ranch, in both maps. Ten Beamos stand between the pillars of the adult Temple of Time hall and are only there after the first adult scenes in the temple. They are a new kind with a longer sight, so they see Link anywhere in the aisle; the game's own Beamos are untouched. They come back whenever the area reloads.";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum What {
@@ -273,6 +274,7 @@ pub fn beamos(y: &mut Byml, p: &Place, raws: &[&[u8]], map: &str) -> Res<usize> 
     let id: u64 = next(raws, &mut taken, &format!("{SEED} {map} {}", p.name));
     let mut b: Node = actor(BEAMOS, id, p.at, euler(0.0, p.turn));
     b.set("Dynamic", Node::Map(vec![("Drop__DropTable".to_string(), Node::Str("None".to_string()))]));
+    b.set("Scale", crate::difficulty::ambush::floats([BEAMOS_SCALE; 3]));
     let flag: Vec<(String, Node)> = vec![("FlagName".to_string(), Node::Str(FIRST_ADULT.to_string())), ("IsCheckLazy".to_string(), Node::Bool(false)), ("IsNegation".to_string(), Node::Bool(false))];
     b.set("Presence", Node::Map(flag));
     list(y, "Actors")?.push(b);
@@ -524,6 +526,8 @@ mod tests {
             assert_eq!(a.get("Dynamic").and_then(|d| d.get("Drop__DropTable")), Some(&Node::Str("None".to_string())));
             assert_eq!(a.get("Presence").and_then(|p| p.get("FlagName")), Some(&Node::Str(FIRST_ADULT.to_string())));
             assert_eq!(a.get("Presence").and_then(|p| p.get("IsNegation")), Some(&Node::Bool(false)));
+            assert_eq!(text(a, "Gyaml"), "Enemy_Beamos_Temple");
+            assert_eq!(vec3(a, "Scale"), Some([BEAMOS_SCALE; 3]));
             let t: [f32; 3] = vec3(a, "Translate").unwrap();
             assert!(t[0] > 80.0 && t[0] < 116.0 && ((t[2] + 43.5).abs() < 0.01 || (t[2] + 24.5).abs() < 0.01));
         }

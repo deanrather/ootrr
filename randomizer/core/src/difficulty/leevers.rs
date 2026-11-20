@@ -259,7 +259,7 @@ pub struct Made {
     pub grown: Vec<(String, usize, usize)>,
 }
 
-fn current(rf: &mut Romfs, have: &dyn Fn(&str) -> Option<Vec<u8>>, p: &str) -> Res<(Vec<u8>, u32)> {
+pub fn current(rf: &mut Romfs, have: &dyn Fn(&str) -> Option<Vec<u8>>, p: &str) -> Res<(Vec<u8>, u32)> {
     let z: Vec<u8> = match have(p) {
         Some(z) => z,
         None => rf.read(p)?,

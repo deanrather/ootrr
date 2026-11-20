@@ -1,4 +1,5 @@
 pub mod ambush;
+pub mod beamos;
 pub mod fireballs;
 pub mod gates;
 pub mod hook;

@@ -481,6 +481,9 @@ pub fn build_with(seed: &SeedFile, romfs: &P, load: &P, mod_name: &str, host: Ho
     extra += cow_files;
     let leever_classes: Vec<&str> = if p.difficulty.gate_list().iter().any(|g| g.new_kind == crate::difficulty::gates::LEEVER_GIANT) { vec![crate::difficulty::leevers::SMALL_CLASS, crate::difficulty::leevers::GIANT_CLASS] } else { Vec::new() };
     extra += crate::difficulty::leevers::write(&mut rf, &pk, &mut rst, &leever_classes)?;
+    if p.difficulty.encounters {
+        extra += crate::difficulty::beamos::write(&mut rf, &pk, &mut rst)?;
+    }
     let volvagia_lines: Vec<String> = if p.difficulty.volvagia {
         let (n, l): (usize, Vec<String>) = crate::difficulty::volvagia::write(&mut rf, &pk, &mut rst)?;
         extra += n;
