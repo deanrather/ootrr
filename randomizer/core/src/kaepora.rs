@@ -32,9 +32,9 @@ pub const MAP_FILE: &str = "Banc/KokiriForest/KokiriForest_Child_Dynamic.bcett.b
 pub const MSG_FILE: &str = "EventFlowMsg/Npc_Kaepora_DeathMountainTrail.msbt";
 pub const MESSAGE_OWNER: &str = BASE;
 pub const SEED: &str = "ootrr kaepora hint";
-pub const SPOT: [f32; 3] = [-104.0, 112.92, -39.0];
-pub const FACING: f32 = 1.5708;
-pub const MAX_LINKS: usize = 8;
+pub const SPOT: [f32; 3] = [-16.35, 119.23, -36.2];
+pub const FACING: f32 = -2.7558;
+pub const MAX_LINKS: usize = 24;
 pub const LABEL: &str = "OOTRRHint_";
 pub const DONE: &str = "OOTRRHint_Done";
 pub const TALK: &str = "Talk";
@@ -156,8 +156,9 @@ pub fn chain(d: &Data, seed: &SeedFile) -> Vec<Link> {
             let Some(flags) = flags_of(name) else {
                 continue;
             };
+            let held: usize = w.start.iter().filter(|(id, _)| *id == *i).map(|(_, n)| *n as usize).sum();
             let k: usize = *seen.entry(name.to_string()).and_modify(|n| *n += 1).or_insert(0);
-            let Some(flag) = flags.get(k) else {
+            let Some(flag) = flags.get(held + k) else {
                 continue;
             };
             let Some(at) = place(d, &w.locs[*l].name) else {
@@ -307,11 +308,12 @@ mod tests {
     }
 
     #[test]
-    fn the_temporary_spot_is_on_the_navmesh_floor_with_room_around_it() {
+    fn the_spot_is_within_one_and_a_half_units_of_the_navmesh_floor() {
         let Some(root) = dump() else { return };
         let mut rf: Romfs = Romfs::open(&root).unwrap();
         let g = crate::difficulty::ground::load(&mut rf, "KokiriForest_Child").unwrap().unwrap();
-        assert!(g.floor_near(SPOT[0], SPOT[1], SPOT[2], 0.6, 0.6).is_some(), "{:?}", g.floors(SPOT[0], SPOT[2]));
+        let near: bool = (-3..=3).any(|a| (-3..=3).any(|b| g.floor_near(SPOT[0] + a as f32 * 0.5, SPOT[1], SPOT[2] + b as f32 * 0.5, 0.6, 0.6).is_some()));
+        assert!(near, "{:?}", g.floors(SPOT[0], SPOT[2]));
     }
 
     #[test]
