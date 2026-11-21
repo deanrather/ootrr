@@ -653,7 +653,7 @@ mod tests {
         let o: Opts = read(&s, &mut bad);
         assert!(bad.is_empty() && o.gates() && o.any() && !o.packs());
         assert_eq!(o.gate_list().len(), gates::GATES.len() - gates::HELD.len());
-        assert_eq!(o.notes().len(), 2);
+        assert_eq!(o.notes().len(), 1);
         s.set(FOREST, Value::s("open")).unwrap();
         let o: Opts = read(&s, &mut bad);
         assert!(o.gates() && o.gate_list().len() == gates::GATES.len() - gates::HELD.len() - 1);
@@ -705,7 +705,7 @@ mod tests {
         assert!(bad.is_empty());
         assert_eq!(o, Opts { health: 250, damage: 50, speed: 200, no_hearts: true, no_fairies: true, no_ammo: true, lose_heart: true, no_bottles: true, no_target: true, no_dupes: true, extra: 50, respawn: true, minibosses: true, regen: true, minions: true, fairy_helps: true, backup: true, gates: true, encounters: true, cucco: true, bowling: true, fireballs: true, spawn_combo: true, randomizer: true, fuses: true, mega_like: true, volvagia: true, ..Opts::default() });
         assert!(o.any() && o.packs());
-        assert_eq!(o.notes().len(), 30);
+        assert_eq!(o.notes().len(), 29);
         assert_eq!(o.notes().iter().collect::<std::collections::BTreeSet<&String>>().len(), o.notes().len());
         assert!(o.notes().iter().any(|n| n.contains("About 50 in 100")));
         assert!(Opts { extra: 100, ..Opts::default() }.any() && !Opts { extra: 100, ..Opts::default() }.packs());

@@ -85,6 +85,7 @@ pub struct Gate {
     pub radius: f32,
     pub new_kind: &'static str,
     pub more_kind: &'static str,
+    pub loose: &'static [[f32; 3]],
     pub scale: f32,
     pub closed_forest_only: bool,
 }
@@ -109,30 +110,29 @@ impl Shuffle {
 }
 
 pub const BEYOND_DUNGEON_DOOR: [u8; 12] = [1, 2, 6, 14, 15, 16, 17, 18, 19, 20, 21, 22];
-pub const STRIP: [([f32; 3], [f32; 3]); 1] = [([-6.0, 120.0, -29.2], [3.8, 120.0, -29.2])];
 
 pub const GATES: [Gate; 21] = [
-    Gate { id: 1, name: "the passage out of the Sacred Forest Meadow's scrub lane", map: "SacredForestMeadow_Child", a: [-8.13, 114.46, -82.57], b: [-5.03, 114.47, -82.57], spot: [-6.4, 104.81, -53.4], more: &[], also: &[], sink: 0.0, radius: RADIUS, new_kind: SCRUB_GUARD, more_kind: "", scale: 1.0, closed_forest_only: false },
-    Gate { id: 2, name: "the Death Mountain Trail below the Dodongo's Cavern path", map: "DeathMountainTrail_Child", a: [-52.85, 106.91, -2.46], b: [-47.86, 106.93, -0.56], spot: [-54.67, 105.8, 6.39], more: &[], also: &[], sink: 0.0, radius: RADIUS, new_kind: DODONGO_GUARD, more_kind: "", scale: 1.0, closed_forest_only: false },
-    Gate { id: 3, name: "Zora's River before the Bean Seller", map: "ZoraRiver_Child", a: [-60.62, 100.11, -8.67], b: [-64.0, 99.85, -7.09], spot: [-64.05, 99.71, -14.09], more: &[], also: &[], sink: 0.0, radius: RADIUS, new_kind: ZORA_GUARD, more_kind: "", scale: 1.0, closed_forest_only: false },
-    Gate { id: 4, name: "Zora's River, the second narrows", map: "ZoraRiver_Child", a: [-25.79, 107.46, -23.17], b: [-23.86, 107.72, -26.27], spot: [-18.84, 106.01, -18.5], more: &[], also: &[], sink: 0.0, radius: RADIUS, new_kind: ZORA_GUARD, more_kind: "", scale: 1.0, closed_forest_only: false },
-    Gate { id: 5, name: "Zora's River, the upper narrows", map: "ZoraRiver_Child", a: [61.43, 108.87, -21.08], b: [60.85, 108.64, -14.65], spot: [34.73, 106.31, -24.81], more: &[[29.84, 106.68, -20.6]], also: &[], sink: 0.0, radius: RADIUS, new_kind: ZORA_GUARD, more_kind: "", scale: 1.0, closed_forest_only: false },
-    Gate { id: 6, name: "the path from Kokiri Forest to the Deku Tree", map: "KokiriForest_Child", a: [45.09, 113.77, -26.27], b: [45.43, 112.83, -19.5], spot: [38.26, 113.25, -17.34], more: &[], also: &[], sink: 0.0, radius: RADIUS, new_kind: "", more_kind: "", scale: 1.0, closed_forest_only: true },
-    Gate { id: 7, name: "the Lost Woods, east passage", map: "LostWood_Child", a: [28.81, 100.18, -50.21], b: [28.86, 100.23, -45.78], spot: [19.39, 99.67, -48.13], more: &[], also: &[], sink: 0.0, radius: RADIUS, new_kind: WOODS_GUARD, more_kind: "", scale: 1.0, closed_forest_only: false },
-    Gate { id: 9, name: "the Lost Woods, both doors of the small room", map: "LostWood_Child", a: [-4.49, 100.3, 2.16], b: [-4.45, 100.19, -2.56], spot: [0.0, 99.87, -0.5], more: &[], also: &[([4.48, 100.26, -1.96], [4.52, 100.26, 2.08])], sink: 0.0, radius: RADIUS, new_kind: WOODS_GUARD, more_kind: "", scale: 1.0, closed_forest_only: false },
-    Gate { id: 11, name: "the ruined Market, south entrance", map: "Market_Adult", a: [0.65, 102.04, 52.21], b: [-4.51, 102.07, 52.27], spot: [-1.67, 100.07, 32.58], more: &[], also: &[], sink: 0.0, radius: RADIUS, new_kind: MARKET_GUARD, more_kind: "", scale: 1.0, closed_forest_only: false },
-    Gate { id: 12, name: "Gerudo Valley, the way on to the fortress", map: "GerudoValley_Adult", a: [10.82, 98.0, 0.76], b: [11.23, 98.0, -6.52], spot: [21.14, 98.18, -3.23], more: &[[21.14, 98.18, -0.23]], also: &[], sink: 0.0, radius: RADIUS, new_kind: SKELETON_GUARD, more_kind: "", scale: 1.0, closed_forest_only: false },
-    Gate { id: 13, name: "Hyrule Field, the way to Gerudo Valley", map: "HyruleField_Adult", a: [-251.35, 136.64, 206.06], b: [-246.42, 135.53, 187.44], spot: [-214.24, 129.62, 194.89], more: &[], also: &[], sink: 0.5, radius: RADIUS, new_kind: FIELD_GUARD, more_kind: "", scale: 1.0, closed_forest_only: false },
-    Gate { id: 14, name: "Death Mountain Crater, the west ledge by the Deku Scrub", map: "DeathMountainCrater_Child", a: [-26.75, 119.34, 33.22], b: [-25.12, 119.32, 32.05], spot: [-19.5, 119.58, 35.5], more: &[], also: &[], sink: 0.0, radius: 5.0, new_kind: DODONGO_GUARD, more_kind: "", scale: 1.0, closed_forest_only: false },
-    Gate { id: 15, name: "Death Mountain Trail, the way up past the junction", map: "DeathMountainTrail_Child", a: [-16.99, 122.43, -29.2], b: [-8.78, 122.67, -29.2], spot: [-14.0, 123.61, -24.0], more: &[], also: &STRIP, sink: 0.0, radius: RADIUS, new_kind: DODONGO_GUARD, more_kind: "", scale: 1.0, closed_forest_only: false },
-    Gate { id: 16, name: "Death Mountain Trail, the way up past the junction", map: "DeathMountainTrail_Adult", a: [-16.82, 122.28, -29.2], b: [-8.89, 122.7, -29.2], spot: [-14.0, 123.13, -24.0], more: &[[-12.5, 123.05, -26.3], [-16.5, 123.6, -20.5], [-17.5, 123.69, -17.0]], also: &STRIP, sink: 0.0, radius: RADIUS, new_kind: DODONGO_GUARD, more_kind: "", scale: 1.0, closed_forest_only: false },
-    Gate { id: 17, name: "the Graveyard, the way to the Shadow Temple", map: "Graveyard_Child", a: [72.35, 108.56, 0.62], b: [72.35, 108.46, 4.34], spot: [67.6, 108.64, 2.5], more: &[[69.0, 108.62, 0.9], [69.0, 108.54, 4.3]], also: &[], sink: 0.0, radius: RADIUS, new_kind: POE_GUARD, more_kind: "", scale: 1.0, closed_forest_only: false },
-    Gate { id: 18, name: "the Graveyard, the way to the Shadow Temple", map: "Graveyard_Adult", a: [72.35, 108.56, 0.62], b: [72.35, 108.46, 4.34], spot: [67.6, 109.03, 2.5], more: &[[69.0, 109.27, 0.9], [69.0, 108.22, 4.3]], also: &[], sink: 0.0, radius: RADIUS, new_kind: POE_GUARD, more_kind: "", scale: 1.0, closed_forest_only: false },
-    Gate { id: 19, name: "Hyrule Field, the way down to Lake Hylia", map: "HyruleField_Child", a: [-104.13, 139.6, 371.34], b: [-61.78, 139.6, 401.59], spot: [-80.6, 141.11, 374.0], more: &[[-88.8, 141.48, 371.7], [-75.1, 140.86, 379.9]], also: &[], sink: 0.0, radius: RADIUS, new_kind: ZORA_GUARD, more_kind: "", scale: 1.0, closed_forest_only: false },
-    Gate { id: 20, name: "Lon Lon Ranch, the north gate", map: "HyruleField_Child", a: [-65.5, 150.0, 183.5], b: [-56.5, 150.0, 184.5], spot: [-60.5, 150.02, 168.0], more: &[[-64.0, 150.2, 166.0], [-57.0, 149.91, 166.0], [-62.5, 150.2, 162.0], [-58.5, 149.89, 162.0], [-60.5, 150.11, 172.5]], also: &[], sink: 0.0, radius: RADIUS, new_kind: LEEVER_GIANT, more_kind: LEEVER_GUARD, scale: GIANT, closed_forest_only: false },
-    Gate { id: 21, name: "Lake Hylia, the bridge by the laboratory", map: "HyruleField_Child", a: [-166.92, 137.64, 421.84], b: [-158.52, 137.32, 427.94], spot: [-153.5, 136.16, 423.0], more: &[[-149.5, 138.2, 419.5], [-149.5, 138.2, 426.5], [-146.5, 139.0, 423.0], [-150.5, 140.0, 430.0]], also: &[], sink: 0.0, radius: RADIUS, new_kind: LIKELIKE_GUARD, more_kind: KEESE_GUARD, scale: 1.0, closed_forest_only: false },
-    Gate { id: 22, name: "Lake Hylia, the bridge by the laboratory", map: "HyruleField_Adult", a: [-166.92, 137.64, 421.84], b: [-158.52, 137.32, 427.94], spot: [-153.5, 135.93, 423.0], more: &[[-149.5, 138.2, 419.5], [-149.5, 138.2, 426.5], [-146.5, 139.0, 423.0], [-150.5, 140.0, 430.0]], also: &[], sink: 0.0, radius: RADIUS, new_kind: LIKELIKE_GUARD, more_kind: KEESE_GUARD, scale: 1.0, closed_forest_only: false },
-    Gate { id: 23, name: "Ganon's Castle, the north exit of the first round room", map: "InsideGanonCastle", a: [-4.0, 110.3, 60.0], b: [4.0, 110.3, 60.0], spot: [0.0, 110.3, 76.0], more: &[], also: &[], sink: 0.0, radius: RADIUS, new_kind: DARKLINK_GUARD, more_kind: "", scale: 1.0, closed_forest_only: false },
+    Gate { id: 1, name: "the passage out of the Sacred Forest Meadow's scrub lane", map: "SacredForestMeadow_Child", a: [-8.13, 114.46, -82.57], b: [-5.03, 114.47, -82.57], spot: [-6.4, 104.81, -53.4], more: &[], also: &[], sink: 0.0, radius: RADIUS, new_kind: SCRUB_GUARD, more_kind: "", loose: &[], scale: 1.0, closed_forest_only: false },
+    Gate { id: 2, name: "the Death Mountain Trail below the Dodongo's Cavern path", map: "DeathMountainTrail_Child", a: [-52.85, 106.91, -2.46], b: [-47.86, 106.93, -0.56], spot: [-54.67, 105.8, 6.39], more: &[], also: &[], sink: 0.0, radius: RADIUS, new_kind: DODONGO_GUARD, more_kind: "", loose: &[], scale: 1.0, closed_forest_only: false },
+    Gate { id: 3, name: "Zora's River before the Bean Seller", map: "ZoraRiver_Child", a: [-60.62, 100.11, -8.67], b: [-64.0, 99.85, -7.09], spot: [-64.05, 99.71, -14.09], more: &[], also: &[], sink: 0.0, radius: RADIUS, new_kind: ZORA_GUARD, more_kind: "", loose: &[], scale: 1.0, closed_forest_only: false },
+    Gate { id: 4, name: "Zora's River, the second narrows", map: "ZoraRiver_Child", a: [-25.79, 107.46, -23.17], b: [-23.86, 107.72, -26.27], spot: [-18.84, 106.01, -18.5], more: &[], also: &[], sink: 0.0, radius: RADIUS, new_kind: ZORA_GUARD, more_kind: "", loose: &[], scale: 1.0, closed_forest_only: false },
+    Gate { id: 5, name: "Zora's River, the upper narrows", map: "ZoraRiver_Child", a: [61.43, 108.87, -21.08], b: [60.85, 108.64, -14.65], spot: [34.73, 106.31, -24.81], more: &[[29.84, 106.68, -20.6]], also: &[], sink: 0.0, radius: RADIUS, new_kind: ZORA_GUARD, more_kind: "", loose: &[], scale: 1.0, closed_forest_only: false },
+    Gate { id: 6, name: "the path from Kokiri Forest to the Deku Tree", map: "KokiriForest_Child", a: [45.09, 113.77, -26.27], b: [45.43, 112.83, -19.5], spot: [38.26, 113.25, -17.34], more: &[], also: &[], sink: 0.0, radius: RADIUS, new_kind: "", more_kind: "", loose: &[], scale: 1.0, closed_forest_only: true },
+    Gate { id: 7, name: "the Lost Woods, east passage", map: "LostWood_Child", a: [28.81, 100.18, -50.21], b: [28.86, 100.23, -45.78], spot: [19.39, 99.67, -48.13], more: &[], also: &[], sink: 0.0, radius: RADIUS, new_kind: WOODS_GUARD, more_kind: "", loose: &[], scale: 1.0, closed_forest_only: false },
+    Gate { id: 9, name: "the Lost Woods, both doors of the small room", map: "LostWood_Child", a: [-4.49, 100.3, 2.16], b: [-4.45, 100.19, -2.56], spot: [0.0, 99.87, -0.5], more: &[], also: &[([4.48, 100.26, -1.96], [4.52, 100.26, 2.08])], sink: 0.0, radius: RADIUS, new_kind: SKELETON_GUARD, more_kind: "", loose: &[], scale: 1.0, closed_forest_only: false },
+    Gate { id: 11, name: "the ruined Market, south entrance", map: "Market_Adult", a: [0.65, 102.04, 52.21], b: [-4.51, 102.07, 52.27], spot: [-1.67, 100.07, 32.58], more: &[], also: &[], sink: 0.0, radius: RADIUS, new_kind: MARKET_GUARD, more_kind: "", loose: &[], scale: 1.0, closed_forest_only: false },
+    Gate { id: 12, name: "Gerudo Valley, the way on to the fortress", map: "GerudoValley_Adult", a: [10.82, 98.0, 0.76], b: [11.23, 98.0, -6.52], spot: [21.14, 98.18, -3.23], more: &[[21.14, 98.18, -0.23]], also: &[], sink: 0.0, radius: RADIUS, new_kind: SKELETON_GUARD, more_kind: "", loose: &[], scale: 1.0, closed_forest_only: false },
+    Gate { id: 13, name: "Hyrule Field, the way to Gerudo Valley", map: "HyruleField_Adult", a: [-251.35, 136.64, 206.06], b: [-246.42, 135.53, 187.44], spot: [-214.24, 129.62, 194.89], more: &[], also: &[], sink: 0.5, radius: RADIUS, new_kind: FIELD_GUARD, more_kind: "", loose: &[], scale: 1.0, closed_forest_only: false },
+    Gate { id: 14, name: "Death Mountain Crater, the west ledge by the Deku Scrub", map: "DeathMountainCrater_Adult", a: [-28.0, 119.35, 33.0], b: [-16.5, 119.4, 33.0], spot: [-21.5, 119.39, 36.5], more: &[], also: &[], sink: 0.0, radius: 5.0, new_kind: DODONGO_GUARD, more_kind: "", loose: &[], scale: 1.0, closed_forest_only: false },
+    Gate { id: 15, name: "Death Mountain Trail, the way up past the junction", map: "DeathMountainTrail_Child", a: [-16.99, 122.43, -29.2], b: [-12.0, 122.58, -29.2], spot: [-14.0, 123.61, -24.0], more: &[], also: &[], sink: 0.0, radius: RADIUS, new_kind: DODONGO_GUARD, more_kind: "", loose: &[], scale: 1.0, closed_forest_only: false },
+    Gate { id: 16, name: "Death Mountain Trail, the way up past the junction", map: "DeathMountainTrail_Adult", a: [-16.82, 122.28, -29.2], b: [-12.0, 122.54, -29.2], spot: [-14.0, 123.13, -24.0], more: &[[-12.5, 123.05, -26.3], [-16.5, 123.6, -20.5], [-17.5, 123.69, -17.0]], also: &[], sink: 0.0, radius: RADIUS, new_kind: DODONGO_GUARD, more_kind: "", loose: &[], scale: 1.0, closed_forest_only: false },
+    Gate { id: 17, name: "the Graveyard, the way to the Shadow Temple", map: "Graveyard_Child", a: [72.35, 108.56, 0.62], b: [72.35, 108.46, 4.34], spot: [67.6, 108.64, 2.5], more: &[[69.0, 108.62, 0.9], [69.0, 108.54, 4.3]], also: &[], sink: 0.0, radius: RADIUS, new_kind: POE_GUARD, more_kind: "", loose: &[], scale: 1.0, closed_forest_only: false },
+    Gate { id: 18, name: "the Graveyard, the way to the Shadow Temple", map: "Graveyard_Adult", a: [72.35, 108.56, 0.62], b: [72.35, 108.46, 4.34], spot: [67.6, 109.03, 2.5], more: &[[69.0, 109.27, 0.9], [69.0, 108.22, 4.3]], also: &[], sink: 0.0, radius: RADIUS, new_kind: POE_GUARD, more_kind: "", loose: &[], scale: 1.0, closed_forest_only: false },
+    Gate { id: 19, name: "Hyrule Field, the way down to Lake Hylia", map: "HyruleField_Child", a: [-104.13, 139.6, 371.34], b: [-61.78, 139.6, 401.59], spot: [-80.6, 141.11, 374.0], more: &[[-88.8, 141.48, 371.7], [-75.1, 140.86, 379.9]], also: &[], sink: 0.0, radius: RADIUS, new_kind: ZORA_GUARD, more_kind: "", loose: &[], scale: 1.0, closed_forest_only: false },
+    Gate { id: 20, name: "Lon Lon Ranch, the north gate", map: "HyruleField_Child", a: [-65.5, 150.0, 183.5], b: [-56.5, 150.0, 184.5], spot: [-60.5, 150.02, 168.0], more: &[[-64.0, 150.2, 166.0], [-57.0, 149.91, 166.0]], also: &[], sink: 0.0, radius: RADIUS, new_kind: SKELETON_GUARD, more_kind: "", loose: &[], scale: 1.0, closed_forest_only: false },
+    Gate { id: 21, name: "Lake Hylia, the bridge by the laboratory", map: "HyruleField_Child", a: [-168.3, 137.6, 428.0], b: [-158.6, 137.3, 428.0], spot: [-161.0, 137.05, 419.5], more: &[], also: &[], sink: 0.0, radius: RADIUS, new_kind: LIKELIKE_GUARD, more_kind: "", loose: &[[-157.0, 139.0, 419.0], [-157.0, 139.0, 423.5], [-164.0, 139.5, 418.0], [-160.0, 140.5, 424.0]], scale: 1.0, closed_forest_only: false },
+    Gate { id: 22, name: "Lake Hylia, the bridge by the laboratory", map: "HyruleField_Adult", a: [-168.3, 137.6, 428.0], b: [-158.6, 137.3, 428.0], spot: [-161.0, 137.02, 419.5], more: &[], also: &[], sink: 0.0, radius: RADIUS, new_kind: LIKELIKE_GUARD, more_kind: "", loose: &[[-157.0, 139.0, 419.0], [-157.0, 139.0, 423.5], [-164.0, 139.5, 418.0], [-160.0, 140.5, 424.0]], scale: 1.0, closed_forest_only: false },
+    Gate { id: 23, name: "Ganon's Castle, the north exit of the first round room", map: "InsideGanonCastle", a: [-4.0, 110.3, 60.0], b: [4.0, 110.3, 60.0], spot: [0.0, 110.3, 76.0], more: &[], also: &[], sink: 0.0, radius: RADIUS, new_kind: DARKLINK_GUARD, more_kind: "", loose: &[], scale: 1.0, closed_forest_only: false },
 ];
 
 pub fn dir_of(g: &Gate) -> &'static str {
@@ -403,6 +403,10 @@ pub fn resolve(ys: &Byml, yd: &mut Byml, raws: &[&[u8]], g: &Gate) -> Res<Option
                 add.push(n.clone());
                 guards.push(n);
                 modes.push(Mode::Trigger);
+            }
+            for (j, at) in g.loose.iter().enumerate() {
+                let h: u64 = fresh(raws, &format!("{seed} loose {j}"));
+                add.push(actor(KEESE_GUARD, h, *at, euler(0.0, turn_from(g, *at))));
             }
         }
     }
@@ -733,7 +737,7 @@ mod tests {
     use super::*;
     use crate::difficulty::encounters::RING;
 
-    const G: Gate = Gate { id: 9, name: "t", map: "T_Child", a: [0.0, 5.0, 0.0], b: [6.0, 6.0, 0.0], spot: [3.0, 5.0, 10.0], more: &[], also: &[], sink: 0.0, radius: RADIUS, new_kind: "Enemy_New", more_kind: "", scale: 1.0, closed_forest_only: false };
+    const G: Gate = Gate { id: 9, name: "t", map: "T_Child", a: [0.0, 5.0, 0.0], b: [6.0, 6.0, 0.0], spot: [3.0, 5.0, 10.0], more: &[], also: &[], sink: 0.0, radius: RADIUS, new_kind: "Enemy_New", more_kind: "", loose: &[], scale: 1.0, closed_forest_only: false };
 
     fn foe(kind: &str, h: u64, at: [f32; 3], flag: bool) -> Node {
         let mut a: Node = actor(kind, h, at, [0.0; 3]);
@@ -780,7 +784,7 @@ mod tests {
             assert_eq!(pieces(g).len(), total);
             assert_eq!(count(g), total);
         }
-        assert_eq!(GATES.iter().map(count).collect::<Vec<usize>>(), vec![2, 3, 2, 2, 3, 3, 2, 4, 3, 3, 6, 2, 7, 7, 2, 2, 14, 4, 4, 4, 3]);
+        assert_eq!(GATES.iter().map(count).collect::<Vec<usize>>(), vec![2, 3, 2, 2, 3, 3, 2, 4, 3, 3, 6, 4, 2, 2, 2, 2, 14, 4, 4, 4, 3]);
     }
 
     #[test]
@@ -819,14 +823,14 @@ mod tests {
     fn the_room_gate_shuts_both_doors_on_one_guard_and_the_gerudo_gate_has_two_skeletons() {
         let room: &Gate = GATES.iter().find(|g| g.id == 9).unwrap();
         assert_eq!(room.also.len(), 1);
-        assert_eq!(room.new_kind, WOODS_GUARD);
+        assert_eq!(room.new_kind, SKELETON_GUARD);
         assert!(room.more.is_empty());
         assert!(GATES.iter().all(|g| g.id != 10));
         let ys: Byml = map(Vec::new(), true);
         let mut yd: Byml = map(Vec::new(), false);
         let f: Found = resolve(&ys, &mut yd, &[], room).unwrap().unwrap();
         assert_eq!(f.guards.len(), 1);
-        let plan: Plan = names(room, &[WOODS_GUARD.to_string()], &f.modes, &[]);
+        let plan: Plan = names(room, &[SKELETON_GUARD.to_string()], &f.modes, &[]);
         assert_eq!(plan.counters.len(), count(room));
         let valley: &Gate = GATES.iter().find(|g| g.id == 12).unwrap();
         assert_eq!(valley.new_kind, SKELETON_GUARD);
@@ -1244,15 +1248,15 @@ mod tests {
     #[test]
     fn the_twentieth_of_november_gates_make_the_marked_guards_for_the_ages_asked() {
         let want: [(u8, &str, &str, usize); 9] = [
-            (14, "DeathMountainCrater_Child", DODONGO_GUARD, 1),
+            (14, "DeathMountainCrater_Adult", DODONGO_GUARD, 1),
             (15, "DeathMountainTrail_Child", DODONGO_GUARD, 1),
             (16, "DeathMountainTrail_Adult", DODONGO_GUARD, 4),
             (17, "Graveyard_Child", POE_GUARD, 3),
             (18, "Graveyard_Adult", POE_GUARD, 3),
             (19, "HyruleField_Child", ZORA_GUARD, 3),
-            (20, "HyruleField_Child", LEEVER_GIANT, 6),
-            (21, "HyruleField_Child", LIKELIKE_GUARD, 5),
-            (22, "HyruleField_Adult", LIKELIKE_GUARD, 5),
+            (20, "HyruleField_Child", SKELETON_GUARD, 3),
+            (21, "HyruleField_Child", LIKELIKE_GUARD, 1),
+            (22, "HyruleField_Adult", LIKELIKE_GUARD, 1),
         ];
         let ys: Byml = map(Vec::new(), true);
         let mut yd: Byml = map(Vec::new(), false);
@@ -1266,14 +1270,12 @@ mod tests {
             let rest: &str = if g.more_kind.is_empty() { kind } else { g.more_kind };
             assert!(f.guards[1..].iter().all(|x| text(x, "Gyaml") == rest), "gate {id}");
             assert!(f.modes.iter().all(|x| *x == Mode::Trigger), "gate {id}");
-            assert_eq!(f.add.len(), n, "gate {id}");
-            let giant: bool = f.guards[0].get("Scale").is_some();
-            assert_eq!(giant, id == 20, "gate {id}");
+            assert_eq!(f.add.len(), n + g.loose.len(), "gate {id}");
+            assert_eq!(g.loose.len(), if id >= 21 { 4 } else { 0 }, "gate {id}");
+            assert!(f.guards[0].get("Scale").is_none(), "gate {id}");
             assert!(f.guards[1..].iter().all(|x| x.get("Scale").is_none()), "gate {id}");
         }
-        assert_eq!(GATES.iter().find(|g| g.id == 20).unwrap().more_kind, LEEVER_GUARD);
-        assert_eq!(GATES.iter().filter(|g| g.scale != 1.0).map(|g| g.id).collect::<Vec<u8>>(), vec![20]);
-        assert_eq!(GATES.iter().filter(|g| !g.more_kind.is_empty()).count(), 3);
+        assert!(GATES.iter().all(|g| g.scale == 1.0 && g.more_kind.is_empty()));
         for (c, a) in [(15u8, 16u8), (17, 18), (21, 22)] {
             let x: &Gate = GATES.iter().find(|g| g.id == c).unwrap();
             let y: &Gate = GATES.iter().find(|g| g.id == a).unwrap();
@@ -1298,12 +1300,12 @@ mod tests {
         assert_eq!(f.guards.len(), 1);
         assert_eq!(text(&f.guards[0], "Gyaml"), "Enemy_MiddleBoss_DarkLink");
         let ranch: &Gate = GATES.iter().find(|g| g.id == 20).unwrap();
-        assert_eq!((ranch.new_kind, ranch.more_kind, ranch.scale), (LEEVER_GIANT, LEEVER_GUARD, GIANT));
+        assert_eq!((ranch.new_kind, ranch.more.len()), (SKELETON_GUARD, 2));
         for id in [21u8, 22] {
             let lake: &Gate = GATES.iter().find(|g| g.id == id).unwrap();
-            assert_eq!((lake.new_kind, lake.more_kind, lake.more.len()), (LIKELIKE_GUARD, KEESE_GUARD, 4));
+            assert_eq!((lake.new_kind, lake.more.len(), lake.loose.len()), (LIKELIKE_GUARD, 0, 4));
         }
-        assert_eq!(GATES.iter().find(|g| g.id == 9).unwrap().new_kind, WOODS_GUARD);
+        assert_eq!(GATES.iter().find(|g| g.id == 9).unwrap().new_kind, SKELETON_GUARD);
     }
 
     #[test]
@@ -1342,7 +1344,7 @@ mod tests {
     const STEP: f32 = 0.8;
     const CELL: f32 = 0.5;
     const REACH: f32 = 140.0;
-    const CLOSED: [u8; 2] = [15, 16];
+    const CLOSED: [u8; 1] = [14];
     const WEST_ROCKS: (f32, f32) = (-19.9, -33.0);
 
     fn seg_dist(p: [f32; 2], a: [f32; 2], b: [f32; 2]) -> f32 {
@@ -1434,5 +1436,20 @@ mod tests {
         }
         assert!(CLOSED.iter().all(|id| checked.contains(id)), "{checked:?}");
         assert!(bad.is_empty(), "{bad:#?}");
+    }
+
+    #[test]
+    fn the_trail_guards_and_walls_keep_well_clear_of_the_goron_city_loading_zone() {
+        let zone: [f32; 3] = [-1.65, 120.17, -26.12];
+        for g in GATES.iter().filter(|g| matches!(g.id, 15 | 16)) {
+            for p in std::iter::once(g.spot).chain(g.more.iter().copied()) {
+                assert!(dist(p, zone) >= 8.0, "gate {} guard {:?}", g.id, p);
+            }
+            for (a, b) in walls(g) {
+                let reach: f32 = MARGIN + BARRIER_HALF;
+                let d: f32 = seg_dist([zone[0], zone[2]], [a[0], a[2]], [b[0], b[2]]);
+                assert!(d - reach >= 8.0, "gate {} wall {d}", g.id);
+            }
+        }
     }
 }

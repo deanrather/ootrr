@@ -49,7 +49,7 @@ pub const DESTROY: &str = "IsRequestDestruction";
 pub const PROCEDURES: &str = "DeathProcedures";
 pub const BEATEN: &str = "HavePlayedEvent.Dm_FireTemple_BossOut";
 pub const PRESENCE: &str = "Presence";
-pub const NOTE: &str = "Volvagia roams Hyrule Field: as an adult, a copy of Volvagia under its own actor name flies over the open middle of Hyrule Field, coming out of the ground and diving back in at eight spots around one point, and breathes fire at you. It has no boss music, no intro scene and no death scene: beating it gives nothing and changes no story flag, a beaten one is never written down, so it is back the next time the field loads, and it stops appearing once you have beaten the real Volvagia in the Fire Temple (the flag that the Fire Temple victory scene has played). The Fire Temple fight is unchanged. Experimental, untested in the game.";
+pub const NOTE: &str = "Volvagia roams Hyrule Field: as an adult, a copy of Volvagia under its own actor name flies over the open middle of Hyrule Field, coming out of the ground and diving back in at eight spots around one point, and breathes fire at you. It has no boss music, no intro scene and no death scene: beating it gives nothing and changes no story flag, a beaten one is never written down, so it is back the next time the field loads, and it stops appearing once you have beaten the real Volvagia in the Fire Temple (the flag that the Fire Temple victory scene has played). The Fire Temple fight is unchanged. Functional WIP: when beaten in the field she freezes before her death animation; she should drop a red rupee and flee (planned).";
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Arena {

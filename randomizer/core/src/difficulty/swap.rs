@@ -40,6 +40,7 @@ pub const SHARE: u64 = 80;
 pub const CELL: f32 = 40.0;
 pub const SPREAD: u32 = 12;
 pub const GUAY: &str = "Enemy_Guay_Fixed";
+pub const BABY: &str = "Enemy_BabyDodongo";
 pub const SOURCES: &[&str] = &["Enemy_Dekubaba"];
 pub const PLACE_KEYS:&[&str] = &["BottomOfTheWell", "CustomPerceptionRange", "SpJumpOut", "ApperMinHeightLimit"];
 pub const NOTE: &str = "Enemy randomizer: about four in five ordinary enemies that no door, counter, group, link or event is tied to become another kind from anywhere in the game that moves on the same kind of ground (walkers on flat ground, walkers on slopes, hoppers, fliers, ceiling enemies; Octoroks and Leevers keep their kind), spread so a room gets a mix. Fire Keese only appear where the game already has them, ceiling enemies only indoors and Guays only outdoors. Child areas and rooms with an enemy counter only get kinds the Kokiri Sword alone can beat (a Deku Stick breaks after one hit, so sticks are not counted on). Wall Skulltulas, blue Tektites and Armos statues keep their kind. Bosses, minibosses, Gold Skulltulas, boss and miniboss rooms, Dodongo's Cavern's Dodongos and the enemies the game uses to open a way are left alone. The same seed gives the same enemies. Experimental, untested in the game.";
@@ -279,7 +280,7 @@ pub fn swap_list(map: &str, list: &mut [Node], vanilla: &Set<u64>, pool: &Pool, 
         let Some(k) = class(&n) else {
             continue;
         };
-        if !vanilla.contains(&h) || !free(a, seen) || kept(map, &n) || g.barred(a) || (g.child && SOURCES.contains(&n.as_str())) {
+        if !vanilla.contains(&h) || !free(a, seen) || (kept(map, &n) && n != BABY) || g.barred(a) || (g.child && SOURCES.contains(&n.as_str())) {
             continue;
         }
         let opts: Vec<&'static Kind> = options(map, k, pool, g, g.blade(a));
@@ -547,7 +548,7 @@ mod tests {
                 assert!(!sw.iter().any(|s| Some(s.0) == hash_of(keep)));
             }
         }
-        let dodongos: Vec<Node> = vec![foe("Enemy_Dodongo", 0x3_0000_0001, P, Some(1), Vec::new()), foe("Enemy_Wolfos", 0x3_0000_0002, P, Some(1), Vec::new()), foe("Enemy_BabyDodongo", 0x3_0000_0003, P, Some(1), Vec::new()), foe("Enemy_LikeLike", 0x3_0000_0004, P, Some(1), Vec::new())];
+        let dodongos: Vec<Node> = vec![foe("Enemy_Dodongo", 0x3_0000_0001, P, Some(1), Vec::new()), foe("Enemy_Wolfos", 0x3_0000_0002, P, Some(1), Vec::new()), foe("Enemy_Dodongo", 0x3_0000_0003, P, Some(1), Vec::new()), foe("Enemy_LikeLike", 0x3_0000_0004, P, Some(1), Vec::new())];
         let (out, sw): (Vec<Node>, Vec<(u64, String, String)>) = run("DodongoCavern", &dodongos, "a");
         assert_eq!(out, dodongos);
         assert!(sw.is_empty());
@@ -692,7 +693,7 @@ mod tests {
                 let h: u64 = hash_of(p).unwrap();
                 assert_eq!(hash_of(q), Some(h));
                 assert_eq!(seen.get(&h), Some(&OWN), "{} {h:x} is referenced", o.path);
-                assert!(free(p, &seen) && !kept(&map, gyaml(p)));
+                assert!(free(p, &seen) && (!kept(&map, gyaml(p)) || gyaml(p) == BABY));
                 assert!(p.get("Links").is_none() && p.get("Rails").is_none());
                 let (kp, kq): (&Kind, &Kind) = (class(gyaml(p)).unwrap(), class(gyaml(q)).unwrap());
                 assert_eq!(kp.class, kq.class, "{} -> {}", kp.gyaml, kq.gyaml);

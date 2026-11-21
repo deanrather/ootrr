@@ -263,3 +263,9 @@ Child gates wait for the Kokiri Sword, as all child gates do; adult gates rely o
 
 ### In the game
 For each gate: warp to the approach point in `playtest/gate14/PLAN.md` (just outside the trigger, facing the wall), with the Kokiri Sword for the child ones. Check: the map loads; nothing appears until you walk in; then the guards and the barrier; the barrier spans the passage with no gap at the ends; it drops when all guards are dead. Then: whether a child can climb out of the crater ledge pocket, the ranch at night, the Like Like in the field, the Poes in the child graveyard.
+
+## Changes after the 21 Nov hands-on
+- Gate 20 (Lon Lon north gate): three Stalfos replace the Leever guards. Gate 9 (Lost Woods): a Stalfos again.
+- Gates 21/22 (lake lab bridge): only the Like Like guards. The four Keese are plain extra enemies near it. The wall now runs across the landward end of the bridge strip only, not across the open area. Possible cause of the fall through the floor: the old wall started at the lab entrance sign and anchor, where Link arrives; not confirmed.
+- Gate 14 (Crater): adult only, with a wall across the full width of the ledge, checked against the navmesh by the gate walk test.
+- Gates 15/16 (Trail): left in place, but the east strip of wall that ran into the Goron City loading zone is gone and the wall ends 8 units short of it. Their walk test is no longer run, as the wall no longer closes the trail; a new position is coming.

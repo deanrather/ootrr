@@ -44,3 +44,6 @@ See `<playtest folder>\volvagia\PLAN.md`: stage 1 Market load test, appearance, 
 - The room logic `Enemy_DungeonBoss_Volvagia_Main_e0cf` creates/deletes it and drives rocks, lava, palette and warp.
 - The story hooks are in the shared `DungeonBossCommonParam` (Appear `Dm_FireTemple_BossIn`, Die `SageOfFire_DefeatBoss`), which is why a field copy needs its own actor class: done above.
 - The adult field has no flyer rails; Guay flocks are native.
+
+## Status (21 Nov, hands-on)
+Functional WIP (label in the settings page and tooltip). When beaten in the field she freezes before her death animation; she should drop a red rupee and flee (planned).

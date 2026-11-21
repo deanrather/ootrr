@@ -109,3 +109,6 @@ Turn on "Enemy randomizer" only (with `skip_intro`, `skip_cutscenes` all, `faste
 - **Hands-on session 4 (20 Nov late afternoon), seen by the user:** gates without the sword (absent), with the sword (stay when walked up to: the fix works), the guard kill drops the barrier; the Zora ambush works with the fix; the spawn combo; lose heart on death. Enemy randomizer v1: works but is too subtle ("boring"). v2 built (``b461862``, not played): 91 swaps in 16 maps, into 15 kinds; 78% of the 117 enemies the safety rules allow; the Fire Temple's 18 go to 9 kinds. The count is limited by the safety rules, not the pool.
 
   - **Enemy randomizer v2:** all 16 swapped maps load, Dodongo's Cavern included, and the new kinds are present at every planned spot checked. Movement and walls not judged.
+
+## Dodongo's Cavern (21 Nov)
+Seed handson9 swapped 8 enemies in Dodongo's Cavern, all Keese. The 12 Baby Dodongos, 5 Dodongos and 5 Armos were left, because Dodongo kinds are kept in that dungeon. Baby Dodongos are now allowed to be swapped out (never swapped in), which brings the seed to 15 swaps there. Dodongos and Armos still keep their kind.

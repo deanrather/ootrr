@@ -16,7 +16,6 @@ pub const FINGERS: &str = "Enemy_DeadHand_Hand";
 pub const KNIGHT: &str = "Enemy_IronKnuckle_Silver";
 pub const LIKE: &str = "Enemy_LikeLike";
 pub const GUAY: &str = "Enemy_Guay_Fixed";
-pub const NIGHT: &str = "Enemy_Guay_Nocturnal";
 pub const OCTO: &str = "Enemy_Octorok";
 pub const SCRUB: &str = "Enemy_Scrub_Mad";
 pub const LEAF: &str = "Enemy_Scrub_Mad_Leaf";
@@ -237,8 +236,7 @@ pub fn like_like(y: &mut Byml, p: &Place, raws: &[&[u8]], map: &str) -> Res<usiz
 pub fn guay(y: &mut Byml, p: &Place, raws: &[&[u8]], map: &str) -> Res<usize> {
     let mut taken: Vec<u64> = Vec::new();
     let id: u64 = next(raws, &mut taken, &format!("{SEED} {map} {}", p.name));
-    let mut g: Node = actor(GUAY, id, p.at, euler(0.0, p.turn));
-    g.set("Dynamic", Node::Map(vec![(NIGHT.to_string(), Node::Bool(true))]));
+    let g: Node = actor(GUAY, id, p.at, euler(0.0, p.turn));
     list(y, "Actors")?.push(g);
     Ok(1)
 }
@@ -556,7 +554,7 @@ mod tests {
         let mut ids: Vec<u64> = Vec::new();
         for a in actors(&child).iter().filter(|a| text(a, "Gyaml") == GUAY) {
             assert!(a.get("Links").is_none() && a.get("Name").is_none());
-            assert_eq!(a.get("Dynamic").and_then(|d| d.get(NIGHT)), Some(&Node::Bool(true)));
+            assert!(a.get("Dynamic").is_none());
             let t: [f32; 3] = vec3(a, "Translate").unwrap();
             assert!(!seen.contains(&t));
             seen.push(t);
