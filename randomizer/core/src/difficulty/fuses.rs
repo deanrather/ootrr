@@ -18,7 +18,6 @@ pub const CHU_GRAPH: &str = "AI/Item_Bombchu_Remake.root.ainb";
 pub const STICK_PACK: &str = "Pack/Actor/Weapon_DekuStick.pack.zs";
 pub const STICK_GRAPH: &str = "AI/Weapon_DekuStick.root.ainb";
 pub const DEATH: &str = "OneShotDeathRequestDeath";
-pub const EXTINGUISH: &str = "OneShotChemicalRequestExtinguish";
 pub const STICK_TERROR: &str = "ExecutePerceptionAdvancedEmitTerror";
 pub const CHU_ROOT: &str = "ExecuteBombchuScheduler";
 pub const DEATH_REASON: i32 = 10;
@@ -56,10 +55,6 @@ fn timer(a: &mut Ainb, tag: &str, floor: f32, top: f32, finish: usize) -> Res<us
 
 fn death(a: &mut Ainb, tag: &str) -> Res<usize> {
     a.add_node(&Spec::node(DEATH, &format!("{tag} death")).prop(1, "ExecuteEveryFrame", flag(false)).constant(0, "DeathReson", DEATH_REASON.to_le_bytes().to_vec()))
-}
-
-fn extinguish(a: &mut Ainb, tag: &str) -> Res<usize> {
-    a.add_node(&Spec::node(EXTINGUISH, &format!("{tag} out")).prop(1, "ExecuteEveryFrame", flag(false)))
 }
 
 fn sole(a: &Ainb, name: &str, what: &str) -> Res<usize> {
@@ -135,7 +130,7 @@ pub fn stick(raw: &[u8]) -> Res<Vec<u8>> {
     }
     let site: usize = sole(&a, STICK_TERROR, "Deku Stick")?;
     let parent: usize = parallel_above(&a, site, 1, "Deku Stick")?;
-    let out: usize = extinguish(&mut a, "ootrr stick")?;
+    let out: usize = death(&mut a, "ootrr stick")?;
     let top: usize = timer(&mut a, "ootrr stick", STICK_FLOOR, STICK_FRAMES, out)?;
     into_parallel(&mut a, parent, top)?;
     checked(a, "Deku Stick")
@@ -243,7 +238,7 @@ mod tests {
         assert_eq!(chu_a.el_type(r), PARALLEL);
         assert_eq!(chu_a.find_els(CHU_ROOT).len(), 1);
         assert_eq!(root(&before[1]), Some(r));
-        assert!(show(&graph_of(&mut rf, &outs[2].z, STICK_GRAPH)).contains(EXTINGUISH));
+        assert!(show(&graph_of(&mut rf, &outs[2].z, STICK_GRAPH)).contains("DeathReson = 10"));
         let patched: Vec<u8> = bomb(&before_raw(&mut rf)).unwrap();
         assert!(bomb(&patched).is_err());
     }
