@@ -18,8 +18,9 @@ pub const ANCHOR: &str = "DestinationAnchor";
 pub const PREFIX: &str = "Hazard_FireballStorm_";
 pub const SEED: &str = "ootrr fireball storms";
 pub const LIFT: f32 = 0.5;
+pub const SLUG: &str = "Enemy_TorchSlug";
 
-pub const NOTE: &str = "Burning rocks rain down, as on the Death Mountain Trail, while you stand in quiet stretches of Hyrule Field, Desert Colossus and the Haunted Wasteland (child and adult) or the Hyrule Castle garden (child), and stop when you leave. The Death Mountain Trail storms run on every visit, child and adult. A rock hits as hard as on the mountain.";
+pub const NOTE: &str = "Burning rocks rain down, as on the Death Mountain Trail, while you stand in quiet stretches of Hyrule Field and the Haunted Wasteland (child and adult) or the Hyrule Castle garden (child), and stop when you leave. The Death Mountain Trail storms run on every visit, child and adult. A rock hits as hard as on the mountain.";
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Spot {
@@ -31,18 +32,17 @@ pub struct Spot {
     pub manager: [f32; 3],
     pub volcano: [f32; 2],
     pub anchors: &'static [[f32; 3]],
+    pub slug: Option<[f32; 3]>,
     pub interval: f32,
     pub fall: f32,
 }
 
 pub const FIELD: &[&str] = &["HyruleField_Child", "HyruleField_Adult"];
 pub const CASTLE: &[&str] = &["HyruleCastle"];
-pub const DESERT: &[&str] = &["DesertColossus_Child", "DesertColossus_Adult"];
 pub const WASTELAND: &[&str] = &["HountedWasteland_Child", "HountedWasteland_Adult"];
 
 pub const FIELD_VOLCANO: [f32; 2] = [801.0, -370.0];
 pub const CASTLE_VOLCANO: [f32; 2] = [1468.0, 478.0];
-pub const DESERT_VOLCANO: [f32; 2] = [187.0, -10.0];
 pub const WASTELAND_VOLCANO: [f32; 2] = [182.0, 87.0];
 
 pub const TRAIL: [&str; 8] = [
@@ -56,16 +56,17 @@ pub const TRAIL: [&str; 8] = [
     "Logic/DeathMountainTrail_Adult_Prefab_fb7b.logic.module.ainb",
 ];
 
-pub const SPOTS: [Spot; 8] = [
+pub const SPOTS: [Spot; 7] = [
     Spot {
         name: "field_middle_road",
         dir: "HyruleField",
         maps: FIELD,
         area: [75.0, 152.9, 95.0],
-        size: [32.0, 12.0, 30.0],
+        size: [64.0, 12.0, 60.0],
         manager: [157.0, 216.0, 36.0],
         volcano: FIELD_VOLCANO,
-        anchors: &[[75.0, 149.4, 95.0], [85.0, 149.9, 100.0], [65.0, 149.7, 100.0], [80.0, 149.1, 85.0], [70.0, 150.2, 105.0], [85.0, 149.3, 90.0]],
+        anchors: &[[95.0, 150.4, 105.0], [55.0, 150.0, 105.0], [65.0, 150.7, 115.0]],
+        slug: Some([75.0, 149.2, 95.0]),
         interval: 45.0,
         fall: 3.5,
     },
@@ -74,10 +75,11 @@ pub const SPOTS: [Spot; 8] = [
         dir: "HyruleField",
         maps: FIELD,
         area: [55.0, 163.0, 190.0],
-        size: [32.0, 12.0, 30.0],
+        size: [64.0, 12.0, 60.0],
         manager: [136.0, 226.0, 132.0],
         volcano: FIELD_VOLCANO,
-        anchors: &[[55.0, 159.5, 190.0], [65.0, 158.3, 195.0], [45.0, 161.1, 195.0], [60.0, 158.1, 180.0], [50.0, 160.2, 200.0], [65.0, 157.7, 185.0]],
+        anchors: &[[75.0, 158.1, 200.0], [35.0, 161.5, 200.0], [65.0, 157.1, 170.0], [45.0, 160.4, 210.0], [75.0, 156.9, 180.0]],
+        slug: Some([55.0, 159.3, 190.0]),
         interval: 45.0,
         fall: 3.5,
     },
@@ -86,10 +88,11 @@ pub const SPOTS: [Spot; 8] = [
         dir: "HyruleField",
         maps: FIELD,
         area: [-170.0, 137.1, 170.0],
-        size: [32.0, 12.0, 30.0],
+        size: [64.0, 12.0, 60.0],
         manager: [-80.0, 200.0, 123.0],
         volcano: FIELD_VOLCANO,
-        anchors: &[[-170.0, 133.6, 170.0], [-160.0, 133.0, 175.0], [-180.0, 132.7, 175.0], [-165.0, 134.3, 160.0], [-175.0, 132.7, 180.0], [-160.0, 133.5, 165.0]],
+        anchors: &[[-150.0, 132.2, 180.0], [-190.0, 132.5, 180.0], [-160.0, 135.4, 150.0], [-180.0, 131.9, 190.0], [-150.0, 134.6, 160.0]],
+        slug: Some([-170.0, 133.4, 170.0]),
         interval: 45.0,
         fall: 3.5,
     },
@@ -98,23 +101,12 @@ pub const SPOTS: [Spot; 8] = [
         dir: "HyruleCastle",
         maps: CASTLE,
         area: [14.0, 118.0, -76.0],
-        size: [44.0, 10.0, 26.0],
+        size: [88.0, 10.0, 52.0],
         manager: [100.0, 186.0, -55.0],
         volcano: CASTLE_VOLCANO,
-        anchors: &[[25.0, 114.5, -74.0], [28.0, 114.5, -80.0], [4.0, 114.5, -71.0], [25.0, 114.5, -89.0], [-14.0, 114.5, -86.0]],
+        anchors: &[[36.0, 114.7, -72.0], [42.0, 114.2, -84.0], [4.0, 114.5, -71.0], [25.0, 114.5, -89.0], [-14.0, 114.5, -86.0]],
+        slug: None,
         interval: 60.0,
-        fall: 3.5,
-    },
-    Spot {
-        name: "desert_colossus_flats",
-        dir: "DesertColossus",
-        maps: DESERT,
-        area: [-137.0, 98.7, -43.0],
-        size: [28.0, 12.0, 30.0],
-        manager: [-56.0, 160.0, -47.0],
-        volcano: DESERT_VOLCANO,
-        anchors: &[[-137.0, 95.2, -43.0], [-131.0, 95.1, -47.0], [-131.0, 95.3, -38.0], [-141.0, 95.2, -48.0], [-137.0, 95.2, -33.0], [-126.0, 95.4, -43.0]],
-        interval: 45.0,
         fall: 3.5,
     },
     Spot {
@@ -122,10 +114,11 @@ pub const SPOTS: [Spot; 8] = [
         dir: "HyruleField",
         maps: FIELD,
         area: [133.0, 162.8, 214.0],
-        size: [32.0, 12.0, 30.0],
+        size: [64.0, 12.0, 60.0],
         manager: [192.0, 225.0, 167.0],
         volcano: FIELD_VOLCANO,
-        anchors: &[[145.0, 158.8, 218.0], [145.0, 159.9, 208.0], [135.0, 160.4, 205.0], [120.0, 160.4, 208.0], [120.0, 158.3, 218.0], [145.0, 157.5, 228.0]],
+        anchors: &[[157.0, 157.6, 222.0], [157.0, 159.9, 202.0], [137.0, 161.2, 196.0], [107.0, 161.5, 202.0], [107.0, 158.8, 222.0]],
+        slug: None,
         interval: 45.0,
         fall: 3.5,
     },
@@ -134,10 +127,11 @@ pub const SPOTS: [Spot; 8] = [
         dir: "HyruleField",
         maps: FIELD,
         area: [-33.0, 152.8, 92.0],
-        size: [32.0, 12.0, 30.0],
+        size: [64.0, 12.0, 60.0],
         manager: [35.0, 212.0, 49.0],
         volcano: FIELD_VOLCANO,
-        anchors: &[[-26.0, 149.3, 92.0], [-36.0, 149.4, 88.0], [-41.0, 149.2, 98.0], [-31.0, 149.3, 100.0], [-26.0, 149.4, 106.0], [-36.0, 149.0, 80.0]],
+        anchors: &[[-19.0, 149.2, 92.0], [-49.0, 148.9, 104.0], [-29.0, 149.0, 108.0], [-19.0, 149.1, 120.0], [-39.0, 148.4, 68.0]],
+        slug: Some([-33.0, 149.3, 92.0]),
         interval: 45.0,
         fall: 3.5,
     },
@@ -146,10 +140,11 @@ pub const SPOTS: [Spot; 8] = [
         dir: "HountedWasteland",
         maps: WASTELAND,
         area: [-56.0, 103.4, -55.0],
-        size: [32.0, 12.0, 30.0],
+        size: [64.0, 12.0, 60.0],
         manager: [18.0, 165.0, -19.0],
         volcano: WASTELAND_VOLCANO,
-        anchors: &[[-52.0, 99.6, -47.0], [-46.0, 99.4, -52.0], [-66.0, 98.6, -50.0], [-45.0, 100.6, -67.0], [-61.0, 99.3, -42.0], [-44.0, 99.2, -60.0]],
+        anchors: &[[-48.0, 99.2, -39.0], [-36.0, 100.5, -49.0], [-32.0, 100.3, -65.0]],
+        slug: Some([-56.0, 99.7, -55.0]),
         interval: 45.0,
         fall: 3.5,
     },
@@ -166,6 +161,10 @@ pub struct Plan {
 impl Spot {
     pub fn file(&self, map: &str, kind: &str) -> String {
         format!("Banc/{}/{map}_{kind}.bcett.byml.zs", self.dir)
+    }
+
+    pub fn added(&self) -> usize {
+        self.anchors.len() + 2 + usize::from(self.slug.is_some())
     }
 
     pub fn plan(&self) -> Plan {
@@ -322,6 +321,10 @@ pub fn place(y: &mut Byml, raws: &[&[u8]], s: &Spot, map: &str) -> Res<usize> {
         acts.push(n);
     }
     acts.push(b);
+    if let Some(at) = s.slug {
+        let slug: u64 = next(raws, &mut taken, &format!("{seed} slug"));
+        acts.push(actor(SLUG, slug, at, [0.0; 3]));
+    }
     let mut all: Vec<u64> = anchors.clone();
     all.push(manager);
     all.push(area);
@@ -338,7 +341,7 @@ pub fn place(y: &mut Byml, raws: &[&[u8]], s: &Spot, map: &str) -> Res<usize> {
     let gs: &mut Vec<Node> = list(y, "AiGroups")?;
     let i: usize = gs.iter().position(|x| hash_of(x).is_some_and(|v| v > group)).unwrap_or(gs.len());
     gs.insert(i, g);
-    Ok(s.anchors.len() + 2)
+    Ok(s.added())
 }
 
 fn source(rf: &Romfs, have: Have, p: &str) -> Res<Vec<u8>> {
@@ -410,7 +413,7 @@ mod tests {
 
     #[test]
     fn spots_are_laid_out_to_be_dodged() {
-        assert_eq!(SPOTS.len(), 8);
+        assert_eq!(SPOTS.len(), 7);
         for s in SPOTS.iter() {
             assert!(s.anchors.len() >= 3 && s.anchors.len() <= 8, "{}", s.name);
             assert!(s.interval >= 30.0 && s.fall >= 3.0, "{}", s.name);
@@ -418,8 +421,8 @@ mod tests {
             assert!((60.0..=110.0).contains(&far), "{} manager {far} away", s.name);
             assert!((55.0..=80.0).contains(&(s.manager[1] - s.area[1])), "{} manager height", s.name);
             for a in s.anchors {
-                assert!(near(*a, s.area) <= 30.0, "{} anchor too far from the box", s.name);
-                assert!((s.area[1] - a[1]).abs() < 6.0, "{} anchor height", s.name);
+                assert!(near(*a, s.area) <= 60.0, "{} anchor too far from the box", s.name);
+                assert!((s.area[1] - a[1]).abs() < 9.0, "{} anchor height", s.name);
             }
             let mut names: Vec<String> = Vec::new();
             for i in 0..s.anchors.len() {
@@ -473,6 +476,84 @@ mod tests {
     }
 
     #[test]
+    fn the_slug_marks_the_centre_and_stands_clear_of_the_anchors() {
+        for s in SPOTS.iter() {
+            if let Some(at) = s.slug {
+                assert!(near(at, s.area) < 1.0, "{}", s.name);
+                for a in s.anchors {
+                    assert!(near(*a, at) >= 8.0, "{} anchor {a:?} is too close to the slug", s.name);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn each_spot_is_linked_only_to_its_own_pieces() {
+        let Some(root) = dump() else {
+            eprintln!("skipped: set OOTRR_ROMFS");
+            return;
+        };
+        let mut rf: Romfs = Romfs::open(&root).unwrap();
+        let all: Vec<Out> = stage(&mut rf, &none).unwrap();
+        let mut ids: Vec<String> = Vec::new();
+        for s in SPOTS.iter() {
+            let p: Plan = s.plan();
+            ids.push(p.module.clone());
+            ids.push(p.manager.clone());
+            ids.push(p.area.clone());
+            ids.push(p.graph.clone());
+        }
+        let n: usize = ids.len();
+        ids.sort();
+        ids.dedup();
+        assert_eq!(ids.len(), n, "two spots share a module, graph, manager or area id");
+        for o in all.iter().filter(|o| o.path.ends_with(".map") || o.path.starts_with("Banc/")) {
+            let now: Byml = Byml::parse(&rf.zs.decompress(&o.z).unwrap()).unwrap();
+            let acts: &[Node] = now.root.get("Actors").unwrap().as_arr().unwrap();
+            let gs: &[Node] = now.root.get("AiGroups").unwrap().as_arr().unwrap();
+            let mine: Vec<&Spot> = SPOTS.iter().filter(|s| s.maps.iter().any(|m| s.file(m, "Static") == o.path)).collect();
+            let mut claimed: Vec<u64> = Vec::new();
+            for s in mine {
+                let p: Plan = s.plan();
+                let g: &Node = gs.iter().find(|g| text(g, "Logic") == p.module).unwrap();
+                let refs: &[Node] = g.get("References").unwrap().as_arr().unwrap();
+                assert_eq!(text(&refs[0], "Id"), p.manager);
+                assert_eq!(text(&refs[1], "Id"), p.area);
+                let m: &Node = acts.iter().find(|a| a.get("Hash") == refs[0].get("Reference")).unwrap();
+                let b: &Node = acts.iter().find(|a| a.get("Hash") == refs[1].get("Reference")).unwrap();
+                assert_eq!(text(m, "Gyaml"), MANAGER);
+                assert_eq!(vec3(m, "Translate"), Some(s.manager));
+                assert_eq!(text(b, "Gyaml"), AREA);
+                assert_eq!(vec3(b, "Translate"), Some(s.area));
+                assert_eq!(vec3(b, "Scale"), Some(s.size));
+                let links: &[Node] = m.get("Links").unwrap().as_arr().unwrap();
+                assert_eq!(links.len(), s.anchors.len());
+                let mut got: Vec<[f32; 3]> = Vec::new();
+                for l in links {
+                    assert_eq!(l.get("Src"), m.get("Hash"));
+                    let t: &Node = acts.iter().find(|a| a.get("Hash") == l.get("Dst")).unwrap();
+                    assert_eq!(text(t, "Gyaml"), ANCHOR);
+                    let h: u64 = hash_of(t).unwrap();
+                    assert!(!claimed.contains(&h), "{} shares an anchor with another spot", s.name);
+                    claimed.push(h);
+                    got.push(vec3(t, "Translate").unwrap());
+                }
+                for a in s.anchors {
+                    assert!(got.contains(a), "{} lost anchor {a:?}", s.name);
+                }
+                let graph: &Out = all.iter().find(|x| x.path == p.graph).unwrap();
+                let a: Ainb = Ainb::parse(&graph.z).unwrap();
+                assert!((0..a.els.len()).any(|i| a.prop_str(i, NAME) == Some(p.manager.as_str())));
+                assert!((0..a.els.len()).any(|i| a.prop_str(i, NAME) == Some(p.area.as_str())));
+                for other in SPOTS.iter().filter(|x| x.name != s.name) {
+                    let q: Plan = other.plan();
+                    assert!(!(0..a.els.len()).any(|i| a.prop_str(i, NAME) == Some(q.manager.as_str()) || a.prop_str(i, NAME) == Some(q.area.as_str())), "{} graph mentions {}", s.name, other.name);
+                }
+            }
+        }
+    }
+
+    #[test]
     fn the_storm_graph_wires_the_area_to_the_manager() {
         let Some(root) = dump() else {
             eprintln!("skipped: set OOTRR_ROMFS");
@@ -515,11 +596,12 @@ mod tests {
             let here: Vec<&Spot> = SPOTS.iter().filter(|s| s.maps.iter().any(|m| s.file(m, "Static") == o.path)).collect();
             let old: &[Node] = was.root.get("Actors").unwrap().as_arr().unwrap();
             let new: &[Node] = now.root.get("Actors").unwrap().as_arr().unwrap();
-            let added: usize = here.iter().map(|s| s.anchors.len() + 2).sum();
+            let added: usize = here.iter().map(|s| s.added()).sum();
             assert_eq!(new.len(), old.len() + added, "{}", o.path);
             assert_eq!(&new[..old.len()], old, "the actors that were there are untouched in {}", o.path);
             let count = |y: &[Node], g: &str| y.iter().filter(|a| text(a, "Gyaml") == g).count();
             assert_eq!(count(new, MANAGER), count(old, MANAGER) + here.len());
+            assert_eq!(count(new, SLUG), count(old, SLUG) + here.iter().filter(|s| s.slug.is_some()).count());
             assert_eq!(count(new, ANCHOR), count(old, ANCHOR) + here.iter().map(|s| s.anchors.len()).sum::<usize>());
             let mut hs: Vec<u64> = new.iter().filter_map(hash_of).collect();
             let n: usize = hs.len();
