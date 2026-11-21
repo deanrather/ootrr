@@ -40,11 +40,12 @@ pub const GET_GROUP: &str = "IsGet";
 pub const SET_TEXT: &str = "ExecuteBlackboardSetString";
 pub const TABLE_KEY: &str = "Drop__DropTableOverWrite";
 pub const TABLES: [&str; 3] = ["", "LikeLike_HyliaShield", "LikeLike_DekuShield"];
+pub const SPARKLES: [&str; 3] = ["Eat_Success", "ライト_00", "ライト_01"];
 pub const IDLE: &str = "ExecuteGenericDummyAction";
 pub const SEQUENCE: u16 = 2;
 pub const BY_NUMBER: u16 = 1;
 pub const STATE: u16 = 500;
-pub const NOTE: &str = "Mega Like Likes: three bigger and tougher Like Likes (a copy of the Like Like under its own actor name that does not use the game's own shield steal, three times the life, a longer grip, and 1.6 times the size) wait in the Deku Tree meadow of Kokiri Forest, as a child and as an adult. When one swallows you it takes one of your shields, any of them, the Mirror Shield first, then the Hylian Shield, then the Deku Shield: the shield leaves the pouch and your hand. Nothing is written down: the missing shield is the record, read from the game's own flags (a shield you have owned and now have none of). When any mega Like Like dies it hands back one such shield, the Mirror Shield first. The shield goes straight back into the pouch, silently. Experimental, untested in the game.";
+pub const NOTE: &str = "Mega Like Likes: three bigger and tougher Like Likes (a copy of the Like Like under its own actor name that does not use the game's own shield steal, three times the life, a longer grip, and 1.6 times the size) wait in the Deku Tree meadow of Kokiri Forest, as a child and as an adult. When one swallows you it takes one of your shields, any of them, the Mirror Shield first, then the Hylian Shield, then the Deku Shield: the shield leaves the pouch and your hand. Nothing is written down: the missing shield is the record, read from the game's own flags (a shield you have owned and now have none of). When any mega Like Like dies it hands back one such shield, the Mirror Shield first. The Mirror Shield goes straight back into the pouch, with the Farore's Wind sparkle rings and orb around the Like Like as the sign. Experimental, untested in the game.";
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Spot {
@@ -282,7 +283,12 @@ pub fn take(a: &mut Ainb, tag: &str) -> Res<usize> {
 pub fn give(a: &mut Ainb, tag: &str) -> Res<usize> {
     let mut next: usize = idle(a, &format!("{tag} give none"))?;
     for (n, s) in SHIELDS.iter().enumerate().rev() {
-        let back: usize = if TABLES[n].is_empty() { change(a, &format!("{tag} give {n} add"), s, 1, true)? } else { pick_drop(a, &format!("{tag} give {n} drop"), TABLES[n])? };
+        let back: usize = if TABLES[n].is_empty() {
+            let add: usize = change(a, &format!("{tag} give {n} add"), s, 1, true)?;
+            let mut names: Vec<&str> = crate::difficulty::fx::PARTS.iter().map(|p| p.0).collect();
+            names.extend(SPARKLES);
+            crate::difficulty::fx::with_cues(a, &format!("{tag} give {n} shown"), add, &names)?
+        } else { pick_drop(a, &format!("{tag} give {n} drop"), TABLES[n])? };
         let num: usize = count(a, &format!("{tag} give {n} count"), s)?;
         let lost: usize = by_number(a, &format!("{tag} give {n} lost"), num, back, next)?;
         let had: usize = owned(a, &format!("{tag} give {n} owned"), s)?;
