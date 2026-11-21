@@ -243,6 +243,8 @@ fn difficulty() -> Vec<Setting> {
             .tip("Hit a Cucco once and the whole flock attacks, instead of after a few hits. Anju's Cuccos and the ones you have to find keep their usual temper."),
         Setting::toggle(d::BOWLING_NUM, d::BOWLING, "difficulty", "Unbreakable Bombchu Bowling grass", false)
             .tip("The grass in the Bombchu Bowling lanes can't be broken, so steer your Bombchus around it."),
+        Setting::toggle(d::DAMPE_NUM, d::DAMPE, "difficulty", "Dampe's tour digs up monsters", false)
+            .tip("On the child Graveyard digging tour, each rupee Dampe digs up comes with a Poe, a Floormaster, a ReDead or a Dead Hand."),
         Setting::toggle(d::FIREBALLS_NUM, d::FIREBALLS, "difficulty", "Fireball storms", false)
             .tip("Burning rocks rain down on quiet stretches of Hyrule Field, Desert Colossus, the Haunted Wasteland and the Castle garden, and on every visit to the Death Mountain Trail. Dodge them."),
         Setting::toggle(d::SPAWN_COMBO_NUM, d::SPAWN_COMBO, "difficulty", "Spawn enemies (sticks + D-pad)", false)
