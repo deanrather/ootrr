@@ -623,6 +623,10 @@ pub fn build() -> Schema {
             .tip("Every gossip stone tells you where an important item lies. The stones need no Mask of Truth text change, only the words are replaced."),
     );
     s.push(
+        Setting::toggle(crate::kaepora::NUM, crate::kaepora::SETTING, "world", "Kaepora hint", false)
+            .tip("Kaepora Gaebora stands in Kokiri Forest, as a child, and tells you where the next item you need lies. He names the first items the quest requires, in order, and speaks about the first one you do not hold yet. Talk to him again after each find. Only the owl, his words and his talk are added, nothing in your save. Experimental, untested in the game."),
+    );
+    s.push(
         Setting::multi(80, crate::npc_hints::SETTING, "world", "Character hints")
             .tip("Characters who know something tell you, in their own words, like the OoTR option of the same name. Altar: the Temple of Time altar says where each medallion rests. Dampé's diary: says where a Progressive Hookshot is. House of Skulltula: the cursed rich man names each token reward. Frogs: the Zora's River frogs name the prize of their ocarina game and of the rainy song. Great Fairies: each fairy names what she grants next to her price. Sheik: while waiting in the Temple of Time, Sheik says where the Light Arrows are. Malon: says where the Weird Egg went, only while the Kakariko gate starts closed. Mido: lets slip where the Kokiri Sword is. Saria: when you meet her in the Sacred Forest Meadow, she says where the Magic Meter is. Only the words change, in every language, with the hint itself in English. Experimental, untested in the game.")
             .opts(&[

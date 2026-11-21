@@ -79,6 +79,7 @@ pub struct Plan {
     pub open: crate::open_world::Opts,
     pub difficulty: crate::difficulty::Opts,
     pub npc: crate::npc_hints::Opts,
+    pub kaepora: bool,
     /// crate::story_skip: Saria's gift, the child Temple of Time and the first sword draw.
     /// Always on; the field stays so the parts can be told apart in the build.
     pub story: bool,
@@ -282,6 +283,7 @@ pub fn plan(s: &Settings) -> Res<Plan> {
     let chest_sizes: bool = crate::chest_size::mode(s, &mut bad);
     let qol: crate::qol::Opts = crate::qol::read(s, &mut bad);
     let npc: crate::npc_hints::Opts = crate::npc_hints::read(s, gates.kakariko, &mut bad);
+    let kaepora: bool = crate::kaepora::read(s, &mut bad);
     let treasure: bool = crate::slice::treasure::mode(s, &mut bad);
     let day_skulls: bool = toggle(s, crate::slice::skull_day::SETTING, &mut bad);
     let open: crate::open_world::Opts = crate::open_world::read(s, &mut bad);
@@ -395,6 +397,9 @@ pub fn plan(s: &Settings) -> Res<Plan> {
     }
     notes.extend(qol.notes());
     notes.extend(crate::npc_hints::note(&npc));
+    if kaepora {
+        notes.push(crate::kaepora::note());
+    }
     notes.extend(kit.notes.iter().cloned());
     if treasure {
         notes.push(crate::slice::treasure::NOTE.to_string());
@@ -430,7 +435,7 @@ pub fn plan(s: &Settings) -> Res<Plan> {
         notes.push(crate::lacs_key::NOTE.to_string());
         notes.push(crate::medal_gate::LACS_NOTE.to_string());
     }
-    Ok(Plan { chests, keys, rewards, hearts, world, songs, harp_colors, hints, fast, chest_sizes, intro, start, gates, excluded, notes, drops, skulls, remake, chus, qol, treasure, day_skulls, kit, open, npc, shops, bridge, debug_names, silver, lacs, rainbow, trials, door, nocturne, prelude, short, first_pickups, area_intros, story, endings, ocarinas, kokiri_sword, difficulty })
+    Ok(Plan { chests, keys, rewards, hearts, world, songs, harp_colors, hints, fast, chest_sizes, intro, start, gates, excluded, notes, drops, skulls, remake, chus, qol, treasure, day_skulls, kit, open, npc, kaepora, shops, bridge, debug_names, silver, lacs, rainbow, trials, door, nocturne, prelude, short, first_pickups, area_intros, story, endings, ocarinas, kokiri_sword, difficulty })
 }
 
 #[cfg(test)]
