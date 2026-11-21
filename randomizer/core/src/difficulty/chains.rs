@@ -14,8 +14,8 @@ use crate::zs;
 
 pub const MAP: &str = "Banc/HyruleField/HyruleField_Child_Static.bcett.byml.zs";
 pub const BRIDGE: &str = "Land_HrlField_DrawBridge_A_01";
-pub const STEP: &str = "FldObj_AirWall_Player";
-pub const BOX: f32 = 4.0;
+pub const STEP: &str = "Obj_MovableBox_A_01";
+pub const BASE: [f32; 3] = [1.49, 1.5, 1.49];
 pub const BOLT: &str = "PhantomGanon_Bullet_Thunder";
 pub const PREFIX: &str = "Gimmick_ChainTop_";
 pub const SEED: &str = "ootrr climbable drawbridge chains";
@@ -79,7 +79,7 @@ pub fn pieces(origin: [f32; 3], side: f32) -> Vec<Piece> {
         out.push(Piece {
             at: [origin[0] + side * CHAIN_X, origin[1] + mid[1] - normal[1] * THICK, origin[2] + mid[0] - normal[0] * THICK],
             rot: [pitch * PITCH_SIGN, 0.0, 0.0],
-            scale: [WIDTH / BOX, THICK / BOX, (len + OVERLAP * 2.0) / BOX],
+            scale: [WIDTH / BASE[0], THICK / BASE[1], (len + OVERLAP * 2.0) / BASE[2]],
         });
     }
     out
@@ -188,8 +188,24 @@ pub fn bridge(y: &Byml) -> Res<(Node, [f32; 3])> {
     Ok((presence, at))
 }
 
+pub fn ramp(y: &mut Byml, origin: [f32; 3], presence: &Node, raws: &[&[u8]], taken: &mut Vec<u64>) -> Res<usize> {
+    let mut made: Vec<Node> = Vec::new();
+    for (i, side) in SIDES.iter().enumerate() {
+        for (k, piece) in pieces(origin, *side).iter().enumerate() {
+            let h: u64 = next(raws, taken, &format!("{SEED} step {i} {k}"));
+            let mut s: Node = actor(STEP, h, piece.at, piece.rot);
+            s.set("Scale", floats(piece.scale));
+            s.set("Presence", presence.clone());
+            made.push(s);
+        }
+    }
+    let count: usize = made.len();
+    list(y, "Actors")?.extend(made);
+    Ok(count)
+}
+
 pub fn place(y: &mut Byml, raws: &[&[u8]]) -> Res<usize> {
-    let (presence, origin): (Node, [f32; 3]) = bridge(y)?;
+    let origin: [f32; 3] = bridge(y)?.1;
     let p: Plan = plan();
     let mut taken: Vec<u64> = Vec::new();
     for a in y.root.get("Actors").and_then(|a| a.as_arr()).unwrap_or(&[]) {
@@ -199,13 +215,6 @@ pub fn place(y: &mut Byml, raws: &[&[u8]]) -> Res<usize> {
     let mut made: Vec<Node> = Vec::new();
     let mut hashes: Vec<u64> = Vec::new();
     for (i, side) in SIDES.iter().enumerate() {
-        for (k, piece) in pieces(origin, *side).iter().enumerate() {
-            let h: u64 = next(raws, &mut taken, &format!("{SEED} step {i} {k}"));
-            let mut s: Node = actor(STEP, h, piece.at, piece.rot);
-            s.set("Scale", floats(piece.scale));
-            s.set("Presence", presence.clone());
-            made.push(s);
-        }
         let area_h: u64 = next(raws, &mut taken, &format!("{SEED} area {i}"));
         let bolt_h: u64 = next(raws, &mut taken, &format!("{SEED} bolt {i}"));
         let mut area: Node = actor(AREA, area_h, top(origin, *side), [0.0, 0.0, 0.0]);
@@ -246,21 +255,36 @@ fn source(rf: &Romfs, have: Have, p: &str) -> Res<Vec<u8>> {
     }
 }
 
-fn one(rf: &mut Romfs, have: Have) -> Res<Out> {
+fn one(rf: &mut Romfs, have: Have) -> Res<Vec<Out>> {
     let z: Vec<u8> = source(rf, have, MAP)?;
     let dict: u32 = dict_id(&z).unwrap_or(BANC_DICT);
     let raw: Vec<u8> = rf.zs.decompress(&z)?;
     let dynamic: String = MAP.replace("_Static", "_Dynamic");
     let land: Vec<u8> = rf.zs.decompress(&source(rf, have, &dynamic)?)?;
     let mut y: Byml = Byml::parse(&raw)?;
+    let mut yd: Byml = Byml::parse(&land)?;
+    let (presence, origin): (Node, [f32; 3]) = bridge(&y)?;
     place(&mut y, &[&raw, &land])?;
+    let mut taken: Vec<u64> = Vec::new();
+    for m in [&y, &yd] {
+        for a in m.root.get("Actors").and_then(|a| a.as_arr()).unwrap_or(&[]) {
+            taken.extend(hash_of(a));
+        }
+    }
+    ramp(&mut yd, origin, &presence, &[&raw, &land], &mut taken)?;
     let bytes: Vec<u8> = y.write()?;
-    Ok(Out { path: MAP.to_string(), old: raw.len(), new: bytes.len(), z: zs::compress_raw(&bytes, Some(dict))? })
+    let db: Vec<u8> = yd.write()?;
+    Ok(vec![
+        Out { path: dynamic, old: land.len(), new: db.len(), z: zs::compress_raw(&db, Some(dict))? },
+        Out { path: MAP.to_string(), old: raw.len(), new: bytes.len(), z: zs::compress_raw(&bytes, Some(dict))? },
+    ])
 }
 
 pub fn stage(rf: &mut Romfs, have: Have) -> Res<Vec<Out>> {
     let was: Vec<u8> = source(rf, have, SOURCE)?;
-    Ok(vec![graph(&was)?, one(rf, have)?])
+    let mut v: Vec<Out> = vec![graph(&was)?];
+    v.extend(one(rf, have)?);
+    Ok(v)
 }
 
 pub fn count(y: &Byml, gyaml: &str) -> usize {
@@ -294,7 +318,7 @@ mod tests {
         for (k, p) in ps.iter().enumerate() {
             let w: &[[f32; 2]] = &PROFILE[k..k + 2];
             let len: f32 = ((w[1][0] - w[0][0]).powi(2) + (w[1][1] - w[0][1]).powi(2)).sqrt();
-            assert!((p.scale[2] * BOX - len - OVERLAP * 2.0).abs() < 1e-4);
+            assert!((p.scale[2] * BASE[2] - len - OVERLAP * 2.0).abs() < 1e-4);
             assert!(p.rot[0] * PITCH_SIGN > 0.0 && p.rot[1] == 0.0 && p.rot[2] == 0.0);
             let (s, c): (f32, f32) = (p.rot[0] * PITCH_SIGN).sin_cos();
             let top: [f32; 2] = [p.at[2] - o[2] + s * THICK, p.at[1] - o[1] + c * THICK];
@@ -354,30 +378,38 @@ mod tests {
     }
 
     #[test]
-    fn only_the_child_field_map_and_the_graph_are_written() {
+    fn only_the_child_field_maps_and_the_graph_are_written() {
         let Some(root) = dump() else {
             eprintln!("skipped: set OOTRR_ROMFS");
             return;
         };
         let mut rf: Romfs = Romfs::open(&root).unwrap();
         let all: Vec<Out> = stage(&mut rf, &none).unwrap();
-        assert_eq!(all.len(), 2);
+        assert_eq!(all.len(), 3);
+        let dynamic: String = MAP.replace("_Static", "_Dynamic");
         let map: &Out = all.iter().find(|o| o.path == MAP).unwrap();
+        let land: &Out = all.iter().find(|o| o.path == dynamic).unwrap();
         assert!(all.iter().any(|o| o.path.starts_with("Logic/")));
         let before: Byml = rf.read_byml(MAP).unwrap();
+        let before_d: Byml = rf.read_byml(&dynamic).unwrap();
         let now: Byml = Byml::parse(&rf.zs.decompress(&map.z).unwrap()).unwrap();
+        let now_d: Byml = Byml::parse(&rf.zs.decompress(&land.z).unwrap()).unwrap();
         let old: &[Node] = before.root.get("Actors").unwrap().as_arr().unwrap();
         let acts: &[Node] = now.root.get("Actors").unwrap().as_arr().unwrap();
-        let added: usize = SIDES.len() * (PROFILE.len() - 1 + 2);
-        assert_eq!(acts.len(), old.len() + added);
+        assert_eq!(acts.len(), old.len() + SIDES.len() * 2);
         assert_eq!(&acts[..old.len()], old);
-        assert_eq!(count(&now, STEP), count(&before, STEP) + SIDES.len() * (PROFILE.len() - 1));
+        assert_eq!(count(&now, STEP), count(&before, STEP));
         assert_eq!(count(&now, BOLT), SIDES.len());
         assert_eq!(count(&now, AREA), count(&before, AREA) + SIDES.len());
+        let old_d: &[Node] = before_d.root.get("Actors").unwrap().as_arr().unwrap();
+        let acts_d: &[Node] = now_d.root.get("Actors").unwrap().as_arr().unwrap();
+        assert_eq!(acts_d.len(), old_d.len() + SIDES.len() * (PROFILE.len() - 1));
+        assert_eq!(&acts_d[..old_d.len()], old_d);
+        assert_eq!(count(&now_d, STEP), count(&before_d, STEP) + SIDES.len() * (PROFILE.len() - 1));
         let (presence, _): (Node, [f32; 3]) = bridge(&before).unwrap();
-        let steps: Vec<&Node> = acts[old.len()..].iter().filter(|a| text(a, "Gyaml") == STEP).collect();
+        let steps: Vec<&Node> = acts_d[old_d.len()..].iter().collect();
         assert!(steps.iter().all(|s| s.get("Presence") == Some(&presence)));
-        let mut hashes: Vec<u64> = acts.iter().filter_map(hash_of).collect();
+        let mut hashes: Vec<u64> = acts.iter().chain(acts_d.iter()).filter_map(hash_of).collect();
         let n: usize = hashes.len();
         hashes.sort();
         hashes.dedup();
