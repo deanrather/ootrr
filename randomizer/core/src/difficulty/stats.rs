@@ -172,6 +172,17 @@ mod tests {
         assert_eq!(scaled_power(2, 100), (2, 1.0));
     }
 
+    #[test]
+    fn ten_times_damage_scales_by_ten() {
+        assert_eq!(scaled_power(2, 1000), (20, 1.0));
+        assert_eq!(scaled_power(12, 1000), (120, 1.0));
+        let one: Node = Node::Map(vec![("DamageMultiplier".to_string(), Node::F32(4.0))]);
+        let raw: Vec<u8> = file(vec![("AttackParams", Node::Arr(vec![one])), ("BaseAttackPower", Node::I32(2))]);
+        let y: Byml = Byml::parse(&attack(&raw, 1000).unwrap().unwrap()).unwrap();
+        assert_eq!(y.root.get("BaseAttackPower"), Some(&Node::I32(20)));
+        assert_eq!(y.root.get("AttackParams").unwrap().as_arr().unwrap()[0].get("DamageMultiplier"), Some(&Node::F32(4.0)));
+    }
+
     fn file(items: Vec<(&str, Node)>) -> Vec<u8> {
         let y: Byml = Byml { root: Node::Map(items.into_iter().map(|(k, v)| (k.to_string(), v)).collect()), version: 7, big: false };
         y.write().unwrap()

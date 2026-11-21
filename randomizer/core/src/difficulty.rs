@@ -120,6 +120,7 @@ pub const SIZES_HEALTH_NUM: u16 = 146;
 
 pub const NORMAL: i64 = 100;
 pub const STAT_RANGE: (i64, i64) = (50, 500);
+pub const DAMAGE_RANGE: (i64, i64) = (50, 1000);
 pub const SPEED_RANGE: (i64, i64) = (75, 200);
 pub const STAT_STEP: i64 = 25;
 pub const SPEED_STEP: i64 = 5;
@@ -349,7 +350,7 @@ pub fn read(s: &Settings, bad: &mut Vec<String>) -> Opts {
         }
     };
     let health: i64 = num(HEALTH, STAT_RANGE);
-    let damage: i64 = num(DAMAGE, STAT_RANGE);
+    let damage: i64 = num(DAMAGE, DAMAGE_RANGE);
     let speed: i64 = num(SPEED, SPEED_RANGE);
     let extra: i64 = num(MORE, MORE_RANGE) - NORMAL;
     let hurt: hurt::Hurt = chosen(s.text(HURT), bad).map(hurt::Hurt::from_setting).unwrap_or(hurt::Hurt::Normal);
@@ -699,6 +700,19 @@ mod tests {
         s.set(crate::shops::plan::SETTING, Value::s("deals_2")).unwrap();
         let shop: Opts = read(&s, &mut bad);
         assert!(shop.shops && shop.notes().len() == 1 && shop.notes()[0].contains("Shopsanity is on"));
+    }
+
+    #[test]
+    fn damage_goes_to_ten_times_and_old_strings_still_decode() {
+        let mut s: Settings = Settings::default();
+        for v in [50, 100, 500, 1000] {
+            s.set(DAMAGE, Value::Int(v)).unwrap();
+            let back: Settings = Settings::decode(&s.encode().unwrap()).unwrap().settings;
+            let mut bad: Vec<String> = Vec::new();
+            assert_eq!(read(&back, &mut bad).damage, v);
+            assert!(bad.is_empty());
+        }
+        assert!(s.set(DAMAGE, Value::Int(1025)).is_err());
     }
 
     #[test]
