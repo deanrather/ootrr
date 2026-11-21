@@ -110,8 +110,8 @@ pub const BOWLING_NUM: u16 = 139;
 pub const FIREBALLS_NUM: u16 = 140;
 pub const VOLVAGIA_NUM: u16 = 143;
 pub const MEGA_LIKE_NUM: u16 = 144;
-pub const FUSES_NUM: u16 = 142;
-pub const RANDOMIZER_NUM: u16 = 138;
+pub const FUSES_NUM: u16 = 151;
+pub const RANDOMIZER_NUM: u16 = 150;
 pub const SIZES_NUM: u16 = 145;
 pub const SIZES_HEALTH_NUM: u16 = 146;
 

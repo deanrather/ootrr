@@ -1,5 +1,5 @@
 pub const SETTING: &str = "skip_area_intros";
-pub const NUM: u16 = 137;
+pub const NUM: u16 = 149;
 pub const NOTE: &str = "The short scene that shows off an area the first time you enter it is skipped, for the overworld areas and the dungeon entrances that only show the place. Scenes that start or advance a quest keep playing.";
 
 pub const PLAYED: &str = "HavePlayedEvent.";
