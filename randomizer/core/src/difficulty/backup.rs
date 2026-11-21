@@ -77,10 +77,10 @@ pub const OUT_OF_BOUNDS: &[&str] = &[
 pub const CALLS_NOBODY: &[&str] = &["Enemy_Skulltula_Gold", "Enemy_Poe_Amy", "Enemy_Poe_Beth", "Enemy_Poe_Joelle", "Enemy_Poe_SistersBase", "Enemy_Poe_Flat", "Enemy_Poe_Sharp", "Enemy_Scrub_Business", "Enemy_Scrub_ForestStage", "Enemy_Scrub_Mad_Leaf", "Enemy_Scrub_Deku_Leaf", "Enemy_Scrub_Deku_Brothers"];
 pub const WHO_CALLS_WHOM: &[(&str, usize)] = &[
     ("Enemy_Stalfos_Weak", 14),
-    ("Enemy_Stalfos", 1),
+    ("Enemy_Stalfos", 14),
     ("Enemy_Stalchild", 0),
-    ("Enemy_Gibdo", 3),
-    ("Enemy_Wolfos_White", 4),
+    ("Enemy_Gibdo", 0),
+    ("Enemy_Wolfos_White", 6),
     ("Enemy_Wolfos", 6),
     ("Enemy_Freezard", 5),
     ("Enemy_Lizalfos", 12),
@@ -92,10 +92,10 @@ pub const WHO_CALLS_WHOM: &[(&str, usize)] = &[
     ("Enemy_Scrub_Mad", 9),
     ("Enemy_Scrub_Deku", 8),
     ("Enemy_SkullKid", 2),
-    ("Enemy_Skulltula", 8),
+    ("Enemy_Skulltula", 0),
     ("Enemy_Gohma_Larva", 0),
-    ("Enemy_Floormaster", 10),
-    ("Enemy_Wallmaster", 10),
+    ("Enemy_Floormaster", 0),
+    ("Enemy_Wallmaster", 0),
     ("Enemy_LikeLike", 10),
     ("Enemy_Poe", 0),
     ("Enemy_Amos", 0),
@@ -106,11 +106,12 @@ pub const WHO_CALLS_WHOM: &[(&str, usize)] = &[
     ("Enemy_Octorok", 0),
     ("Enemy_ShellBlade", 11),
     ("Enemy_Stinger", 11),
-    ("Enemy_Bari", 11),
+    ("Enemy_Bari", 0),
     ("Enemy_Biri", 0),
     ("Enemy_Tentacle", 11),
 ];
 pub const LADDER: [&str; 9] = ["Enemy_Keese", "Enemy_Gohma_Larva", "Enemy_Lizalfos", "Enemy_Wolfos", "Enemy_Wolfos_White", "Enemy_Dinolfos", "Enemy_Stalfos_Weak", "Enemy_Stalfos", "Enemy_IronKnuckle_White"];
+pub const KIN: &[(&str, &str)] = &[("Skulltula", "Skullwalltula"), ("Floormaster", "Wallmaster"), ("Bari", "Biri"), ("Lizalfos", "Dinolfos"), ("Gibdo", "ReDead")];
 pub const FELL_BACK: &[&str] = &[];
 pub const FRAMES: f32 = 600.0;
 pub const RANDOM_FRAMES: f32 = 900.0;
@@ -322,6 +323,16 @@ pub fn add_key(raw: &[u8], helper: &str, max: i32) -> Res<Vec<u8>> {
 
 pub fn excluded(actor: &str) -> bool {
     OUT_OF_BOUNDS.iter().chain(CALLS_NOBODY).any(|p| actor.starts_with(p))
+}
+
+pub fn kind(actor: &str) -> &str {
+    let bare: &str = actor.strip_prefix(CALLERS).unwrap_or(actor);
+    bare.split('_').next().unwrap_or(bare)
+}
+
+pub fn same_kind(a: &str, b: &str) -> bool {
+    let (x, y): (&str, &str) = (kind(a), kind(b));
+    x == y || KIN.iter().any(|k| (k.0 == x && k.1 == y) || (k.0 == y && k.1 == x))
 }
 
 pub fn helper_of(actor: &str) -> usize {
@@ -604,24 +615,49 @@ mod tests {
     }
 
     #[test]
-    fn a_caller_on_the_ladder_calls_the_kind_one_step_below_and_only_one() {
-        for w in LADDER.windows(2) {
-            let (above, below): (&str, &str) = (w[1], w[0]);
+    fn a_caller_on_the_ladder_calls_the_nearest_lesser_rung_of_another_kind_and_only_one() {
+        for (i, above) in LADDER.iter().enumerate().skip(1) {
             if excluded(above) {
-                assert_eq!(above, "Enemy_IronKnuckle_White", "only the top rung is barred");
+                assert_eq!(*above, "Enemy_IronKnuckle_White", "only the top rung is barred");
                 continue;
             }
+            let below: &str = LADDER[..i].iter().rev().find(|b| !same_kind(above, b)).copied().unwrap();
             let h: (&str, &str, i32) = HELPERS[helper_of(above)];
-            if below == "Enemy_Keese" {
-                assert_eq!(h.0, below, "{above}");
-            } else {
-                assert_eq!(h.0, below, "{above} calls one step below");
-            }
+            assert_eq!(h.0, below, "{above} calls the nearest lesser rung that is not its own kind");
             assert_eq!(h.2, 1, "{above} calls at most one");
         }
+        assert_eq!(HELPERS[helper_of("Enemy_Stalfos")].0, "Enemy_Dinolfos");
+        assert_eq!(HELPERS[helper_of("Enemy_Wolfos_White")].0, "Enemy_Lizalfos");
         assert!(excluded(LADDER[0]));
         assert_eq!(MAX, 1);
         assert!(HELPERS.iter().all(|h| h.2 == 1));
+    }
+
+    #[test]
+    fn no_caller_calls_its_own_kind_or_a_variant_of_it() {
+        assert_eq!((kind("Enemy_Stalfos"), kind("Enemy_Stalfos_Weak"), kind("Enemy_Wolfos_White"), kind("Enemy_Keese_Ice")), ("Stalfos", "Stalfos", "Wolfos", "Keese"));
+        for (a, b) in [("Enemy_Stalfos", "Enemy_Stalfos_Weak"), ("Enemy_Stalfos_ForChild", "Enemy_Stalfos"), ("Enemy_Wolfos_White", "Enemy_Wolfos"), ("Enemy_Floormaster", "Enemy_Floormaster_Little"), ("Enemy_Wallmaster", "Enemy_Floormaster_Little"), ("Enemy_Skulltula", "Enemy_Skullwalltula"), ("Enemy_Bari", "Enemy_Biri"), ("Enemy_Gibdo", "Enemy_ReDead"), ("Enemy_Dinolfos", "Enemy_Lizalfos")] {
+            assert!(same_kind(a, b) && same_kind(b, a), "{a} {b}");
+        }
+        for (a, b) in [("Enemy_Stalfos", "Enemy_Stalchild"), ("Enemy_Stalfos", "Enemy_Dinolfos"), ("Enemy_Wolfos_White", "Enemy_Lizalfos"), ("Enemy_LikeLike", "Enemy_Floormaster_Little")] {
+            assert!(!same_kind(a, b), "{a} {b}");
+        }
+        let mut callers: Vec<String> = WHO_CALLS_WHOM.iter().map(|r| r.0.to_string()).collect();
+        callers.extend(LADDER.iter().map(|a| a.to_string()));
+        for v in ["_ForChild", "_AlwaysRespawn", "_Weak", "_White", "_Big", "_Little", "_Red", "_Blue", "_Fixed", "_Withered", "_Club"] {
+            callers.extend(WHO_CALLS_WHOM.iter().map(|r| format!("{}{v}", r.0)));
+        }
+        if let Some(dir) = dump() {
+            let rf: Romfs = Romfs::open(&dir).unwrap();
+            callers.extend(rf.list("Pack/Actor").unwrap().iter().filter_map(|f| actor_of(f)).filter(|a| a.starts_with(CALLERS)).map(str::to_string));
+        }
+        for a in callers.iter().filter(|a| !excluded(a)) {
+            let h: &str = HELPERS[helper_of(a)].0;
+            assert!(!same_kind(a, h), "{a} calls {h}, its own kind");
+        }
+        for h in HELPERS {
+            assert!(excluded(h.0) || !same_kind(h.0, HELPERS[helper_of(h.0)].0), "{} calls its own kind", h.0);
+        }
     }
 
     #[test]
@@ -645,14 +681,14 @@ mod tests {
             assert!(!excluded(a), "{a} fights and may call");
         }
         let option_3: [(&str, &str, i32); 43] = [
-            ("Enemy_Stalfos", "Enemy_Stalfos_Weak", 1),
-            ("Enemy_Stalfos_ForChild", "Enemy_Stalfos_Weak", 1),
+            ("Enemy_Stalfos", "Enemy_Dinolfos", 1),
+            ("Enemy_Stalfos_ForChild", "Enemy_Dinolfos", 1),
             ("Enemy_Stalfos_Weak", "Enemy_Dinolfos", 1),
             ("Enemy_Stalchild", "Enemy_Keese", 1),
             ("Enemy_Stalchild_Big", "Enemy_Keese", 1),
-            ("Enemy_Gibdo", "Enemy_ReDead", 1),
+            ("Enemy_Gibdo", "Enemy_Keese", 1),
             ("Enemy_Wolfos", "Enemy_Lizalfos", 1),
-            ("Enemy_Wolfos_White", "Enemy_Wolfos", 1),
+            ("Enemy_Wolfos_White", "Enemy_Lizalfos", 1),
             ("Enemy_Freezard", "Enemy_Keese_Ice", 1),
             ("Enemy_Freezard_Fixed", "Enemy_Keese_Ice", 1),
             ("Enemy_Lizalfos", "Enemy_Gohma_Larva", 1),
@@ -667,10 +703,10 @@ mod tests {
             ("Enemy_Scrub_Mad", "Enemy_Dekubaba", 1),
             ("Enemy_Scrub_Deku", "Enemy_Skullwalltula", 1),
             ("Enemy_SkullKid", "Enemy_Stalchild", 1),
-            ("Enemy_Skulltula", "Enemy_Skullwalltula", 1),
+            ("Enemy_Skulltula", "Enemy_Keese", 1),
             ("Enemy_Gohma_Larva", "Enemy_Keese", 1),
-            ("Enemy_Floormaster", "Enemy_Floormaster_Little", 1),
-            ("Enemy_Wallmaster", "Enemy_Floormaster_Little", 1),
+            ("Enemy_Floormaster", "Enemy_Keese", 1),
+            ("Enemy_Wallmaster", "Enemy_Keese", 1),
             ("Enemy_LikeLike", "Enemy_Floormaster_Little", 1),
             ("Enemy_Poe", "Enemy_Keese", 1),
             ("Enemy_Poe_Big", "Enemy_Keese", 1),
@@ -686,14 +722,14 @@ mod tests {
             ("Enemy_Octorok", "Enemy_Keese", 1),
             ("Enemy_ShellBlade", "Enemy_Biri", 1),
             ("Enemy_Stinger", "Enemy_Biri", 1),
-            ("Enemy_Bari", "Enemy_Biri", 1),
+            ("Enemy_Bari", "Enemy_Keese", 1),
             ("Enemy_Biri", "Enemy_Keese", 1),
         ];
         for (a, helper, n) in option_3 {
             assert!(!excluded(a), "{a} calls");
             let h: (&str, &str, i32) = HELPERS[helper_of(a)];
             assert_eq!((h.0, h.2), (helper, n), "{a}");
-            assert!(h.0 != a, "{a} never calls its own kind");
+            assert!(!same_kind(a, h.0), "{a} never calls its own kind");
         }
         assert_eq!(HELPERS[helper_of("Enemy_Tentacle_Red")].0, "Enemy_Biri");
         assert_eq!(helper_of("Enemy_Unlisted"), 0);
