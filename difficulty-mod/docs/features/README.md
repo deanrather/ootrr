@@ -34,3 +34,4 @@ All 19 are in rc 4 (`<builds>\rc-4\`).
 | 29 | [Fireball storms](29-fireball-storms.md) | `fireball_storms` | Yes, by hand (two of four spots) |
 
 Features 01 to 08 I built directly. Features 09 to 19 were built by sub-agents; what those files say about investigation and testing comes from the agents' reports, which I did not re-run except where noted.
+| 43 | [Climbable drawbridge chains](43-drawbridge-chains.md) | `climbable_drawbridge_chains` | No (unconfirmed) |

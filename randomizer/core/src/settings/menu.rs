@@ -773,7 +773,7 @@ pub const MENU: &[Page] = &[
             sec("Hazards", &["fireball_storms", "random_fuses", "shorter_timers"]),
             sec("Game over", &["lose_heart_on_death"]),
             sec("Minigames", &["unbreakable_bowling_grass"]),
-            sec("Just for fun", &["enemy_spawn_combo"]),
+            sec("Just for fun", &["enemy_spawn_combo", "climbable_drawbridge_chains"]),
         ],
     },
     Page { id: "debug", label: "Debug", heading: DEBUG, sections: &[sec("Debug", &["debug_location_names"])] },
