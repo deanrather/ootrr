@@ -24,13 +24,13 @@ pub const DEATH_REASON: i32 = 10;
 pub const FPS: f32 = 60.0;
 pub const FLOOR: f32 = 60.0;
 pub const BOMB_FRAMES: f32 = 240.0;
-pub const CHU_FLOOR: f32 = 120.0;
-pub const CHU_FRAMES: f32 = 210.0;
+pub const CHU_FLOOR: f32 = 210.0;
+pub const CHU_FRAMES: f32 = 315.0;
 pub const STICK_FLOOR: f32 = 600.0;
 pub const STICK_FRAMES: f32 = 1440.0;
 pub const HEAP_EXTRA: i32 = 0x1000;
 pub const LABEL: &str = "random fuses";
-pub const NOTE: &str = "Each bomb, Bombchu and Deku Stick you light gets its own random fuse. A bomb blows up after 1 to 4 seconds instead of 4, a Bombchu after 2 to 3.5 seconds, and a lit Deku Stick burns for 10 to 24 seconds before it goes out (a stick that burned for only 1 second could not carry a flame to a torch). Bomb flowers, the bomb the Imperial soldier throws and the bombs of enemies are unchanged. The Bombchu bowling alley uses the same Bombchu, so its Bombchus get the shorter fuse as well. Experimental, untested in the game.";
+pub const NOTE: &str = "Each bomb, Bombchu and Deku Stick you light gets its own random fuse. A bomb blows up after 1 to 4 seconds instead of 4, a Bombchu after 3.5 to 5.25 seconds (never shorter than normal, so the Bombchu Bowling alley stays playable), and a lit Deku Stick burns for 10 to 24 seconds before it goes out (a stick that burned for only 1 second could not carry a flame to a torch). Bomb flowers, the bomb the Imperial soldier throws and the bombs of enemies are unchanged. Experimental, untested in the game.";
 
 pub fn packs() -> [(&'static str, &'static str); 3] {
     [(BOMB_PACK, BOMB_GRAPH), (CHU_PACK, CHU_GRAPH), (STICK_PACK, STICK_GRAPH)]
@@ -175,6 +175,8 @@ mod tests {
     use super::*;
     use crate::ainb::show::show;
 
+    const VANILLA_CHU_FRAMES: f32 = 210.0;
+
     fn dump() -> Option<std::path::PathBuf> {
         let p: std::path::PathBuf = std::env::var_os("OOTRR_ROMFS").map(std::path::PathBuf::from)?;
         if p.is_dir() { Some(p) } else { None }
@@ -186,13 +188,15 @@ mod tests {
     }
 
     #[test]
-    fn bombs_run_from_one_second_chus_from_two_and_sticks_keep_ten_seconds() {
+    fn bombs_run_from_one_second_chus_never_shorter_than_vanilla_and_sticks_keep_ten_seconds() {
         assert_eq!(FLOOR, FPS);
         assert!(BOMB_FRAMES > FLOOR && CHU_FRAMES > CHU_FLOOR && STICK_FRAMES > STICK_FLOOR);
         assert!(STICK_FLOOR >= 10.0 * FPS);
-        assert_eq!(CHU_FLOOR / FPS, 2.0);
+        assert_eq!(CHU_FLOOR / FPS, 3.5);
+        assert_eq!(CHU_FLOOR, VANILLA_CHU_FRAMES);
+        assert!(CHU_FRAMES <= VANILLA_CHU_FRAMES * 1.5);
         assert_eq!(BOMB_FRAMES / FPS, 4.0);
-        assert_eq!(CHU_FRAMES / FPS, 3.5);
+        assert_eq!(CHU_FRAMES / FPS, 5.25);
         assert_eq!(STICK_FRAMES / FPS, 24.0);
     }
 
