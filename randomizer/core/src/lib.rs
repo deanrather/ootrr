@@ -50,6 +50,7 @@ pub mod nocturne_gate;
 pub mod prelude_gate;
 pub mod npc_hints;
 pub mod kaepora;
+pub mod kaepora_pack;
 pub mod rainbow_bridge;
 pub mod open_world;
 pub mod ganon_trials;

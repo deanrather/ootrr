@@ -9,7 +9,7 @@
 use std::collections::BTreeMap as BM;
 
 use crate::bfevfl::flow::NONE;
-use crate::bfevfl::{Actor, Bf, Case, Cont, Event, Flow, Kind, Val};
+use crate::bfevfl::{Bf, Case, Cont, Event, Flow, Kind, Val};
 use crate::byml::{Byml, Node};
 use crate::difficulty::ambush::{actor, euler, fresh, list, text};
 use crate::error::{Error, Res};
@@ -26,10 +26,11 @@ use crate::world::{Placement, World};
 
 pub const SETTING: &str = "kaepora_hint";
 pub const NUM: u16 = 152;
-pub const OWL: &str = "Npc_Kaepora_DeathMountainTrail";
+pub const OWL: &str = "Npc_Kaepora_KokiriForest";
+pub const BASE: &str = "Npc_Kaepora_DeathMountainTrail";
 pub const MAP_FILE: &str = "Banc/KokiriForest/KokiriForest_Child_Dynamic.bcett.byml.zs";
-pub const FLOW_FILE: &str = "Event/EventFlow/Npc_Kaepora_DeathMountainTrail.bfevfl.zs";
 pub const MSG_FILE: &str = "EventFlowMsg/Npc_Kaepora_DeathMountainTrail.msbt";
+pub const MESSAGE_OWNER: &str = BASE;
 pub const SEED: &str = "ootrr kaepora hint";
 pub const SPOT: [f32; 3] = [-104.0, 112.92, -39.0];
 pub const FACING: f32 = 1.5708;
@@ -39,10 +40,6 @@ pub const DONE: &str = "OOTRRHint_Done";
 pub const TALK: &str = "Talk";
 pub const TALK_TEMPLATE: &str = "Event29";
 pub const FLAG_TEMPLATE: &str = "Event4";
-pub const UI: &str = "UISystemActor";
-pub const WHERE: &str = "EventQueryGetCurrentBaseLocation";
-pub const HERE: Option<u32> = None;
-pub const LAST_PLACE: u32 = 31;
 pub const OWNED: u32 = 0;
 pub const LACKS: u32 = 1;
 pub const GAME_DATA: &str = "GameDataName";
@@ -180,7 +177,7 @@ fn label(i: usize) -> String {
 }
 
 fn message(label: &str) -> String {
-    format!("EventFlowMsg/{OWL}:{label}")
+    format!("EventFlowMsg/{MESSAGE_OWNER}:{label}")
 }
 
 fn say(t: &Event, label: &str) -> Res<Kind> {
@@ -213,9 +210,9 @@ fn find<'a>(f: &'a Flow, name: &str) -> Res<&'a Event> {
     f.events.iter().find(|e| e.name == name).ok_or_else(|| Error::Msg(format!("kaepora: the owl flow has no {name}, the game files differ")))
 }
 
-pub fn flow_bytes(raw: &[u8], links: &[Link], here: Option<u32>) -> Res<Vec<u8>> {
+pub fn flow_bytes(raw: &[u8], links: &[Link]) -> Res<Vec<u8>> {
     let mut b: Bf = Bf::parse(raw)?;
-    let f: &mut Flow = b.flows.iter_mut().find(|f| f.name == OWL).ok_or(Error::Format("kaepora: the owl flow is not in its file"))?;
+    let f: &mut Flow = b.flows.iter_mut().find(|f| f.name == BASE).ok_or(Error::Format("kaepora: the owl flow is not in its file"))?;
     if f.events.iter().any(|e| e.name.starts_with(LABEL)) {
         return Err(Error::Format("kaepora: the owl flow is already edited"));
     }
@@ -226,7 +223,6 @@ pub fn flow_bytes(raw: &[u8], links: &[Link], here: Option<u32>) -> Res<Vec<u8>>
     };
     let (ga, gq): (u16, u16) = (*ga, *gq);
     let entry: usize = f.entries.iter().position(|e| e.name == TALK).ok_or(Error::Format("kaepora: the owl flow has no Talk entry"))?;
-    let old: u16 = f.entries[entry].main;
     let mut next: u16 = push(f, DONE.to_string(), say(&talk, DONE)?)?;
     for (i, l) in links.iter().enumerate().rev() {
         let said: u16 = push(f, label(i), say(&talk, &label(i))?)?;
@@ -243,21 +239,7 @@ pub fn flow_bytes(raw: &[u8], links: &[Link], here: Option<u32>) -> Res<Vec<u8>>
         }
         next = push(f, format!("{LABEL}Has{i:02}"), Kind::Switch { actor: ga, query: gq, cases: vec![Case { val: OWNED, ev: next }, Case { val: LACKS, ev: said }], params: Some(p) })?;
     }
-    f.entries[entry].main = match here {
-        None => next,
-        Some(h) => {
-            let ui: usize = f.actors.iter().position(|a: &Actor| a.name == UI).ok_or(Error::Format("kaepora: the owl flow has no UISystemActor"))?;
-            let q: u16 = match f.actors[ui].queries.iter().position(|s| s == WHERE) {
-                Some(i) => i as u16,
-                None => {
-                    f.actors[ui].queries.push(WHERE.to_string());
-                    (f.actors[ui].queries.len() - 1) as u16
-                }
-            };
-            let cases: Vec<Case> = (0..=LAST_PLACE).map(|v| Case { val: v, ev: if v == h { next } else { old } }).collect();
-            push(f, format!("{LABEL}Where"), Kind::Switch { actor: ui as u16, query: q, cases, params: None })?
-        }
-    };
+    f.entries[entry].main = next;
     let out: Vec<u8> = b.write()?;
     if Bf::parse(&out)? != b {
         return Err(Error::Format("kaepora: the edited owl flow does not read back"));
@@ -297,7 +279,6 @@ pub fn stage(rf: &mut Romfs, more: &mut Vec<crate::staging::Out>, work: &std::pa
     let map: Vec<u8> = rf.read_zs(MAP_FILE)?;
     let statics: Vec<u8> = rf.read_zs(&MAP_FILE.replace("_Dynamic", "_Static"))?;
     edit_staged(rf, more, work, MAP_FILE, true, |raw| map_bytes(raw, &[&map, &statics], SPOT, FACING))?;
-    edit_staged(rf, more, work, FLOW_FILE, true, |raw| flow_bytes(raw, &links, HERE))?;
     for f in crate::hints::languages(rf)? {
         edit_staged(rf, more, work, &f, true, |raw| text_bytes(raw, &links))?;
     }
@@ -404,7 +385,7 @@ mod tests {
     fn vanilla_flow() -> Option<Vec<u8>> {
         let root: std::path::PathBuf = dump()?;
         let mut rf: Romfs = Romfs::open(&root).unwrap();
-        Some(rf.read_zs(FLOW_FILE).unwrap())
+        Some(rf.read_zs(&crate::kaepora_pack::flow_file(BASE)).unwrap())
     }
 
     fn fake(n: usize) -> Vec<Link> {
@@ -412,52 +393,41 @@ mod tests {
     }
 
     #[test]
-    fn every_path_of_the_edited_talk_ends_the_way_the_game_ends_its_talks_and_the_other_owl_is_untouched() {
+    fn every_path_of_the_edited_talk_ends_the_way_the_game_ends_its_talks() {
         let Some(raw) = vanilla_flow() else { return };
-        for here in [None, Some(3)] {
-            for n in [0, 1, 5, MAX_LINKS] {
-                let out: Vec<u8> = flow_bytes(&raw, &fake(n), here).unwrap();
-                let was: Bf = Bf::parse(&raw).unwrap();
-                let now: Bf = Bf::parse(&out).unwrap();
-                let (a, b): (&Flow, &Flow) = (&was.flows[0], &now.flows[0]);
-                assert_eq!(b.events[..a.events.len()], a.events[..]);
-                assert_eq!(b.events.len(), a.events.len() + 2 * n + 1 + usize::from(here.is_some()));
-                let e: usize = b.entries.iter().position(|e| e.name == TALK).unwrap();
-                let old: u16 = a.entries[a.entries.iter().position(|e| e.name == TALK).unwrap()].main;
-                let mut start: u16 = b.entries[e].main;
-                if let Some(h) = here {
-                    let Kind::Switch { cases, .. } = &b.events[start as usize].kind else { panic!() };
-                    assert_eq!(cases.len(), LAST_PLACE as usize + 1);
-                    assert!(cases.iter().all(|c| c.ev == old || c.val == h));
-                    assert_eq!(cases.iter().filter(|c| c.val == h).count(), 1);
-                    start = cases.iter().find(|c| c.val == h).unwrap().ev;
+        for n in [0, 1, 5, MAX_LINKS] {
+            let out: Vec<u8> = flow_bytes(&raw, &fake(n)).unwrap();
+            let was: Bf = Bf::parse(&raw).unwrap();
+            let now: Bf = Bf::parse(&out).unwrap();
+            let (a, b): (&Flow, &Flow) = (&was.flows[0], &now.flows[0]);
+            assert_eq!(b.events[..a.events.len()], a.events[..]);
+            assert_eq!(b.events.len(), a.events.len() + 2 * n + 1);
+            let e: usize = b.entries.iter().position(|e| e.name == TALK).unwrap();
+            let mut stack: Vec<u16> = vec![b.entries[e].main];
+            let mut said: usize = 0;
+            let mut seen: Vec<u16> = Vec::new();
+            while let Some(i) = stack.pop() {
+                if seen.contains(&i) {
+                    continue;
                 }
-                let mut stack: Vec<u16> = vec![start];
-                let mut said: usize = 0;
-                let mut seen: Vec<u16> = Vec::new();
-                while let Some(i) = stack.pop() {
-                    if seen.contains(&i) {
-                        continue;
+                seen.push(i);
+                match &b.events[i as usize].kind {
+                    Kind::Action { next, .. } => {
+                        assert_eq!(*next, NONE, "{}", b.events[i as usize].name);
+                        said += 1;
                     }
-                    seen.push(i);
-                    match &b.events[i as usize].kind {
-                        Kind::Action { next, .. } => {
-                            assert_eq!(*next, NONE, "{}", b.events[i as usize].name);
-                            said += 1;
-                        }
-                        Kind::Switch { cases, .. } => stack.extend(cases.iter().map(|c| c.ev)),
-                        k => panic!("{k:?}"),
-                    }
+                    Kind::Switch { cases, .. } => stack.extend(cases.iter().map(|c| c.ev)),
+                    k => panic!("{k:?}"),
                 }
-                assert_eq!(said, n + 1, "one line per link and the closing line");
-                for ev in b.events.iter().skip(a.events.len()) {
-                    if let Kind::Action { .. } = &ev.kind {
-                        let Some(Val::Str(m)) = ev.kind.params().and_then(|p| p.get(MESSAGE)) else { panic!("{}", ev.name) };
-                        assert!(m.starts_with(&format!("EventFlowMsg/{OWL}:{LABEL}")), "{m}");
-                    }
-                }
-                assert!(flow_bytes(&out, &fake(n), here).is_err());
             }
+            assert_eq!(said, n + 1, "one line per link and the closing line");
+            for ev in b.events.iter().skip(a.events.len()) {
+                if let Kind::Action { .. } = &ev.kind {
+                    let Some(Val::Str(m)) = ev.kind.params().and_then(|p| p.get(MESSAGE)) else { panic!("{}", ev.name) };
+                    assert!(m.starts_with(&format!("EventFlowMsg/{MESSAGE_OWNER}:{LABEL}")), "{m}");
+                }
+            }
+            assert!(flow_bytes(&out, &fake(n)).is_err());
         }
     }
 
@@ -496,7 +466,7 @@ mod tests {
     }
 
     #[test]
-    fn a_build_stages_the_map_the_flow_and_every_language() {
+    fn a_build_stages_the_map_and_every_language() {
         let Some(root) = dump() else { return };
         let mut rf: Romfs = Romfs::open(&root).unwrap();
         let d: Data = Data::load().unwrap();
@@ -507,10 +477,8 @@ mod tests {
         assert!(more.is_empty());
         stage(&mut rf, &mut more, &work, &d, &s, true).unwrap();
         let langs: Vec<String> = crate::hints::languages(&rf).unwrap();
-        assert_eq!(more.len(), 2 + langs.len());
-        for p in [MAP_FILE, FLOW_FILE] {
-            assert!(more.iter().any(|o| o.path == p), "{p}");
-        }
+        assert_eq!(more.len(), 1 + langs.len());
+        assert!(more.iter().any(|o| o.path == MAP_FILE));
         for l in &langs {
             assert!(more.iter().any(|o| &o.path == l), "{l}");
         }
