@@ -14,7 +14,7 @@ use crate::byml::{Byml, Node};
 use crate::difficulty::ambush::{actor, euler, fresh, list, text};
 use crate::error::{Error, Res};
 use crate::msbt::{self, Msbt};
-use crate::npc_hints::{item_phrase, layout, lead_codes, place, HI, LO};
+use crate::npc_hints::{item_phrase, layout, lead_codes, place, where_is, HI, LO};
 use crate::placement::hash_of;
 use crate::romfs::Romfs;
 use crate::sarc;
@@ -137,6 +137,64 @@ pub fn told(item: &str, place: &str) -> String {
     format!("Hoo hoo! Heed my words, Link!|Know this: {} awaits you in {}.|You will need it on your journey. Hoo hoo!", hi(&item_phrase(item)), hi(place))
 }
 
+/// The nine dungeon rewards in the order a run usually earns them, each with the
+/// event that holds it when dungeon rewards are not shuffled and the name its
+/// keeper goes by.
+pub const REWARDS: [(&str, &str, &str); 9] = [
+    ("Kokiri Emerald", "Queen Gohma", "Queen Gohma"),
+    ("Goron Ruby", "King Dodongo", "King Dodongo"),
+    ("Zora Sapphire", "Barinade", "Barinade"),
+    ("Forest Medallion", "Phantom Ganon", "Phantom Ganon"),
+    ("Fire Medallion", "Volvagia", "Volvagia"),
+    ("Water Medallion", "Morpha", "Morpha"),
+    ("Shadow Medallion", "Bongo Bongo", "Bongo Bongo"),
+    ("Spirit Medallion", "Twinrova", "Twinrova"),
+    ("Light Medallion", "ToT Reward from Rauru", "Rauru"),
+];
+pub const STONES: usize = 3;
+pub const VANILLA_GOAL: [&str; 2] = ["Shadow Medallion", "Spirit Medallion"];
+
+pub fn guarded(item: &str, place: &str, keeper: &str) -> String {
+    format!("Hoo hoo! Heed my words, Link!|Know this: {} awaits you in {}, from {}.|You will need it on your journey. Hoo hoo!", hi(&item_phrase(item)), hi(place), hi(keeper))
+}
+
+fn goal(s: &crate::settings::Settings, mode: &str, stones: &str, medallions: &str, rewards: &str) -> Vec<&'static str> {
+    let count = |key: &str| -> usize { s.int(key).map(|n| n.max(0) as usize).unwrap_or(0) };
+    let stone: Vec<&'static str> = REWARDS[..STONES].iter().map(|r| r.0).collect();
+    let medal: Vec<&'static str> = REWARDS[STONES..].iter().map(|r| r.0).collect();
+    match s.text(mode) {
+        Ok("stones") => stone.into_iter().take(count(stones)).collect(),
+        Ok("medallions") => medal.into_iter().take(count(medallions)).collect(),
+        Ok("dungeons") => REWARDS.iter().map(|r| r.0).take(count(rewards)).collect(),
+        _ => Vec::new(),
+    }
+}
+
+/// The dungeon rewards the seed's Rainbow Bridge and Ganon's Boss Key need, in
+/// the order the owl asks for them.
+pub fn needed(s: &crate::settings::Settings) -> Vec<&'static str> {
+    let mut out: Vec<&'static str> = Vec::new();
+    let mut add = |v: Vec<&'static str>| {
+        for i in v {
+            if !out.contains(&i) {
+                out.push(i);
+            }
+        }
+    };
+    if s.text("bridge").ok() == Some("vanilla") {
+        add(VANILLA_GOAL.to_vec());
+    } else {
+        add(goal(s, "bridge", "bridge_stones", "bridge_medallions", "bridge_rewards"));
+    }
+    if s.text("shuffle_ganon_bosskey").ok() == Some(crate::lacs_key::VALUE) {
+        add(REWARDS.iter().map(|r| r.0).take(s.int(crate::medal_gate::LACS_REWARDS).map(|n| n.max(0) as usize).unwrap_or(0)).collect());
+    } else {
+        add(goal(s, "shuffle_ganon_bosskey", "ganon_bosskey_stones", "ganon_bosskey_medallions", "ganon_bosskey_rewards"));
+    }
+    out.sort_by_key(|i| REWARDS.iter().position(|r| r.0 == *i));
+    out
+}
+
 pub const ALL_DONE: &str = "Hoo hoo! I have nothing more to tell you, Link. Your path lies clear before you!";
 
 /// The required items in the order the logic needs them, the first ones only,
@@ -150,7 +208,7 @@ pub fn chain(d: &Data, seed: &SeedFile) -> Vec<Link> {
     };
     let mut seen: BM<String, usize> = BM::new();
     let mut out: Vec<Link> = Vec::new();
-    for sphere in &sp.spheres {
+    'spheres: for sphere in &sp.spheres {
         for (l, i) in sphere {
             let name: &str = &w.items.names[*i];
             let Some(flags) = flags_of(name) else {
@@ -166,8 +224,27 @@ pub fn chain(d: &Data, seed: &SeedFile) -> Vec<Link> {
             };
             out.push(Link { item: name.to_string(), place: at.clone(), flag: format!("IsGet.{flag}"), text: told(name, &at) });
             if out.len() == MAX_LINKS {
-                return out;
+                break 'spheres;
             }
+        }
+    }
+    if let Ok(loaded) = seed.settings() {
+        for item in needed(&loaded.settings) {
+            if out.iter().any(|l| l.item == item) || w.item(item).is_some_and(|i| w.start.iter().any(|(id, n)| *id == i && *n > 0)) {
+                continue;
+            }
+            let Some((_, event, keeper)) = REWARDS.iter().find(|r| r.0 == item) else {
+                continue;
+            };
+            let Some(flag) = flags_of(item).and_then(|f| f.first()) else {
+                continue;
+            };
+            let loc: String = where_is(d, seed, item).unwrap_or_else(|| event.to_string());
+            let Some(at) = place(d, &loc) else {
+                continue;
+            };
+            let text: String = if loc == *event { guarded(item, &at, keeper) } else { told(item, &at) };
+            out.push(Link { item: item.to_string(), place: at, flag: format!("IsGet.{flag}"), text });
         }
     }
     out
@@ -355,7 +432,7 @@ mod tests {
         for n in 0..3 {
             let s: SeedFile = seed(n);
             let c: Vec<Link> = chain(&d, &s);
-            assert!(!c.is_empty() && c.len() <= MAX_LINKS, "{n}: {}", c.len());
+            assert!(!c.is_empty() && c.len() <= MAX_LINKS + REWARDS.len(), "{n}: {}", c.len());
             let mut flags: Vec<&str> = c.iter().map(|l| l.flag.as_str()).collect();
             let k: usize = flags.len();
             flags.sort();
@@ -381,6 +458,58 @@ mod tests {
             let at: Vec<String> = s.placements.iter().filter(|(_, i)| **i == l.item).filter_map(|(loc, _)| place(&d, loc)).collect();
             let vanilla: Vec<String> = d.vanilla.iter().filter(|(_, i)| **i == l.item).filter_map(|(loc, _)| place(&d, loc)).collect();
             assert!(at.contains(&l.place) || vanilla.contains(&l.place), "{} is not in {} ({:?})", l.item, l.place, at);
+        }
+    }
+
+    fn with(pairs: &[(&str, Value)]) -> Settings {
+        let mut s: Settings = Settings::default();
+        for (k, v) in pairs {
+            s.set(k, v.clone()).unwrap();
+        }
+        s
+    }
+
+    #[test]
+    fn the_needed_rewards_follow_the_bridge_and_the_boss_key_in_logic_order() {
+        assert_eq!(needed(&Settings::default()), ["Shadow Medallion", "Spirit Medallion"]);
+        assert!(needed(&with(&[("bridge", Value::s("open"))])).is_empty());
+        assert_eq!(needed(&with(&[("bridge", Value::s("stones")), ("bridge_stones", Value::Int(2))])), ["Kokiri Emerald", "Goron Ruby"]);
+        assert_eq!(needed(&with(&[("bridge", Value::s("medallions")), ("bridge_medallions", Value::Int(3))])), ["Forest Medallion", "Fire Medallion", "Water Medallion"]);
+        assert_eq!(needed(&with(&[("bridge", Value::s("dungeons")), ("bridge_rewards", Value::Int(4))])), ["Kokiri Emerald", "Goron Ruby", "Zora Sapphire", "Forest Medallion"]);
+        assert_eq!(
+            needed(&with(&[("bridge", Value::s("stones")), ("bridge_stones", Value::Int(1)), ("shuffle_ganon_bosskey", Value::s("medallions")), ("ganon_bosskey_medallions", Value::Int(2))])),
+            ["Kokiri Emerald", "Forest Medallion", "Fire Medallion"]
+        );
+        assert_eq!(needed(&with(&[("bridge", Value::s("tokens"))])), Vec::<&str>::new());
+        assert_eq!(REWARDS.len(), 9);
+        for r in REWARDS {
+            assert!(flags_of(r.0).is_some() && crate::npc_hints::place(&Data::load().unwrap(), r.1).is_some(), "{r:?}");
+        }
+    }
+
+    #[test]
+    fn with_everything_but_the_rewards_held_the_chain_still_asks_for_the_medallions_and_says_where() {
+        let d: Data = Data::load().unwrap();
+        let kit: Vec<&str> = vec!["hookshot", "longshot", "megaton_hammer", "lens_of_truth", "magic_meter", "dins_fire", "farores_wind", "fire_arrows", "ice_arrows", "light_arrows", "iron_boots", "hover_boots", "goron_tunic", "zora_tunic", "mirror_shield", "ocarina_of_time", "bow", "boomerang", "golden_gauntlets"];
+        let s: Settings = with(&[("starting_items", Value::set(&kit))]);
+        let g = generate_data(&d, &s, "kaepora kit", &GenOpts::default()).unwrap();
+        let c: Vec<Link> = chain(&d, &g.seed_file);
+        let last: Vec<&Link> = c.iter().filter(|l| l.item.ends_with("Medallion")).collect();
+        assert!(last.iter().any(|l| l.item == "Shadow Medallion") && last.iter().any(|l| l.item == "Spirit Medallion"), "{:?}", c.iter().map(|l| &l.item).collect::<Vec<_>>());
+        for l in last {
+            assert!(l.flag.starts_with("IsGet.Item_Medal_") && l.text.contains(&l.place), "{l:?}");
+        }
+        assert!(c.len() <= MAX_LINKS + REWARDS.len());
+    }
+
+    #[test]
+    fn a_reward_held_at_its_boss_is_named_with_the_dungeon_and_the_boss() {
+        let t: String = guarded("Shadow Medallion", "the Shadow Temple", "Bongo Bongo");
+        assert!(t.contains("Shadow Medallion") && t.contains("the Shadow Temple") && t.contains("Bongo Bongo"), "{t}");
+        let laid: String = layout(&t, "");
+        assert!(msbt::from_markup(&laid).is_ok());
+        for page in laid.split(crate::npc_hints::PAGE) {
+            assert!(page.split('\n').count() <= crate::npc_hints::LINES, "{page}");
         }
     }
 
