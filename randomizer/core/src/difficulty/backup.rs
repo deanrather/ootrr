@@ -283,6 +283,7 @@ pub fn holder_of(es: &[Entry], actor: &str) -> Res<Option<String>> {
 pub fn entry(helper: &str, max: i32) -> Node {
     Node::Map(vec![
         ("Actor".to_string(), Node::Str(format!("Work/Actor/{helper}.engine__actor__ActorParam.gyml"))),
+        ("IsAutoRecreate".to_string(), Node::Bool(false)),
         ("IsCreateFirstWithHolder".to_string(), Node::Bool(false)),
         ("IsEnableWaitCreateAndIgnition".to_string(), Node::Bool(false)),
         ("MaxActors".to_string(), Node::I32(max)),
@@ -593,6 +594,7 @@ mod tests {
         assert_eq!(e.get("Actor").and_then(Node::as_str), Some("Work/Actor/Enemy_Keese.engine__actor__ActorParam.gyml"));
         assert_eq!(e.get("IsCreateFirstWithHolder"), Some(&Node::Bool(false)));
         assert_eq!(e.get("MaxActors"), Some(&Node::I32(1)));
+        assert_eq!(e.get("IsAutoRecreate"), Some(&Node::Bool(false)), "a killed helper is not made again: one call is one helper, never a stream");
         assert_eq!(holder_file(HELPER, 1).unwrap(), holder_file(HELPER, 1).unwrap());
         assert!(HELPERS.iter().all(|h| h.1.starts_with(HOLDER_DIR) && h.1.ends_with(".game__component__ActorHolderParam.bgyml")));
         assert!(HELPERS.iter().all(|h| (1..=MAX).contains(&h.2)), "no caller can ever have more than {MAX} helpers alive");
@@ -947,6 +949,21 @@ mod tests {
 
     fn none(_p: &str) -> Option<Vec<u8>> {
         None
+    }
+
+    #[test]
+    fn the_game_names_the_recreate_switch_our_holders_turn_off() {
+        let Some(dir) = dump() else {
+            eprintln!("skipped: set OOTRR_ROMFS");
+            return;
+        };
+        let mut rf: Romfs = Romfs::open(&dir).unwrap();
+        let es: Vec<Entry> = sarc::parse(&rf.read_zs("Pack/Actor/Enemy_Floormaster.pack.zs").unwrap()).unwrap();
+        let held: Byml = Byml::parse(&sarc::get(&es, "Component/ActorHolderParam/Enemy_Floormaster.game__component__ActorHolderParam.bgyml").unwrap().data).unwrap();
+        let little: &Node = held.root.get(HELD).and_then(|h| h.get("Little")).unwrap();
+        assert_eq!(little.get("IsAutoRecreate"), Some(&Node::Bool(true)), "the game's own split keeps making small Floormasters");
+        let ours: Byml = Byml::parse(&holder_file(HELPERS[helper_of("Enemy_LikeLike")].0, 1).unwrap()).unwrap();
+        assert_eq!(ours.root.get(HELD).and_then(|h| h.get(KEY)).and_then(|k| k.get("IsAutoRecreate")), Some(&Node::Bool(false)));
     }
 
     #[test]
