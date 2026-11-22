@@ -5,6 +5,7 @@ use crate::byml::{Byml, Node};
 use crate::cow_clone::rows::heap;
 use crate::difficulty::ambush::{actor, fresh, vec3};
 use crate::difficulty::respawn;
+use crate::difficulty::volvagia_die::{self as die_graph, Mode, DIE_MODULE};
 use crate::error::{Error as E, Res};
 use crate::flow_locations::dict_id;
 use crate::modpack::Pack;
@@ -16,7 +17,7 @@ use crate::placement::hash_of;
 use crate::romfs::Romfs;
 use crate::rsizetable::{self, Rst};
 use crate::sarc::{self, Entry};
-use crate::staging::{grow_out, Out, BANC_DICT};
+use crate::staging::{grow_out, Out, BANC_DICT, MARGIN};
 use crate::zs;
 
 pub const BASE: &str = "Enemy_DungeonBoss_Volvagia";
@@ -295,7 +296,7 @@ pub fn drop_files(donor: &[Entry]) -> Res<Vec<Entry>> {
     Ok(out)
 }
 
-pub fn build(base: &[Entry], scale: f32, donor: &[Entry]) -> Res<Vec<Entry>> {
+pub fn build(base: &[Entry], scale: f32, donor: &[Entry], m: Mode) -> Res<Vec<Entry>> {
     if base.iter().any(|e| e.name.contains(CLASS)) {
         return Err(E::Msg(format!("volvagia roams: the {BASE} pack already holds files named {CLASS}")));
     }
@@ -305,6 +306,8 @@ pub fn build(base: &[Entry], scale: f32, donor: &[Entry]) -> Res<Vec<Entry>> {
             out.push(e);
         }
     }
+    let d: Vec<u8> = die_graph::die(&get(base, DIE_MODULE)?.data, m)?;
+    out.iter_mut().find(|e| e.name == DIE_MODULE).ok_or_else(|| E::Msg(format!("volvagia roams: the {BASE} pack has no {DIE_MODULE}, the game files differ")))?.data = d;
     out.push(Entry { name: actor_file(CLASS), data: actor_param(&get(base, &actor_file(BASE))?.data)? });
     out.push(Entry { name: table_file(CLASS), data: table(&get(base, &table_file(BASE))?.data)? });
     out.push(Entry { name: boss_file(CLASS), data: boss(&get(base, &boss_file(BASE))?.data)? });
@@ -456,6 +459,7 @@ pub fn place(y: &mut Byml, r: &Ring, s: &Shape, raws: &[&[u8]]) -> Res<Vec<u64>>
 pub struct Made {
     pub outs: Vec<Out>,
     pub sizes: Vec<(String, u32)>,
+    pub grown: Vec<(String, usize, usize)>,
     pub lines: Vec<String>,
 }
 
@@ -468,7 +472,7 @@ fn current(rf: &mut Romfs, have: &dyn Fn(&str) -> Option<Vec<u8>>, p: &str) -> R
     Ok((rf.zs.decompress(&z)?, id))
 }
 
-pub fn stage(rf: &mut Romfs, have: &dyn Fn(&str) -> Option<Vec<u8>>, rst: &Rst, s: &Shape) -> Res<Made> {
+pub fn stage(rf: &mut Romfs, have: &dyn Fn(&str) -> Option<Vec<u8>>, rst: &Rst, s: &Shape, dm: Mode) -> Res<Made> {
     let mut m: Made = Made::default();
     if rf.root.join(pack_of(CLASS)).is_file() {
         return Err(E::Msg(format!("volvagia roams: the game already ships {CLASS}")));
@@ -482,8 +486,13 @@ pub fn stage(rf: &mut Romfs, have: &dyn Fn(&str) -> Option<Vec<u8>>, rst: &Rst, 
     let pid: u32 = dict_id(&bz).unwrap_or(PACK_DICT);
     let dz: Vec<u8> = rf.read(&pack_of(FROM))?;
     let donor: Vec<Entry> = sarc::parse(&rf.zs.decompress(&dz)?)?.into_iter().filter(|e| e.name.contains("Drop")).collect();
-    let es: Vec<Entry> = build(&base, s.scale, &donor)?;
+    let es: Vec<Entry> = build(&base, s.scale, &donor, dm)?;
     let raw: Vec<u8> = sarc::write(&es)?;
+    for e in &es {
+        if let Some(b) = base.iter().find(|b| b.name == e.name).filter(|b| e.data.len() > b.data.len()) {
+            m.grown.push((e.name.clone(), b.data.len(), e.data.len()));
+        }
+    }
     let near: Vec<(String, usize)> = base.iter().chain(donor.iter()).map(|e| (e.name.clone(), e.data.len())).collect();
     for p in own() {
         let len: usize = get(&es, &p)?.data.len();
@@ -523,7 +532,7 @@ pub fn stage(rf: &mut Romfs, have: &dyn Fn(&str) -> Option<Vec<u8>>, rst: &Rst, 
     let placed: Vec<u64> = place(&mut y, &r, s, &[&mraw, &land])?;
     let mout: Vec<u8> = y.write()?;
     m.outs.push(Out { path: s.arena.file.to_string(), z: zs::compress_raw(&mout, Some(mid))?, old: mraw.len(), new: mout.len() });
-    m.lines.push(format!("{CLASS}: new actor class, pack {} bytes with {} files ({} of its own) and its own death table; it is not placed once {BEATEN} is set", raw.len(), es.len(), own().len()));
+    m.lines.push(format!("{CLASS}: new actor class, pack {} bytes with {} files ({} of its own, {} grown) and its own death table, death {dm:?}; it is not placed once {BEATEN} is set", raw.len(), es.len(), own().len(), m.grown.len()));
     m.lines.push(format!("{}: {CLASS} and {} anchors placed around {:?}, lift {}, scale {} (actor {})", s.arena.file, placed.len() - 1, s.arena.at, s.lift, s.scale, placed.first().map(|h| h.to_string()).unwrap_or_default()));
     Ok(m)
 }
@@ -532,6 +541,12 @@ pub fn sized(rf: &mut Romfs, t: &mut Rst, m: &Made) -> Res<usize> {
     let mut n: usize = 0;
     for (p, sz) in &m.sizes {
         t.set_size(p, *sz)?;
+        n += 1;
+    }
+    for (p, old, new) in &m.grown {
+        if t.grow(p, *old as u64, *new as u64, MARGIN)?.is_none() {
+            return Err(E::Msg(format!("volvagia roams: {p} has no size table entry to grow")));
+        }
         n += 1;
     }
     for o in m.outs.iter().filter(|o| !m.sizes.iter().any(|s| s.0 == o.path)) {
@@ -561,7 +576,7 @@ pub fn write(rf: &mut Romfs, pk: &Pack, rst: &mut Option<Rst>) -> Res<(usize, Ve
     let t: &mut Rst = rst.as_mut().ok_or(E::Format("volvagia roams: no size table"))?;
     let have = |p: &str| -> Option<Vec<u8>> { fs::read(p.split('/').fold(root.clone(), |a, s| a.join(s))).ok() };
     let s: Shape = shape();
-    let m: Made = stage(rf, &have, t, &s)?;
+    let m: Made = stage(rf, &have, t, &s, die_graph::mode())?;
     for o in &m.outs {
         pk.write_romfs(&o.path, &o.z)?;
     }
@@ -612,12 +627,13 @@ mod tests {
         assert!(!r.join(pack_of(CLASS)).is_file());
         let base: Vec<Entry> = sarc::parse(&rf.read_zs(&pack_of(BASE)).unwrap()).unwrap();
         let dn: Vec<Entry> = donor(&mut rf);
-        let es: Vec<Entry> = build(&base, 2.0, &dn).unwrap();
+        let es: Vec<Entry> = build(&base, 2.0, &dn, Mode::Drop).unwrap();
         assert_eq!(es.len(), base.len() + 10);
         let back: Vec<Entry> = sarc::parse(&sarc::write(&es).unwrap()).unwrap();
-        for e in &base {
+        for e in base.iter().filter(|e| e.name != DIE_MODULE) {
             assert_eq!(sarc::get(&back, &e.name).map(|x| &x.data), Some(&e.data), "{}", e.name);
         }
+        assert_eq!(sarc::get(&back, DIE_MODULE).map(|x| x.data.clone()), Some(die_graph::die(&sarc::get(&base, DIE_MODULE).unwrap().data, Mode::Drop).unwrap()));
         let a: Byml = y(&back, &actor_file(CLASS));
         assert_eq!(s(&a.root, &["$parent"]), "Work/Actor/Enemy_DungeonBoss_Volvagia.engine__actor__ActorParam.gyml");
         assert_eq!(s(&a.root, &["Components", "GameParameterTableRef"]), format!("?{}", table_file(CLASS)));
@@ -653,7 +669,7 @@ mod tests {
             }
         }
         assert_eq!(format!("{:?}", w.root.get("AirDiveHeight")), format!("{:?}", wo.root.get("AirDiveHeight")));
-        assert!(build(&es, 1.0, &dn).is_err());
+        assert!(build(&es, 1.0, &dn, Mode::Drop).is_err());
     }
 
     #[test]
@@ -707,7 +723,7 @@ mod tests {
             let mut rf: Romfs = Romfs::open(&r).unwrap();
             let t: Rst = rsizetable::load(&mut rf).unwrap();
             let sh: Shape = Shape { arena, lift, scale };
-            let m: Made = stage(&mut rf, &none, &t, &sh).unwrap();
+            let m: Made = stage(&mut rf, &none, &t, &sh, Mode::Drop).unwrap();
             let paths: Vec<&str> = m.outs.iter().map(|o| o.path.as_str()).collect();
             assert_eq!(paths, vec![pack_of(CLASS).as_str(), ACTOR_INFO, GAME_ACTOR_INFO, TAG, death_table().as_str(), arena.file]);
             assert_eq!(m.sizes.len(), 10);
@@ -806,7 +822,7 @@ mod tests {
         let staged: Out = outs.into_iter().find(|x| x.path == pack_of(BASE)).unwrap();
         let t: Rst = rsizetable::load(&mut rf).unwrap();
         let have = |p: &str| -> Option<Vec<u8>> { if p == pack_of(BASE) { Some(staged.z.clone()) } else { None } };
-        let m: Made = stage(&mut rf, &have, &t, &Shape { arena: FIELD, lift: 0.0, scale: 1.0 }).unwrap();
+        let m: Made = stage(&mut rf, &have, &t, &Shape { arena: FIELD, lift: 0.0, scale: 1.0 }, Mode::Drop).unwrap();
         let clone: Vec<Entry> = sarc::parse(&rf.zs.decompress(&m.outs[0].z).unwrap()).unwrap();
         let plain: Vec<Entry> = sarc::parse(&rf.read_zs(&pack_of(BASE)).unwrap()).unwrap();
         let life: String = format!("{}Enemy_DungeonBoss_Volvagia{}", crate::difficulty::stats::LIFE_DIR, crate::difficulty::stats::LIFE_EXT);
@@ -874,8 +890,8 @@ mod tests {
         assert!(changed.iter().all(|n| n.starts_with("Life/") || n.contains("Attack") || n.contains("Speed") || n.contains("Move")), "{changed:?}");
         assert!(!changed.iter().any(|n| n.contains("Damage") || n.contains("Guard") || n.contains("Weak") || n.contains("Death") || n.contains("Reaction")), "{changed:?}");
         let dn: Vec<Entry> = donor(&mut rf);
-        let es: Vec<Entry> = build(&st, 1.0, &dn).unwrap();
-        for e in &st {
+        let es: Vec<Entry> = build(&st, 1.0, &dn, Mode::Drop).unwrap();
+        for e in st.iter().filter(|e| e.name != DIE_MODULE) {
             assert_eq!(sarc::get(&es, &e.name).map(|x| &x.data), Some(&e.data), "{}", e.name);
         }
         let a: Byml = y(&es, &actor_file(CLASS));
@@ -1027,7 +1043,7 @@ mod tests {
         let mut rf: Romfs = Romfs::open(&r).unwrap();
         let none = |_: &str| -> Option<Vec<u8>> { None };
         let t: Rst = rsizetable::load(&mut rf).unwrap();
-        let m: Made = stage(&mut rf, &none, &t, &Shape { arena: FIELD, lift: 0.0, scale: 1.0 }).unwrap();
+        let m: Made = stage(&mut rf, &none, &t, &Shape { arena: FIELD, lift: 0.0, scale: 1.0 }, Mode::Drop).unwrap();
         assert!(rf.read(&death_table()).is_err());
         let o: &Out = m.outs.iter().find(|o| o.path == death_table()).unwrap();
         assert!(t.get(&o.path).is_none());
@@ -1080,6 +1096,31 @@ mod tests {
     }
 
     #[test]
+    fn the_grown_die_module_gets_a_bigger_size_entry_in_both_modes() {
+        let Some(r) = root() else { return };
+        for dm in [Mode::Drop, Mode::Pay] {
+            let mut rf: Romfs = Romfs::open(&r).unwrap();
+            let none = |_: &str| -> Option<Vec<u8>> { None };
+            let t: Rst = rsizetable::load(&mut rf).unwrap();
+            let m: Made = stage(&mut rf, &none, &t, &Shape { arena: FIELD, lift: 0.0, scale: 1.0 }, dm).unwrap();
+            assert_eq!(m.grown.iter().map(|g| g.0.as_str()).collect::<Vec<_>>(), vec![DIE_MODULE]);
+            let (_, old, new): &(String, usize, usize) = &m.grown[0];
+            assert!(new > old);
+            let pk: Vec<Entry> = sarc::parse(&rf.zs.decompress(&m.outs[0].z).unwrap()).unwrap();
+            let g: crate::ainb::Ainb = crate::ainb::Ainb::parse(&sarc::get(&pk, DIE_MODULE).unwrap().data).unwrap();
+            let plain: Vec<Entry> = sarc::parse(&rf.read_zs(&pack_of(BASE)).unwrap()).unwrap();
+            let p: crate::ainb::Ainb = crate::ainb::Ainb::parse(&sarc::get(&plain, DIE_MODULE).unwrap().data).unwrap();
+            assert_eq!(g.els.len(), p.els.len() + dm.added());
+            let before: u32 = t.get(DIE_MODULE).unwrap();
+            let mut rst: Rst = rsizetable::load(&mut rf).unwrap();
+            sized(&mut rf, &mut rst, &m).unwrap();
+            let after: u32 = rst.get(DIE_MODULE).unwrap();
+            assert!(after as u64 >= before as u64 + rsizetable::align((new - old) as u64), "{dm:?} {before} {after}");
+            assert!(m.lines[0].contains(&format!("{dm:?}")));
+        }
+    }
+
+    #[test]
     fn a_drop_less_donor_is_refused_and_the_drop_files_cover_their_parents_size() {
         assert!(drop_files(&[]).is_err());
         assert_eq!(parent_of(DROP_PARAM_CLONE), DROP_PLAIN);
@@ -1090,7 +1131,7 @@ mod tests {
         let mut rf: Romfs = Romfs::open(&r).unwrap();
         let none = |_: &str| -> Option<Vec<u8>> { None };
         let t: Rst = rsizetable::load(&mut rf).unwrap();
-        let m: Made = stage(&mut rf, &none, &t, &Shape { arena: FIELD, lift: 0.0, scale: 1.0 }).unwrap();
+        let m: Made = stage(&mut rf, &none, &t, &Shape { arena: FIELD, lift: 0.0, scale: 1.0 }, Mode::Drop).unwrap();
         let pk: Vec<Entry> = sarc::parse(&rf.zs.decompress(&m.outs[0].z).unwrap()).unwrap();
         for p in own() {
             let len: usize = sarc::get(&pk, &p).unwrap().data.len();

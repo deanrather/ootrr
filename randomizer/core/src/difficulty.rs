@@ -35,6 +35,7 @@ pub mod swap;
 pub mod target;
 pub mod timers;
 pub mod volvagia;
+pub mod volvagia_die;
 pub mod wake;
 
 use std::fs;
