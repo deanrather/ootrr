@@ -48,6 +48,8 @@ pub const DEATH_TABLE_BASE: &str = "DungeonBossVolvagia";
 pub const DESTROY: &str = "IsRequestDestruction";
 pub const PROCEDURES: &str = "DeathProcedures";
 pub const WAIT: &str = "IsWaitForSignal";
+pub const DROP: &str = "IsDropItem";
+pub const ENABLED: [&str; 7] = ["AI", "AncientWeapon", "Crushed", "Frozen", "LifeDepleted", "SideCrushed", "UpperCrushed"];
 pub const FROM: &str = "Enemy_Floormaster";
 pub const DROP_KEY: &str = "DropRef";
 pub const DROP_DEFAULT: &str = "Component/DropParam/Default.game__component__DropParam.bgyml";
@@ -178,8 +180,20 @@ pub fn procedures(raw: &[u8]) -> Res<Vec<u8>> {
     if c.get(WAIT) != Some(&Node::Bool(true)) {
         return Err(E::Msg(format!("volvagia roams: the Volvagia death table does not wait for the death scene ({WAIT}), the game files differ")));
     }
-    if !c.set(DESTROY, Node::Bool(true)) || !c.set(WAIT, Node::Bool(false)) {
-        return Err(E::Format("volvagia roams: the cell for a beaten Volvagia is not a map"));
+    let cells: &mut Node = y.root.get_mut(respawn::CELLS).ok_or(E::Format("volvagia roams: the Volvagia death table has no cell list"))?;
+    for r in ENABLED {
+        let k: String = format!("{r}___Data");
+        if cells.get(&k).is_none() {
+            let m: Node = Node::Map(vec![("$type".to_string(), Node::Str(respawn::CELL_TYPE.to_string())), ("ColumnKey".to_string(), Node::Str("Data".to_string())), ("RowKey".to_string(), Node::Str(r.to_string()))]);
+            if !cells.set(&k, m) {
+                return Err(E::Format("volvagia roams: the cell list of the Volvagia death table is not a map"));
+            }
+        }
+        let c: &mut Node = cells.get_mut(&k).ok_or(E::Format("volvagia roams: a cell of the Volvagia death table is missing"))?;
+        let ok: bool = c.set(DESTROY, Node::Bool(true)) && c.set(WAIT, Node::Bool(false)) && c.set(DROP, Node::Bool(true)) && c.set(respawn::KEPT, Node::Bool(false)) && c.set(respawn::SAVED, Node::Bool(false));
+        if !ok {
+            return Err(E::Format("volvagia roams: a cell of the Volvagia death table is not a map"));
+        }
     }
     y.write()
 }
@@ -797,22 +811,30 @@ mod tests {
         let cell: &Node = made.root.get(respawn::CELLS).and_then(|c| c.get(respawn::CELL)).unwrap();
         assert_eq!(cell.get(respawn::KEPT), Some(&Node::Bool(false)));
         assert_eq!(cell.get(respawn::SAVED), Some(&Node::Bool(false)));
-        assert_eq!(cell.get(DESTROY), Some(&Node::Bool(true)));
-        assert_eq!(cell.get(WAIT), Some(&Node::Bool(false)));
         let game: Byml = Byml::parse(&plain_table).unwrap();
         assert_eq!(s(&made.root, &["$parent"]), s(&game.root, &["$parent"]));
         let (Some(Node::Map(want)), Some(Node::Map(got))) = (game.root.get(respawn::CELLS), made.root.get(respawn::CELLS)) else { panic!() };
-        assert_eq!(want.len(), got.len());
-        for (k, v) in want {
-            let mine: &Node = made.root.get(respawn::CELLS).and_then(|c| c.get(k)).unwrap();
-            if k == respawn::CELL {
-                let (Node::Map(a), Node::Map(b)) = (v, mine) else { panic!() };
-                let rest: Vec<&(String, Node)> = b.iter().filter(|(n, _)| n != DESTROY && n != WAIT && n != respawn::KEPT && n != respawn::SAVED).collect();
-                assert_eq!(rest, a.iter().filter(|(n, _)| n != DESTROY && n != WAIT && n != respawn::KEPT && n != respawn::SAVED).collect::<Vec<_>>());
-            } else {
-                assert_eq!(mine, v, "{k}");
-            }
+        let mine_keys: Vec<String> = ENABLED.iter().map(|r| format!("{r}___Data")).collect();
+        for k in &mine_keys {
+            let c: &Node = made.root.get(respawn::CELLS).and_then(|c| c.get(k)).unwrap();
+            assert_eq!(c.get(DROP), Some(&Node::Bool(true)), "{k}");
+            assert_eq!(c.get(WAIT), Some(&Node::Bool(false)), "{k}");
+            assert_eq!(c.get(DESTROY), Some(&Node::Bool(true)), "{k}");
+            assert_eq!(c.get(respawn::KEPT), Some(&Node::Bool(false)), "{k}");
+            assert_eq!(c.get(respawn::SAVED), Some(&Node::Bool(false)), "{k}");
+            assert_eq!(c.get("IsIgnoreThisDeathReason"), want.iter().find(|(n, _)| n == k).and_then(|(_, v)| v.get("IsIgnoreThisDeathReason")), "{k}");
+            assert_eq!(c.get("$type").and_then(|t| t.as_str()), Some(respawn::CELL_TYPE), "{k}");
         }
+        for (k, v) in want {
+            if mine_keys.contains(k) {
+                continue;
+            }
+            assert_eq!(made.root.get(respawn::CELLS).and_then(|c| c.get(k)).unwrap(), v, "{k}");
+        }
+        assert_eq!(got.len(), want.len() + mine_keys.iter().filter(|k| !want.iter().any(|(n, _)| n == *k)).count());
+        let c: &Node = made.root.get(respawn::CELLS).and_then(|c| c.get("UpperCrushed___Data")).unwrap();
+        assert_eq!(c.get("RowKey").and_then(|t| t.as_str()), Some("UpperCrushed"));
+        assert_eq!(c.get("ColumnKey").and_then(|t| t.as_str()), Some("Data"));
         for k in ["AI___Data", "Burned___Data", "LifeCondition___Data", "PhysicsKinematicCollision___Data"] {
             assert!(made.root.get(respawn::CELLS).and_then(|c| c.get(k)).is_some(), "{k}");
         }
@@ -878,6 +900,32 @@ mod tests {
         assert!(seen > 0);
         assert_eq!(m.iter().map(|(k, _)| k.as_str()).collect::<Vec<_>>(), vec!["FlagName", "IsCheckLazy", "IsNegation"]);
         assert_eq!(mine.get("IsNegation"), Some(&Node::Bool(true)));
+    }
+
+    #[test]
+    fn every_enabled_death_reason_after_inheritance_is_on_the_list() {
+        let Some(r) = root() else { return };
+        let mut rf: Romfs = Romfs::open(&r).unwrap();
+        let mut merged: Vec<(String, bool)> = Vec::new();
+        for t in ["Default", "EnemyCommon", "DungeonBossCommon", DEATH_TABLE_BASE] {
+            let y: Byml = Byml::parse(&rf.read(&respawn::file(t)).unwrap()).unwrap();
+            let Some(Node::Map(c)) = y.root.get(respawn::CELLS) else { panic!() };
+            for (k, v) in c {
+                if let Some(Node::Bool(b)) = v.get("IsIgnoreThisDeathReason") {
+                    match merged.iter_mut().find(|(n, _)| n == k) {
+                        Some(e) => e.1 = *b,
+                        None => merged.push((k.clone(), *b)),
+                    }
+                } else if !merged.iter().any(|(n, _)| n == k) {
+                    merged.push((k.clone(), false));
+                }
+            }
+        }
+        let mut on: Vec<String> = merged.into_iter().filter(|(_, i)| !*i).map(|(k, _)| k.trim_end_matches("___Data").to_string()).collect();
+        on.sort();
+        let mut want: Vec<String> = ENABLED.iter().map(|r| r.to_string()).collect();
+        want.sort();
+        assert_eq!(on, want);
     }
 
     #[test]
