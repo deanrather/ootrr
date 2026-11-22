@@ -19,6 +19,9 @@ Upstream issue 70: "unable to pick up or break rock in kokiri forest". The check
 ## How to test in the game
 Rock shuffle on (all or overworld), a fresh child save before the Deku Tree. Go to the rock behind the kid (the spot with the lesson rock, about -45.8, 111.8, -27.8) and lift or break the check rock (it may sit under or beside the lesson rock); the check is given. Control: rock shuffle off, vanilla. After the Deku Tree the lesson rock is gone and rock 11 still works.
 
+## Kid interruption (user, 23 Nov)
+The user decided a shuffled rock is never removed and asked whether the kid's walk-past interruption could be taken away instead. Findings: the kid (`Npc_Kokiri_008_Child`) has a `Near` entry that only shows a speech balloon (`Near_01`, `Near_03`), his own talk entries start when Link presses A, and a ring of `Area` triggers (the lesson's practice area) surrounds the lesson rock. No time saver in the randomizer edits him or his flow, so the interruption itself was not reproduced or isolated here; if it is confirmed in the game, the next step is to find which trigger starts his `Camera_ForPracticeArea` or `GameStarted_*` entry. The fix above does not depend on it: the check rock no longer waits for the Deku Tree, and the kid and his lesson rock stay as the game has them.
+
 ## Notes
 - The two rocks overlap at one position before the Deku Tree; whether they look odd or the lesson rock hides the check rock needs a look in the game.
 
