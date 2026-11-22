@@ -63,3 +63,17 @@ Every branch ends where the vanilla event ended, the end of its fork branch, so 
 ## Notes for the next feature
 - The game's own fall cost differs by surface. Never assume one number: test pits and lava both.
 - A negative `EventTriggerHealLife` is a working way for a flow to lower Link's life; to kill, lower it to 1 and let the game's own damage do it, so the death runs through the normal paths.
+
+## Test status (23 Nov)
+Rebased state is on current `origin/main`. `cargo test -p ootrr-core difficulty` (312 passed), `settings` (114 passed) and `cargo test --workspace` pass; the audit has no failures. Not played yet: a tester plan and one built mod per level (0, 2, 3) are ready. Lava that burns over time is a different mechanism and is untouched; the void-out flow cannot tell a sinking-lava void-out from a pit, so both count as falls.
+
+## MR Drafts
+
+### Initial MR Draft
+**Title:** New Difficulty > Fall in pit penalty Feature: Choose what falling into a pit costs
+
+A new Difficulty slider, Fall in pit penalty, 0 to 3: 0 costs nothing, 1 (default) is the game's usual penalty, 2 leaves you on 1 heart, 3 leaves you on zero hearts (a bottled fairy still revives you). Data edits only; default off, settings strings and default seeds unchanged. Not yet played at levels 0, 2 and 3.
+
+For details about implementation and testing, see difficulty-mod/docs/features/49-fall-pit-penalty.md.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
