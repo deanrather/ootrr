@@ -19,6 +19,29 @@ impl Ainb {
         })
     }
 
+    pub fn prop_f32(&self, i: usize, name: &str) -> Option<f32> {
+        let b: usize = self.params.get(i)?.pe[2][0] as usize;
+        let n: usize = self.params.get(i)?.pe[2][1] as usize;
+        (b..b + n).find_map(|g| {
+            if self.prop_name(2, g)? != name {
+                return None;
+            }
+            let e: &[u8] = self.props[2].get(g * PSZ[2]..(g + 1) * PSZ[2])?;
+            Some(f32::from_le_bytes([e[8], e[9], e[10], e[11]]))
+        })
+    }
+
+    pub fn set_prop_f32(&mut self, i: usize, name: &str, v: f32) -> Res<bool> {
+        let b: usize = self.params.get(i).ok_or(Error::Format("ainb: no such element"))?.pe[2][0] as usize;
+        let n: usize = self.params[i].pe[2][1] as usize;
+        let Some(g) = (b..b + n).find(|&g| self.prop_name(2, g) == Some(name)) else {
+            return Ok(false);
+        };
+        let o: usize = g * PSZ[2] + 8;
+        self.props[2].get_mut(o..o + 4).ok_or(Error::Format("ainb: property out of range"))?.copy_from_slice(&v.to_le_bytes());
+        Ok(true)
+    }
+
     pub fn add_bool_input(&mut self, i: usize, name: &str, v: bool) -> Res<bool> {
         if i >= self.params.len() {
             return Err(Error::Format("ainb: no such element"));

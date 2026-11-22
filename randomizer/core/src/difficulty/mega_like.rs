@@ -24,6 +24,7 @@ pub const BASE: &str = "Enemy_LikeLike";
 pub const CLASS: &str = "Enemy_LikeLike_Mega";
 pub const SEED: &str = "ootrr mega like likes";
 pub const SHIELDS: [&str; 3] = ["Weapon_Shield_Mirror", "Weapon_Shield_Hylian", "Weapon_Shield_Deku"];
+pub const NEVER: f32 = 1.0e9;
 pub const LIFE_TIMES: i32 = 3;
 pub const GRIP_TIMES: f32 = 1.5;
 pub const SIZE: f32 = 1.6;
@@ -56,12 +57,12 @@ pub struct Spot {
 }
 
 pub const SPOTS: [Spot; 6] = [
-    Spot { map: "KokiriForest_Child", name: "child_meadow_south", at: [82.0, 113.1, -40.0], turn: 1.2 },
-    Spot { map: "KokiriForest_Child", name: "child_meadow_middle", at: [85.0, 113.4, -28.0], turn: 1.2 },
-    Spot { map: "KokiriForest_Child", name: "child_meadow_north", at: [88.0, 113.6, -16.0], turn: 1.2 },
-    Spot { map: "KokiriForest_Adult", name: "adult_meadow_west", at: [70.0, 112.0, -35.0], turn: 1.2 },
-    Spot { map: "KokiriForest_Adult", name: "adult_meadow_south", at: [80.0, 113.0, -40.0], turn: 1.2 },
-    Spot { map: "KokiriForest_Adult", name: "adult_meadow_north", at: [88.0, 113.7, -16.0], turn: 1.2 },
+    Spot { map: "KokiriForest_Child", name: "child_meadow_south", at: [69.61, 111.85, -13.94], turn: 1.2 },
+    Spot { map: "KokiriForest_Child", name: "child_meadow_middle", at: [78.38, 112.71, -5.66], turn: 1.2 },
+    Spot { map: "KokiriForest_Child", name: "child_meadow_north", at: [69.68, 111.57, -38.97], turn: 1.2 },
+    Spot { map: "KokiriForest_Adult", name: "adult_meadow_west", at: [69.61, 111.94, -13.94], turn: 1.2 },
+    Spot { map: "KokiriForest_Adult", name: "adult_meadow_south", at: [78.38, 112.56, -5.66], turn: 1.2 },
+    Spot { map: "KokiriForest_Adult", name: "adult_meadow_north", at: [69.68, 111.85, -38.97], turn: 1.2 },
 ];
 
 pub fn banc(map: &str) -> String {
@@ -345,6 +346,16 @@ fn has_predation(a: &Ainb, from: usize) -> bool {
     false
 }
 
+pub fn no_backup(a: &mut Ainb) -> Res<usize> {
+    let mut n: usize = 0;
+    for i in 0..a.els.len() {
+        if a.el_type(i) == 0 && a.el_name(i) == crate::difficulty::backup::TIMER && a.prop_f32(i, "CountFrames") == Some(crate::difficulty::backup::FRAMES) && a.prop_f32(i, "RandomAddCountFrames") == Some(crate::difficulty::backup::RANDOM_FRAMES) && a.set_prop_f32(i, "CountFrames", NEVER)? {
+            n += 1;
+        }
+    }
+    Ok(n)
+}
+
 pub fn quiet(raw: &[u8]) -> Res<Vec<u8>> {
     let mut a: Ainb = Ainb::parse(raw)?;
     let nodes: Vec<usize> = a.find_els(RIDER);
@@ -359,6 +370,7 @@ pub fn quiet(raw: &[u8]) -> Res<Vec<u8>> {
     }
     a.params[root].remove_plug(2, at + 1)?;
     a.params[root].remove_plug(2, at)?;
+    no_backup(&mut a)?;
     finish(a, "the utility graph")
 }
 
@@ -630,5 +642,19 @@ mod tests {
         assert_eq!(acts.len(), 1);
         assert_eq!(acts[0].get("Gyaml").and_then(|v| v.as_str()), Some(CLASS));
         assert!(acts[0].get("Scale").is_some());
+    }
+
+    #[test]
+    fn every_spot_stands_on_the_navmesh() {
+        let Some(r) = root() else { return };
+        let mut rf: Romfs = Romfs::open(&r).unwrap();
+        for m in maps() {
+            let g: crate::difficulty::ground::Ground = crate::difficulty::ground::load(&mut rf, m).unwrap().unwrap();
+            for s in SPOTS.iter().filter(|s| s.map == m) {
+                let f: Option<(f32, u32)> = g.floor_near(s.at[0], s.at[1], s.at[2], 0.5, 0.5);
+                assert!(f.is_some(), "{} is not on the floor of {m}", s.name);
+                assert!(g.clear(s.at) > 0.5, "{} is inside a wall of {m}", s.name);
+            }
+        }
     }
 }
