@@ -17,11 +17,13 @@ pub const SEED: &str = "ootrr climbable drawbridge chains";
 pub const SIDES: [f32; 2] = [-1.0, 1.0];
 pub const CHAIN_X: f32 = 3.73;
 pub const WIDTH: f32 = 1.2;
+pub const WIDE: f32 = 2.0;
+pub const WIDE_PIECES: usize = 3;
 pub const THICK: f32 = 0.5;
 pub const OVERLAP: f32 = 0.4;
 pub const PITCH_SIGN: f32 = 1.0;
 
-pub const PROFILE: [[f32; 2]; 11] = [[11.2, 0.45], [9.5, 1.12], [6.5, 2.9], [5.5, 3.6], [4.5, 4.27], [2.5, 6.0], [1.5, 7.0], [0.5, 8.1], [-0.5, 9.3], [-1.5, 10.5], [-2.4, 11.4]];
+pub const PROFILE: [[f32; 2]; 13] = [[15.0, 0.0], [13.0, 0.15], [11.2, 0.45], [9.5, 1.12], [6.5, 2.9], [5.5, 3.6], [4.5, 4.27], [2.5, 6.0], [1.5, 7.0], [0.5, 8.1], [-0.5, 9.3], [-1.5, 10.5], [-2.4, 11.4]];
 
 pub const NOTE: &str = "In the child Hyrule Field, a narrow invisible-collision ramp (wooden planks) runs up each of the two chains of the lowered Hyrule Castle drawbridge, from the end of the bridge to the gatehouse, so Link can climb them. Only while the bridge is down (by day). The adult castle has no chains, so nothing changes there.";
 
@@ -34,7 +36,8 @@ pub struct Piece {
 
 pub fn pieces(origin: [f32; 3], side: f32) -> Vec<Piece> {
     let mut out: Vec<Piece> = Vec::new();
-    for w in PROFILE.windows(2) {
+    for (k, w) in PROFILE.windows(2).enumerate() {
+        let width: f32 = if k < WIDE_PIECES { WIDE } else { WIDTH };
         let dz: f32 = w[1][0] - w[0][0];
         let dy: f32 = w[1][1] - w[0][1];
         let len: f32 = (dz * dz + dy * dy).sqrt();
@@ -45,7 +48,7 @@ pub fn pieces(origin: [f32; 3], side: f32) -> Vec<Piece> {
         out.push(Piece {
             at: [origin[0] + side * CHAIN_X, origin[1] + mid[1] - normal[1] * THICK, origin[2] + mid[0] - normal[0] * THICK],
             rot: [pitch * PITCH_SIGN, 0.0, 0.0],
-            scale: [WIDTH / BASE[0], THICK / BASE[1], (len + OVERLAP * 2.0) / BASE[2]],
+            scale: [width / BASE[0], THICK / BASE[1], (len + OVERLAP * 2.0) / BASE[2]],
         });
     }
     out
