@@ -272,10 +272,11 @@ fn difficulty() -> Vec<Setting> {
         Setting::toggle(d::FAIRY_HELPS_NUM, d::FAIRY_HELPS, "difficulty", "Fairies help enemies too", false)
             .tip("When you use a bottled fairy, or one revives you, every awake enemy and boss heals to full too."),
         Setting::choice(d::feint::NUM, d::feint::SETTING, "difficulty", "Enemy feints", "off")
-            .tip("Stalfos sometimes fake a swing: they start the attack, stop short, wait a moment, then swing for real. Only Stalfos so far. Experimental, not played in the game yet.")
-            .opt("off", "Off", "Every swing is real.")
-            .opt("quarter", "25%", "About one swing in four starts with a feint.")
-            .opt("half", "50%", "About one swing in two starts with a feint."),
+            .tip("Stalfos, Lizalfos, Dinolfos, Iron Knuckles and Deku Babas sometimes fake an attack: they start it, stop short, wait a moment, then attack for real. Stalfos combos and the Iron Knuckle double swing can also pause after the first swing. Experimental.")
+            .opt("off", "Off", "Every attack is real.")
+            .opt("quarter", "25%", "About one attack in four has a feint.")
+            .opt("half", "50%", "About one attack in two has a feint.")
+            .opt("three_quarters", "75%", "About three attacks in four have a feint."),
     ]
 }
 
