@@ -9,7 +9,7 @@ use crate::error::{Error as E, Res};
 use crate::flow_locations::dict_id;
 use crate::modpack::Pack;
 use crate::pickup_pack::rows::{self, ACTOR_INFO, GAME_ACTOR_INFO, HEAP, ROW_ID};
-use crate::pickup_pack::sizes::{file_size, pack_size};
+use crate::pickup_pack::sizes::{file_size, pack_size, FILE_MARGIN};
 use crate::pickup_pack::tag::{Table, TAG};
 use crate::pickup_pack::PACK_DICT;
 use crate::placement::hash_of;
@@ -49,6 +49,7 @@ pub const DESTROY: &str = "IsRequestDestruction";
 pub const PROCEDURES: &str = "DeathProcedures";
 pub const WAIT: &str = "IsWaitForSignal";
 pub const DROP: &str = "IsDropItem";
+pub const CELL_COST: u64 = 256;
 pub const ENABLED: [&str; 7] = ["AI", "AncientWeapon", "Crushed", "Frozen", "LifeDepleted", "SideCrushed", "UpperCrushed"];
 pub const FROM: &str = "Enemy_Floormaster";
 pub const DROP_KEY: &str = "DropRef";
@@ -169,6 +170,20 @@ pub fn death(base: &[u8]) -> Res<Vec<u8>> {
         return Err(E::Format("volvagia roams: the Volvagia death file is not a map"));
     }
     y.write()
+}
+
+pub fn cells(raw: &[u8]) -> Res<usize> {
+    match Byml::parse(raw)?.root.get(respawn::CELLS) {
+        Some(Node::Map(c)) => Ok(c.len()),
+        _ => Err(E::Format("volvagia roams: a death table has no cell list")),
+    }
+}
+
+pub fn table_size(rst: &Rst, peer: &str, peer_raw: &[u8], out: &[u8]) -> Res<u32> {
+    let have: u64 = rst.get(peer).ok_or_else(|| E::Msg(format!("volvagia roams: {peer} has no size table entry")))? as u64;
+    let more: u64 = cells(out)?.saturating_sub(cells(peer_raw)?) as u64;
+    let grow: u64 = rsizetable::align(out.len().saturating_sub(peer_raw.len()) as u64) + CELL_COST * more;
+    u32::try_from(have + grow + FILE_MARGIN).map_err(|_| E::Format("volvagia roams: the death table size does not fit in 32 bits"))
 }
 
 pub fn procedures(raw: &[u8]) -> Res<Vec<u8>> {
@@ -498,8 +513,7 @@ pub fn stage(rf: &mut Romfs, have: &dyn Fn(&str) -> Option<Vec<u8>>, rst: &Rst, 
         None => rf.read(&tp)?,
     };
     let dt: Vec<u8> = procedures(&traw2)?;
-    let peers: Vec<(String, usize)> = vec![(tp.clone(), traw2.len()), (respawn::file("DungeonBossCommon"), rf.read(&respawn::file("DungeonBossCommon"))?.len())];
-    m.sizes.push((death_table(), file_size(rst, &peers, &death_table(), dt.len())?));
+    m.sizes.push((death_table(), table_size(rst, &tp, &rf.read(&tp)?, &dt)?));
     m.outs.push(Out { path: death_table(), old: 0, new: dt.len(), z: dt });
     let r: Ring = ring(&rf.read_byml(STAGE)?)?;
     let (mraw, mid): (Vec<u8>, u32) = current(rf, have, s.arena.file)?;
@@ -905,7 +919,7 @@ mod tests {
     #[test]
     fn every_enabled_death_reason_after_inheritance_is_on_the_list() {
         let Some(r) = root() else { return };
-        let mut rf: Romfs = Romfs::open(&r).unwrap();
+        let rf: Romfs = Romfs::open(&r).unwrap();
         let mut merged: Vec<(String, bool)> = Vec::new();
         for t in ["Default", "EnemyCommon", "DungeonBossCommon", DEATH_TABLE_BASE] {
             let y: Byml = Byml::parse(&rf.read(&respawn::file(t)).unwrap()).unwrap();
@@ -926,6 +940,81 @@ mod tests {
         let mut want: Vec<String> = ENABLED.iter().map(|r| r.to_string()).collect();
         want.sort();
         assert_eq!(on, want);
+    }
+
+    fn game_tables(r: &PB) -> Vec<(String, Vec<u8>)> {
+        let mut out: Vec<(String, Vec<u8>)> = Vec::new();
+        for e in fs::read_dir(r.join(respawn::DIR)).unwrap() {
+            let n: String = e.unwrap().file_name().to_string_lossy().to_string();
+            if n.ends_with(respawn::EXT) {
+                let p: String = format!("{}{n}", respawn::DIR);
+                out.push((p.clone(), fs::read(r.join(&p)).unwrap()));
+            }
+        }
+        out.sort();
+        out
+    }
+
+    #[test]
+    fn the_death_table_size_covers_what_every_game_table_of_its_length_and_cells_needs() {
+        let Some(r) = root() else { return };
+        let mut rf: Romfs = Romfs::open(&r).unwrap();
+        let t: Rst = rsizetable::load(&mut rf).unwrap();
+        let tp: String = respawn::file(DEATH_TABLE_BASE);
+        let peer: Vec<u8> = rf.read(&tp).unwrap();
+        let all: Vec<(String, Vec<u8>)> = game_tables(&r);
+        assert!(all.len() > 100);
+        let mut n: usize = 0;
+        for (p, b) in &all {
+            let Some(want) = t.get(p) else { continue };
+            let got: u32 = table_size(&t, &tp, &peer, b).unwrap() - FILE_MARGIN as u32;
+            assert!(got >= want, "{p}: {got} < {want}");
+            let per: i64 = want as i64 - b.len() as i64 - 240 * cells(b).unwrap() as i64;
+            assert!((5040..5400).contains(&per), "{p}: {per}");
+            n += 1;
+        }
+        assert!(n > 100);
+        let made: Vec<u8> = procedures(&peer).unwrap();
+        let need: u64 = made.len() as u64 + 5400 + 240 * cells(&made).unwrap() as u64;
+        assert!(table_size(&t, &tp, &peer, &made).unwrap() as u64 >= need + 512);
+    }
+
+    #[test]
+    fn the_new_death_table_round_trips_and_its_cells_use_only_fields_and_kinds_the_game_tables_use() {
+        let Some(r) = root() else { return };
+        let mut fields: Vec<(String, std::mem::Discriminant<Node>)> = Vec::new();
+        for (_, b) in game_tables(&r) {
+            let y: Byml = Byml::parse(&b).unwrap();
+            let Some(Node::Map(c)) = y.root.get(respawn::CELLS) else { continue };
+            for (_, v) in c {
+                let Node::Map(m) = v else { panic!() };
+                for (k, x) in m {
+                    if !fields.iter().any(|(n, _)| n == k) {
+                        fields.push((k.clone(), std::mem::discriminant(x)));
+                    }
+                }
+            }
+        }
+        let peer: Vec<u8> = fs::read(r.join(respawn::file(DEATH_TABLE_BASE))).unwrap();
+        let made: Vec<u8> = procedures(&peer).unwrap();
+        let y: Byml = Byml::parse(&made).unwrap();
+        assert_eq!(y.write().unwrap(), made);
+        let game: Byml = Byml::parse(&peer).unwrap();
+        let top = |y: &Byml| -> Vec<String> { if let Node::Map(m) = &y.root { m.iter().map(|(k, _)| k.clone()).collect() } else { panic!() } };
+        assert_eq!(top(&y), top(&game));
+        let Some(Node::Map(c)) = y.root.get(respawn::CELLS) else { panic!() };
+        for (k, v) in c {
+            let Node::Map(m) = v else { panic!("{k}") };
+            let names: Vec<&str> = m.iter().map(|(n, _)| n.as_str()).collect();
+            let mut sorted: Vec<&str> = names.clone();
+            sorted.sort();
+            assert_eq!(names, sorted, "{k}");
+            assert_eq!(v.get("$type").and_then(|t| t.as_str()), Some(respawn::CELL_TYPE), "{k}");
+            for (n, x) in m {
+                let kind: Option<&std::mem::Discriminant<Node>> = fields.iter().find(|(f, _)| f == n).map(|(_, d)| d);
+                assert_eq!(kind, Some(&std::mem::discriminant(x)), "{k} {n}");
+            }
+        }
     }
 
     #[test]
