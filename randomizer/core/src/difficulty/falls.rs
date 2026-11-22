@@ -31,7 +31,7 @@ pub const RANGE: (i64, i64) = (FREE, ZERO);
 pub fn note(level: i64) -> String {
     match level {
         FREE => "Falling into a pit, lava or quicksand costs nothing: Link comes back at the edge with the hearts he had.".to_string(),
-        ONE_HEART => "Falling into a pit, lava or quicksand leaves Link at one heart. With one heart or less left, a fall takes the rest: a bottled fairy saves him, otherwise it is game over.".to_string(),
+        ONE_HEART => "Falling into a pit, lava or quicksand leaves Link at one heart. With one heart or less left, a fall costs nothing.".to_string(),
         ZERO => "Falling into a pit, lava or quicksand takes every heart: a bottled fairy saves Link, otherwise it is game over.".to_string(),
         _ => String::new(),
     }
@@ -77,6 +77,15 @@ fn to_last(f: &mut Flow, hi: i32, at: u16) -> Res<u16> {
     ladder(f, "Last", LAST + 1, hi, LAST, wait)
 }
 
+fn guarded(f: &mut Flow, actor: u16, act: u16, params: Option<Cont>, next: u16) -> Res<u16> {
+    let (ha, hn): (u16, u16) = action(f, PLAYER, HEAL)?;
+    let back: u16 = push(f, format!("{MARK}Down"), Kind::Action { next, actor: ha, act: hn, params: cont(vec![(VALUE, Val::Int(-HEART))]) })?;
+    let abyss: u16 = push(f, format!("{MARK}Safe"), Kind::Action { next: back, actor, act, params: Some(spare(params)) })?;
+    let (a, n): (u16, u16) = action(f, WAITER, WAIT)?;
+    let wait: u16 = push(f, format!("{MARK}Settle"), Kind::Action { next: abyss, actor: a, act: n, params: cont(vec![("IsWaitEnd", Val::Bool(TRUE)), ("Frames", Val::Int(1))]) })?;
+    push(f, format!("{MARK}Up"), Kind::Action { next: wait, actor: ha, act: hn, params: cont(vec![(VALUE, Val::Int(HEART))]) })
+}
+
 pub fn penalty(raw: &[u8], level: i64) -> Res<Vec<u8>> {
     if !(RANGE.0..=RANGE.1).contains(&level) || level == VANILLA {
         return Err(Error::Msg(format!("difficulty: fall penalty {level} has no edit")));
@@ -97,11 +106,15 @@ pub fn penalty(raw: &[u8], level: i64) -> Res<Vec<u8>> {
     };
     let old: usize = f.events.len();
     let start: u16 = match level {
-        FREE => push(f, format!("{MARK}Abyss"), Kind::Action { next, actor, act, params: Some(spare(params)) })?,
+        FREE => {
+            let plain: u16 = push(f, format!("{MARK}Abyss"), Kind::Action { next, actor, act, params: Some(spare(params.clone())) })?;
+            let low: u16 = guarded(f, actor, act, params, next)?;
+            life_check(f, format!("{MARK}Gate"), HEART, [low, low, plain])?
+        }
         ONE_HEART => {
             let first: u16 = ladder(f, "One", HEART + 1, TOP, HEART, next)?;
-            let spared: u16 = push(f, format!("{MARK}Abyss"), Kind::Action { next: first, actor, act, params: Some(spare(params)) })?;
-            let low: u16 = to_last(f, HEART, at)?;
+            let spared: u16 = push(f, format!("{MARK}Abyss"), Kind::Action { next: first, actor, act, params: Some(spare(params.clone())) })?;
+            let low: u16 = guarded(f, actor, act, params, next)?;
             life_check(f, format!("{MARK}Gate"), HEART, [low, low, spared])?
         }
         _ => to_last(f, TOP, at)?,
@@ -144,6 +157,8 @@ mod tests {
         heal_before: bool,
         waited: bool,
         steps: usize,
+        heals: usize,
+        at_abyss: i32,
     }
 
     fn walk(f: &Flow, from: u16, start: i32) -> Run {
@@ -154,6 +169,7 @@ mod tests {
         let mut steps: usize = 0;
         let mut at: u16 = from;
         let mut heals: usize = 0;
+        let mut at_abyss: i32 = 0;
         while at != NONE {
             steps += 1;
             assert!(steps < 40, "the flow loops");
@@ -172,7 +188,7 @@ mod tests {
                     let name: &str = &f.actors[*actor as usize].actions[*act as usize];
                     if name == HEAL {
                         heals += 1;
-                        assert_eq!(heals, 1, "healed twice");
+                        assert!(heals <= 2, "healed three times");
                         let Some(Val::Int(n)) = params.as_ref().and_then(|c| c.get(VALUE)) else { panic!() };
                         life += *n;
                         if damage.is_none() {
@@ -186,13 +202,14 @@ mod tests {
                         assert!(damage.is_none(), "two abyss events");
                         let off: bool = params.as_ref().and_then(|c| c.get(NO_DAMAGE)) == Some(&Val::Bool(TRUE));
                         damage = Some(!off);
+                        at_abyss = life;
                     }
                     *next
                 }
                 _ => panic!(),
             };
         }
-        Run { life, damage, heal_before, waited, steps }
+        Run { life, damage, heal_before, waited, steps, heals, at_abyss }
     }
 
     fn edited(level: i64) -> Bf {
@@ -200,17 +217,22 @@ mod tests {
     }
 
     #[test]
-    fn no_penalty_runs_the_abyss_event_without_damage_and_never_heals() {
+    fn no_penalty_leaves_every_life_alone_and_lifts_a_low_one_above_a_heart_for_the_fall() {
         let mut b: Bf = edited(FREE);
         let f: &mut Flow = flow(&mut b, FLOW).unwrap();
         for life in 1..=TOP {
             let r: Run = walk(f, f.entries[0].main, life);
-            assert_eq!((r.life, r.damage, r.heal_before), (life, Some(false), false), "life {life}");
+            assert_eq!((r.life, r.damage), (life, Some(false)), "life {life}");
+            if life > HEART {
+                assert_eq!((r.heals, r.at_abyss), (0, life), "life {life}");
+            } else {
+                assert_eq!((r.heals, r.at_abyss, r.waited), (2, life + HEART, true), "life {life}");
+            }
         }
     }
 
     #[test]
-    fn one_heart_leaves_one_heart_above_it_and_takes_the_rest_at_or_below_it() {
+    fn one_heart_leaves_one_heart_above_it_and_leaves_a_heart_or_less_alone() {
         let mut b: Bf = edited(ONE_HEART);
         let f: &mut Flow = flow(&mut b, FLOW).unwrap();
         for life in HEART + 1..=TOP {
@@ -220,8 +242,7 @@ mod tests {
         }
         for life in 1..=HEART {
             let r: Run = walk(f, f.entries[0].main, life);
-            assert_eq!((r.life, r.damage, r.waited), (LAST, Some(true), true), "life {life}");
-            assert_eq!(r.heal_before, life > LAST);
+            assert_eq!((r.life, r.damage, r.waited, r.heals, r.at_abyss), (life, Some(false), true, 2, life + HEART), "life {life}");
         }
     }
 

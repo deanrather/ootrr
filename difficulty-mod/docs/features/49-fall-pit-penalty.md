@@ -6,7 +6,7 @@ Setting `fall_pit_penalty` (number 162), a slider from 0 to 3, default 1 (the ga
 First: "near-death falls: falling down a hole takes you down to 1 heart" (22 Nov). After playing that version (hands-on 15), the user turned it into a slider, "Fall in pit penalty", 0 to 3:
 - 0: no penalty (a fall costs nothing)
 - 1: the default penalty
-- 2: leaves you on 1 heart; at 1 heart or less, a fall takes you to zero (a fairy, or game over)
+- 2: leaves you on 1 heart; at 1 heart or less, nothing more is lost (changed 23 Nov after the first test: it used to take the rest)
 - 3: leaves you on zero hearts (every fall: a fairy, or game over)
 
 ## How it behaves
@@ -26,6 +26,8 @@ First: "near-death falls: falling down a hole takes you down to 1 heart" (22 Nov
 The on/off version brought falls above 1 heart down to 1 heart, then ran the base game's event at 1 heart or less, assuming it costs one heart. In Shadow Temple pits it costs half a heart, so a fall at 1 heart left half a heart instead of ending the game. The scripted check had used lava, which does cost one heart, so it passed. The new levels never depend on the size of the game's own cost: to take the rest, they bring life down to a quarter heart first, and then any cost kills.
 
 ## Implementation
+(The low-life branches below were replaced on 23 Nov: see "Fix after the first tester run".)
+
 In `DmF_SY_FallDown`, the one `EventPlayerAbyss` event is reached through new events (marked `OOTRRPitPenalty`):
 - **0:** a copy of the event with `InvalidDamage` true replaces it. Nothing else.
 - **1:** no edit; nothing is staged.
@@ -64,6 +66,9 @@ Every branch ends where the vanilla event ended, the end of its fork branch, so 
 - The game's own fall cost differs by surface. Never assume one number: test pits and lava both.
 - A negative `EventTriggerHealLife` is a working way for a flow to lower Link's life; to kill, lower it to 1 and let the game's own damage do it, so the death runs through the normal paths.
 
+## Fix after the first tester run (23 Nov)
+The tester found two bugs at low life: level 0 from half a heart (2 quarter hearts) killed Link (2 to 0 in 0.24 s), and level 2 from exactly one heart went 4 to 1 to 0. The second was the old design (take the rest at 1 heart or less); the user's spec is "leaves you on 1 heart", so level 2 now leaves 4 or less unchanged. The first is unexplained: the no-damage copy of the event worked from 80, 20 and 4 but not from 2, and the engine node behind `EventPlayerAbyss` is not readable here. So for life 4 or less, levels 0 and 2 now lift Link by one heart first (a heal of +4), wait one frame, run the no-damage event, then take the heart back (-4), so the fall never happens at a life where the game could kill. This is a workaround, not a confirmed cause: the tester must check lives 1 to 4 at levels 0 and 2, and level 3 is unchanged. Unit walks cover every life from 1 to 80 at each level.
+
 ## Test status (23 Nov)
 Rebased state is on current `origin/main`. `cargo test -p ootrr-core difficulty` (312 passed), `settings` (114 passed) and `cargo test --workspace` pass; the audit has no failures. Not played yet: a tester plan and one built mod per level (0, 2, 3) are ready. Lava that burns over time is a different mechanism and is untouched; the void-out flow cannot tell a sinking-lava void-out from a pit, so both count as falls.
 
@@ -72,7 +77,7 @@ Rebased state is on current `origin/main`. `cargo test -p ootrr-core difficulty`
 ### Initial MR Draft
 **Title:** New Difficulty > Fall in pit penalty Feature: Choose what falling into a pit costs
 
-A new Difficulty slider, Fall in pit penalty, 0 to 3: 0 costs nothing, 1 (default) is the game's usual penalty, 2 leaves you on 1 heart, 3 leaves you on zero hearts (a bottled fairy still revives you). Data edits only; default off, settings strings and default seeds unchanged. Not yet played at levels 0, 2 and 3.
+A new Difficulty slider, Fall in pit penalty, 0 to 3: 0 costs nothing, 1 (default) is the game's usual penalty, 2 leaves you on 1 heart (at 1 heart or less nothing more is lost), 3 leaves you on zero hearts (a bottled fairy still revives you). Data edits only; default off, settings strings and default seeds unchanged. Not yet played at levels 0, 2 and 3.
 
 For details about implementation and testing, see difficulty-mod/docs/features/49-fall-pit-penalty.md.
 

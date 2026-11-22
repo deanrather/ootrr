@@ -223,7 +223,7 @@ fn difficulty() -> Vec<Setting> {
         Setting::toggle(d::LOSE_HEART_NUM, d::LOSE_HEART, "difficulty", "Lose heart on death", false)
             .tip("Each game over costs a heart container, down to three. Being saved by a bottled fairy does not count. Quitting to the title screen gives the hearts back."),
         Setting::number(d::PIT_NUM, d::PIT, "difficulty", "Fall in pit penalty", d::falls::VANILLA, d::falls::RANGE.0, d::falls::RANGE.1)
-            .tip("What falling into a pit, lava or quicksand costs. 0: nothing. 1: the usual small loss. 2: leaves you on 1 heart; at 1 heart or less it takes the rest. 3: takes every heart. A bottled fairy still saves you."),
+            .tip("What falling into a pit, lava or quicksand costs. 0: nothing. 1: the usual small loss. 2: leaves you on 1 heart (at 1 heart or less, nothing more is lost). 3: takes every heart. A bottled fairy still saves you."),
         Setting::toggle(d::NO_BOTTLES_NUM, d::NO_BOTTLES, "difficulty", "No bottles during combat", false)
             .tip("You can't use a bottle while the battle music plays or in a boss fight. A bottled fairy still revives you."),
         Setting::toggle(d::NO_TARGET_NUM, d::NO_TARGET, "difficulty", "No Z-targeting", false)
