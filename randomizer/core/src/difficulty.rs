@@ -56,7 +56,7 @@ pub const NO_HEARTS: &str = "no_heart_drops";
 pub const NO_FAIRIES: &str = "no_gossip_fairies";
 pub const NO_AMMO: &str = "no_ammo_drops";
 pub const LOSE_HEART: &str = "lose_heart_on_death";
-pub const NEAR_DEATH: &str = "near_death_falls";
+pub const PIT: &str = "fall_pit_penalty";
 pub const NO_BOTTLES: &str = "no_bottles_in_combat";
 pub const NO_TARGET: &str = "no_z_targeting";
 pub const NO_DUPES: &str = "no_dupe_items";
@@ -94,7 +94,7 @@ pub const NO_HEARTS_NUM: u16 = 113;
 pub const NO_FAIRIES_NUM: u16 = 114;
 pub const NO_AMMO_NUM: u16 = 115;
 pub const LOSE_HEART_NUM: u16 = 116;
-pub const NEAR_DEATH_NUM: u16 = 162;
+pub const PIT_NUM: u16 = 162;
 pub const NO_BOTTLES_NUM: u16 = 117;
 pub const NO_TARGET_NUM: u16 = 124;
 pub const NO_DUPES_NUM: u16 = 122;
@@ -140,7 +140,7 @@ pub struct Opts {
     pub no_fairies: bool,
     pub no_ammo: bool,
     pub lose_heart: bool,
-    pub near_death: bool,
+    pub pit: i64,
     pub no_bottles: bool,
     pub no_target: bool,
     pub no_dupes: bool,
@@ -173,7 +173,7 @@ pub struct Opts {
 
 impl Default for Opts {
     fn default() -> Opts {
-        Opts { health: NORMAL, damage: NORMAL, hurt: hurt::Hurt::Normal, speed: NORMAL, no_hearts: false, no_fairies: false, no_ammo: false, lose_heart: false, near_death: false, no_bottles: false, no_target: false, no_dupes: false, extra: 0, respawn: false, minibosses: false, regen: false, minions: false, fairy_helps: false, backup: false, gates: false, encounters: false, cucco: false, bowling: false, talon: false, fireballs: false, spawn_combo: false, randomizer: false, sizes: sizes::Range::Off, sized_health: false, fuses: false, mega_like: false, volvagia: false, forest_open: false, shops: false, mido_gone: false, entrances: gates::Shuffle::Off, timers: NORMAL }
+        Opts { health: NORMAL, damage: NORMAL, hurt: hurt::Hurt::Normal, speed: NORMAL, no_hearts: false, no_fairies: false, no_ammo: false, lose_heart: false, pit: falls::VANILLA, no_bottles: false, no_target: false, no_dupes: false, extra: 0, respawn: false, minibosses: false, regen: false, minions: false, fairy_helps: false, backup: false, gates: false, encounters: false, cucco: false, bowling: false, talon: false, fireballs: false, spawn_combo: false, randomizer: false, sizes: sizes::Range::Off, sized_health: false, fuses: false, mega_like: false, volvagia: false, forest_open: false, shops: false, mido_gone: false, entrances: gates::Shuffle::Off, timers: NORMAL }
     }
 }
 
@@ -203,7 +203,7 @@ impl Opts {
     }
 
     pub fn any(&self) -> bool {
-        self.packs() || self.no_fairies || self.lose_heart || self.near_death || self.no_bottles || self.no_dupes || self.extra > 0 || self.respawn || self.minibosses || self.regen || self.minions || self.fairy_helps || self.backup || self.encounters || self.cucco || self.bowling || self.talon || self.fireballs || self.spawn_combo || self.randomizer || self.sizes.on() || self.fuses || self.mega_like || self.volvagia || self.timers != NORMAL || self.gates()
+        self.packs() || self.no_fairies || self.lose_heart || self.pit != falls::VANILLA || self.no_bottles || self.no_dupes || self.extra > 0 || self.respawn || self.minibosses || self.regen || self.minions || self.fairy_helps || self.backup || self.encounters || self.cucco || self.bowling || self.talon || self.fireballs || self.spawn_combo || self.randomizer || self.sizes.on() || self.fuses || self.mega_like || self.volvagia || self.timers != NORMAL || self.gates()
     }
 
     pub fn notes(&self) -> Vec<String> {
@@ -236,8 +236,8 @@ impl Opts {
         if self.no_fairies {
             out.push("Playing a song at a gossip stone no longer brings out a fairy.".to_string());
         }
-        if self.near_death {
-            out.push(falls::NOTE.to_string());
+        if self.pit != falls::VANILLA {
+            out.push(falls::note(self.pit));
         }
         if self.lose_heart {
             out.push(match flows::KEEP {
@@ -366,7 +366,7 @@ pub fn read(s: &Settings, bad: &mut Vec<String>) -> Opts {
             false
         })
     };
-    let o: Opts = Opts { health, damage, hurt, speed, no_hearts: flag(NO_HEARTS), no_fairies: flag(NO_FAIRIES), no_ammo: flag(NO_AMMO), lose_heart: flag(LOSE_HEART), near_death: flag(NEAR_DEATH), no_bottles: flag(NO_BOTTLES), no_target: flag(NO_TARGET), no_dupes: flag(NO_DUPES), extra: 0, respawn: flag(RESPAWN), minibosses: flag(MINIBOSSES), regen: flag(REGEN), minions: flag(MINIONS), fairy_helps: flag(FAIRY_HELPS), backup: flag(BACKUP), gates: flag(GATES), encounters: false, cucco: flag(CUCCO), bowling: flag(BOWLING), talon: flag(TALON), fireballs: flag(FIREBALLS), spawn_combo: flag(SPAWN_COMBO), randomizer: flag(RANDOMIZER), sizes: sizes::Range::Off, sized_health: flag(SIZES_HEALTH), fuses: flag(FUSES), mega_like: flag(MEGA_LIKE), volvagia: flag(VOLVAGIA), forest_open: false, shops: false, mido_gone: false, entrances: gates::Shuffle::Off, timers: NORMAL };
+    let o: Opts = Opts { health, damage, hurt, speed, no_hearts: flag(NO_HEARTS), no_fairies: flag(NO_FAIRIES), no_ammo: flag(NO_AMMO), lose_heart: flag(LOSE_HEART), pit: falls::VANILLA, no_bottles: flag(NO_BOTTLES), no_target: flag(NO_TARGET), no_dupes: flag(NO_DUPES), extra: 0, respawn: flag(RESPAWN), minibosses: flag(MINIBOSSES), regen: flag(REGEN), minions: flag(MINIONS), fairy_helps: flag(FAIRY_HELPS), backup: flag(BACKUP), gates: flag(GATES), encounters: false, cucco: flag(CUCCO), bowling: flag(BOWLING), talon: flag(TALON), fireballs: flag(FIREBALLS), spawn_combo: flag(SPAWN_COMBO), randomizer: flag(RANDOMIZER), sizes: sizes::Range::Off, sized_health: flag(SIZES_HEALTH), fuses: flag(FUSES), mega_like: flag(MEGA_LIKE), volvagia: flag(VOLVAGIA), forest_open: false, shops: false, mido_gone: false, entrances: gates::Shuffle::Off, timers: NORMAL };
     let forest_open: bool = chosen(s.text(FOREST), bad).map(|t| t == "open").unwrap_or(true);
     let entrances: gates::Shuffle = chosen(s.text(ENTRANCES), bad).map(|t| gates::Shuffle::from_setting(t)).unwrap_or(gates::Shuffle::Wide);
     let shops: bool = chosen(s.text(crate::shops::plan::SETTING), bad).map(|t| t != "off").unwrap_or(false);
@@ -374,7 +374,18 @@ pub fn read(s: &Settings, bad: &mut Vec<String>) -> Opts {
     let mido_gone: bool = !closed && s.text(KAKARIKO).map(|t| t == "open").unwrap_or(false);
     let sizes: sizes::Range = chosen(s.text(SIZES), bad).map(sizes::Range::from_setting).unwrap_or_default();
     let timers: i64 = chosen(s.text(timers::SETTING), bad).and_then(timers::percent).unwrap_or(NORMAL);
-    Opts { extra, sizes, timers, encounters: extra > 0, forest_open, mido_gone, entrances, shops, ..o }
+    let pit: i64 = match s.int(PIT) {
+        Ok(v) if (falls::RANGE.0..=falls::RANGE.1).contains(&v) => v,
+        Ok(v) => {
+            bad.push(format!("{PIT} is {v}, which is outside {} to {}", falls::RANGE.0, falls::RANGE.1));
+            falls::VANILLA
+        }
+        Err(e) => {
+            bad.push(e.to_string());
+            falls::VANILLA
+        }
+    };
+    Opts { extra, sizes, timers, pit, encounters: extra > 0, forest_open, mido_gone, entrances, shops, ..o }
 
 }
 
@@ -530,8 +541,9 @@ pub fn stage_noted(rf: &mut Romfs, o: &Opts, have: Have, seed: &str, notes: &mut
         step(rf, &mut outs, have, |rf, have| Ok(vec![edit_zs(rf, have, flows::OVER_FILE, flows::lose_heart)?]))?;
         step(rf, &mut outs, have, |rf, have| Ok(vec![edit_zs(rf, have, flows::BOOT_FILE, flows::lose_heart_boot)?]))?;
     }
-    if o.near_death {
-        step(rf, &mut outs, have, |rf, have| Ok(vec![edit_zs(rf, have, falls::FILE, falls::near_death)?]))?;
+    if o.pit != falls::VANILLA {
+        let level: i64 = o.pit;
+        step(rf, &mut outs, have, |rf, have| Ok(vec![edit_zs(rf, have, falls::FILE, |raw| falls::penalty(raw, level))?]))?;
     }
     if o.fairy_helps {
         step(rf, &mut outs, have, |rf, have| Ok(vec![edit_zs(rf, have, flows::OVER_FILE, |raw| flows::fairy_used(raw, flows::OVER_FLOW, flows::REVIVE))?]))?;
@@ -850,29 +862,35 @@ mod tests {
     }
 
     #[test]
-    fn the_near_death_falls_setting_is_read_and_off_leaves_the_settings_string_alone() {
+    fn the_fall_pit_penalty_is_read_and_the_default_leaves_the_settings_string_alone() {
         let mut s: Settings = Settings::default();
-        s.set(NEAR_DEATH, Value::Bool(false)).unwrap();
+        s.set(PIT, Value::Int(falls::VANILLA)).unwrap();
         assert_eq!(s.encode().unwrap(), Settings::default().encode().unwrap());
-        s.set(NEAR_DEATH, Value::Bool(true)).unwrap();
-        let back: Settings = Settings::decode(&s.encode().unwrap()).unwrap().settings;
         let mut bad: Vec<String> = Vec::new();
-        let o: Opts = read(&back, &mut bad);
-        assert!(bad.is_empty());
-        assert_eq!(o, Opts { near_death: true, ..Opts::default() });
-        assert!(o.any() && !o.packs());
-        assert_eq!(o.notes(), vec![falls::NOTE.to_string()]);
+        assert_eq!(read(&s, &mut bad), Opts::default());
+        assert!(bad.is_empty() && !Opts::default().any());
+        for level in [falls::FREE, falls::ONE_HEART, falls::ZERO] {
+            s.set(PIT, Value::Int(level)).unwrap();
+            let back: Settings = Settings::decode(&s.encode().unwrap()).unwrap().settings;
+            let o: Opts = read(&back, &mut bad);
+            assert!(bad.is_empty());
+            assert_eq!(o, Opts { pit: level, ..Opts::default() });
+            assert!(o.any() && !o.packs());
+            assert_eq!(o.notes(), vec![falls::note(level)]);
+        }
     }
 
     #[test]
-    fn near_death_falls_stages_only_the_fall_flow() {
+    fn a_fall_pit_penalty_stages_only_the_fall_flow() {
         let Some(root) = dump() else {
             eprintln!("skipped: set OOTRR_ROMFS");
             return;
         };
         let mut rf: Romfs = Romfs::open(&root).unwrap();
-        let outs: Vec<Out> = stage(&mut rf, &Opts { near_death: true, ..Opts::default() }, &none, "seed").unwrap();
-        assert_eq!(outs.iter().map(|x| x.path.as_str()).collect::<Vec<&str>>(), vec![falls::FILE]);
+        for level in [falls::FREE, falls::ONE_HEART, falls::ZERO] {
+            let outs: Vec<Out> = stage(&mut rf, &Opts { pit: level, ..Opts::default() }, &none, "seed").unwrap();
+            assert_eq!(outs.iter().map(|x| x.path.as_str()).collect::<Vec<&str>>(), vec![falls::FILE]);
+        }
     }
 
     #[test]
