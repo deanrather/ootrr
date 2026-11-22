@@ -103,12 +103,14 @@ Turn on "Volvagia roams Hyrule Field" with the time savers, start as an adult, g
 ## Status (21 Nov, hands-on, kept)
 Functional WIP (label in the settings page and tooltip). Hands-on showed she froze just before her death animation (fixed above); she should drop a purple rupee (built above) and flee (not built). Enemy regen does not heal her (above). Q17 (is she too harsh) was not answered; the default stands.
 
-## Hands-on 15 (23 Nov): no rupee, new spot
+## Hands-on 15 (23 Nov): no rupee, spot tried and reverted
 
 **Result.** She died without freezing but nothing dropped: the wallet read 53 rupees before and after (frames from the hands-on clip). Cause not proven. What the game files show: the drop table, drop parameters and actor reference were all built as intended; `Obj_Rupee_Purple` is in the global drop preload list and has a normal drop pack; but no shipped drop table names it, so the purple rupee as a dropped actor has never been seen working anywhere, while the red one dropped in the scripted Market test (the bridge `kill`, not a hammer kill). The shipped drop tables also show that `DropCreateCount` above 1 is normal (3 green rupees for a Floormaster, 3 for Poe Meg).
 
-**Change.** The drop is now ten blue rupees (`Obj_Rupee_Blue`, count 10, 100 %): 50 rupees from an actor that many shipped enemies drop. `RUPEE` and `RUPEE_COUNT` are constants; going back to one purple is one line.
+**Drop status (23 Nov): the drop does not fire in game (seen twice), cause unknown.** Hands-on 15 with the ten blue rupees: she died, no rupees, and no rupee actors within 15 m afterwards, so the actor choice was not the cause. A researcher is looking into it.
 
-**New spot.** The user marked adult Hyrule Field (-214.8, 129.7, 204.9). It is a shallow dish about 40 units across, rising 1 to 3 units toward the rim, with open ground west of x -250 missing from the collision data. The old checks were relaxed: clearance at the centre is 10.7 (was 12), keep-out distance 50 (was 60; the west fireball storm is 57 away), floor under every hole but one (hole Eight sits 12 units east, beside a thin wall, which is a prop), full ground ring only out to 20 units.
+**Change (tried, did not fix it).** The drop is now ten blue rupees (`Obj_Rupee_Blue`, count 10, 100 %): 50 rupees from an actor that many shipped enemies drop. `RUPEE` and `RUPEE_COUNT` are constants; going back to one purple is one line.
+
+**New spot, tried and reverted.** The user marked adult Hyrule Field (-214.8, 129.7, 204.9) and played it in hands-on 15: the holes did not look nice because the terrain there is not flat. She is back at the original spot (-36.0, 148.2, 120.0) and the field-spot test thresholds are as strict as before (clearance 12, keep-out 60, floor under every hole, full ground ring to 60 units).
 
 **Appear scene (asked 23 Nov, not built).** The game's item-appear scenes (`TreasureBoxAppear` entries, the boss `Die` event, the heart container) are driven from map logic: placed anchors named `TBox` and `Point1`, an `EventRequestActor` and a chest or container module in the map's `AiGroups`. Nothing there fires from an enemy's death without an AI graph edit, and our drop is created by the drop table, not by a placed actor. A data-only version would need a new event flow file (camera to the spot, wait, hand control back) started from her death table, plus a rupee placed by the scene. That is new, untested flow work with the freeze risk this feature already hit once.

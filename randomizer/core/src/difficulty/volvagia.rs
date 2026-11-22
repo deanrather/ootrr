@@ -73,7 +73,7 @@ pub struct Arena {
 }
 
 pub const TEST: Arena = Arena { name: "ruined Market plaza (test only)", file: "Banc/Market/Market_Adult_Static.bcett.byml.zs", at: [-1.9, 100.07, 12.4] };
-pub const FIELD: Arena = Arena { name: "adult Hyrule Field", file: "Banc/HyruleField/HyruleField_Adult_Static.bcett.byml.zs", at: [-214.8, 129.7, 204.9] };
+pub const FIELD: Arena = Arena { name: "adult Hyrule Field", file: "Banc/HyruleField/HyruleField_Adult_Static.bcett.byml.zs", at: [-36.0, 148.2, 120.0] };
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Shape {
@@ -736,11 +736,12 @@ mod tests {
         let c: [f32; 3] = FIELD.at;
         let (y, _): (f32, u32) = g.floor_near(c[0], c[1], c[2], 1.0, 1.0).unwrap();
         assert!((y - c[1]).abs() < 0.5, "{y}");
-        assert!(g.clear(c) >= 10.0);
+        assert!(g.clear(c) >= 12.0);
         let rg: Ring = ring(&rf.read_byml(STAGE).unwrap()).unwrap();
-        let bare: usize = rg.points.iter().filter(|(_, off)| g.floor_near(c[0] + off[0], c[1], c[2] + off[2], 4.0, 4.0).is_none()).count();
-        assert!(bare <= 1, "{bare}");
-        for rad in [10.0f32, 20.0] {
+        for (n, off) in &rg.points {
+            assert!(g.floor_near(c[0] + off[0], c[1], c[2] + off[2], 4.0, 4.0).is_some(), "{n}");
+        }
+        for rad in [10.0f32, 20.0, 30.0, 40.0, 50.0, 60.0] {
             for k in 0..16 {
                 let a: f32 = k as f32 * std::f32::consts::FRAC_PI_8;
                 let f: Option<(f32, u32)> = g.floor_near(c[0] + rad * a.cos(), c[1], c[2] + rad * a.sin(), 8.0, 8.0);
@@ -763,7 +764,7 @@ mod tests {
         ];
         for (p, what) in keep_out {
             let d: f32 = ((p[0] - c[0]).powi(2) + (p[1] - c[2]).powi(2)).sqrt();
-            assert!(d >= 50.0, "{what} is {d} away");
+            assert!(d >= 60.0, "{what} is {d} away");
         }
     }
 
