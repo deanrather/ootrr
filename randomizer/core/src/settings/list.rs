@@ -271,6 +271,11 @@ fn difficulty() -> Vec<Setting> {
             .tip("With random enemy sizes on, an enemy's health is multiplied by its size, so a double-size Stalfos has twice the health and a half-size one half, never less than one. Sizes then come in a few steps. It stacks with the enemy health setting. Not working yet, as the sizes themselves are ignored."),
         Setting::toggle(d::FAIRY_HELPS_NUM, d::FAIRY_HELPS, "difficulty", "Fairies help enemies too", false)
             .tip("When you use a bottled fairy, or one revives you, every awake enemy and boss heals to full too."),
+        Setting::choice(d::feint::NUM, d::feint::SETTING, "difficulty", "Enemy feints", "off")
+            .tip("Stalfos sometimes fake a swing: they start the attack, stop short, wait a moment, then swing for real. Only Stalfos so far. Experimental, not played in the game yet.")
+            .opt("off", "Off", "Every swing is real.")
+            .opt("quarter", "25%", "About one swing in four starts with a feint.")
+            .opt("half", "50%", "About one swing in two starts with a feint."),
     ]
 }
 
