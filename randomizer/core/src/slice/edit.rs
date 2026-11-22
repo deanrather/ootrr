@@ -501,6 +501,13 @@ pub fn build_with(seed: &SeedFile, romfs: &P, load: &P, mod_name: &str, host: Ho
     } else {
         Vec::new()
     };
+    let gerudo_lines: Vec<String> = if p.difficulty.gerudo {
+        let (n, l): (usize, Vec<String>) = crate::difficulty::gerudo::write(&mut rf, &pk, &mut rst)?;
+        extra += n;
+        l
+    } else {
+        Vec::new()
+    };
     let mega_lines: Vec<String> = if p.difficulty.mega_like {
         let (n, l): (usize, Vec<String>) = crate::difficulty::mega_like::write(&mut rf, &pk, &mut rst)?;
         extra += n;
@@ -639,6 +646,10 @@ pub fn build_with(seed: &SeedFile, romfs: &P, load: &P, mod_name: &str, host: Ho
     if !volvagia_lines.is_empty() {
         notes.push("Volvagia roams, files made:".to_string());
         notes.extend(volvagia_lines.iter().map(|l| format!("  {l}")));
+    }
+    if !gerudo_lines.is_empty() {
+        notes.push("Gerudo fighters, files made:".to_string());
+        notes.extend(gerudo_lines.iter().map(|l| format!("  {l}")));
     }
     if !mega_lines.is_empty() {
         notes.push("Mega Like Likes, files made:".to_string());

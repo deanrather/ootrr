@@ -271,6 +271,8 @@ fn difficulty() -> Vec<Setting> {
             .tip("With random enemy sizes on, an enemy's health is multiplied by its size, so a double-size Stalfos has twice the health and a half-size one half, never less than one. Sizes then come in a few steps. It stacks with the enemy health setting. Not working yet, as the sizes themselves are ignored."),
         Setting::toggle(d::FAIRY_HELPS_NUM, d::FAIRY_HELPS, "difficulty", "Fairies help enemies too", false)
             .tip("When you use a bottled fairy, or one revives you, every awake enemy and boss heals to full too."),
+        Setting::toggle(d::GERUDO_NUM, d::GERUDO, "difficulty", "Gerudo fighters (experimental)", false)
+            .tip("Adds a copy of the fortress's Gerudo thief that fights like any enemy: no talking, no cutscene, and no jail. A spin hit just hurts. She drops a red rupee. With More enemies at 500% or more she joins the minibosses; the fortress thieves are unchanged. Untested in the game."),
     ]
 }
 

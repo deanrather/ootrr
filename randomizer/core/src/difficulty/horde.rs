@@ -76,7 +76,7 @@ pub const SKIP_MAPS: &[&str] = &[
     "HountedWasteland_Child",
 ];
 pub const PEACEFUL: &[&str] = &["KokiriForest_Child", "KakarikoVillage_Child", "KakarikoVillage_Adult", "KakarikoVillage_Adult_Alternative"];
-pub const BIG: &[&str] = &["Enemy_LikeLike", "Enemy_Wolfos", "Enemy_Stalfos", "Enemy_Dinolfos", "Enemy_Dodongo", "Enemy_ReDead", "Enemy_IronKnuckle", "Enemy_Moblin", "Enemy_Floormaster", "Enemy_Amos", "Enemy_Gibdo", "Enemy_DeadHand", "Enemy_Lizalfos"];
+pub const BIG: &[&str] = &["Enemy_LikeLike", "Enemy_Wolfos", "Enemy_Stalfos", "Enemy_Dinolfos", "Enemy_Dodongo", "Enemy_ReDead", "Enemy_IronKnuckle", "Enemy_Moblin", "Enemy_Floormaster", "Enemy_Amos", "Enemy_Gibdo", "Enemy_DeadHand", "Enemy_Lizalfos", "Enemy_Gerudo_Fighter"];
 pub const BIG_GAP: f32 = 25.0;
 pub const KNIGHT_PREFIX: &str = "Enemy_IronKnuckle";
 pub const KNIGHTS_FIELD: usize = 2;
@@ -188,6 +188,8 @@ pub const KINDS: &[Kind] = &[
     k("Enemy_Leever_Fixed", Class::Sand, 3, 0.0, 4, true),
 ];
 
+pub const FIGHTERS: &[Kind] = &[k(crate::difficulty::gerudo::CLASS, Class::Mini, 2, 0.0, 1, false)];
+
 pub const NEVER: &[&str] = &[
     "Enemy_DungeonBoss",
     "Enemy_MiddleBoss",
@@ -247,7 +249,7 @@ pub fn percher(g: &str) -> bool {
 }
 
 pub fn kind(g: &str) -> Option<&'static Kind> {
-    KINDS.iter().find(|k| k.gyaml == g)
+    KINDS.iter().chain(FIGHTERS.iter()).find(|k| k.gyaml == g)
 }
 
 pub fn fighting(g: &str) -> bool {
@@ -640,7 +642,7 @@ pub fn node(s: &Spot, temps: &Map<String, Node>, srt: u32) -> Node {
         _ => {
             let mut c: Node = actor(&s.gyaml, s.hash, s.at, euler(0.0, s.yaw));
             c.set("SRTHash", Node::U32(srt));
-            let mut d: Vec<(String, Node)> = vec![("Drop__DropTable".to_string(), Node::Str("None".to_string()))];
+            let mut d: Vec<(String, Node)> = if s.gyaml == crate::difficulty::gerudo::CLASS { vec![(crate::difficulty::gerudo::NO_RECORD.to_string(), Node::Bool(false))] } else { vec![("Drop__DropTable".to_string(), Node::Str("None".to_string()))] };
             if s.gyaml == wake_kind() {
                 d.push((wake::KEY.to_string(), Node::Bool(true)));
             }
@@ -686,7 +688,7 @@ fn pick_kind<'a>(pool: &'a [(&'static Kind, u32)], rng: &mut Rng) -> Option<&'a 
     None
 }
 
-fn plan_map(sc: &Scene, g: &Ground, extra: i64, seed: &str, seen: &mut Map<u64, u32>) -> Plan {
+fn plan_map(sc: &Scene, g: &Ground, extra: i64, seed: &str, seen: &mut Map<u64, u32>, fighters: bool) -> Plan {
     let m: i64 = (extra + 100) / 100;
     let mut rng: Rng = Rng::from_text(&format!("{seed}|{SALT}|{}|{extra}", sc.map));
     let mut foes: Vec<[f32; 3]> = Vec::new();
@@ -842,7 +844,8 @@ fn plan_map(sc: &Scene, g: &Ground, extra: i64, seed: &str, seen: &mut Map<u64, 
     let sand: bool = SAND_MAPS.contains(&sc.map.as_str());
     let rising: bool = RISING_WATER.contains(&sc.map.as_str());
     let mut pool: Vec<(&'static Kind, u32)> = Vec::new();
-    for k in KINDS {
+    let spare: &[Kind] = if fighters { FIGHTERS } else { &[] };
+    for k in KINDS.iter().chain(spare.iter()) {
         let home: bool = local(k);
         let fits: bool = match k.class {
             Class::Sand => sand,
@@ -1000,7 +1003,7 @@ fn scenes(rf: &mut Romfs, have: Have, seen: &mut Map<u64, u32>, all: &mut Vec<No
     Ok(by.into_values().collect())
 }
 
-pub fn plan(rf: &mut Romfs, have: Have, seed: &str, extra: i64) -> Res<(Vec<Plan>, Map<String, Node>)> {
+pub fn plan(rf: &mut Romfs, have: Have, seed: &str, extra: i64, fighters: bool) -> Res<(Vec<Plan>, Map<String, Node>)> {
     let mut seen: Map<u64, u32> = Map::new();
     let mut all: Vec<Node> = Vec::new();
     let scs: Vec<Scene> = scenes(rf, have, &mut seen, &mut all)?;
@@ -1018,7 +1021,7 @@ pub fn plan(rf: &mut Romfs, have: Have, seed: &str, extra: i64) -> Res<(Vec<Plan
         let Some(g) = ground::load(rf, &sc.map)? else {
             continue;
         };
-        let mut p: Plan = plan_map(sc, &g, extra, seed, &mut seen);
+        let mut p: Plan = plan_map(sc, &g, extra, seed, &mut seen, fighters);
         let mut counts: Vec<usize> = vec![0; sc.files.len()];
         for (i, a) in &sc.acts {
             if fighting(gyaml(a)) {
@@ -1058,8 +1061,8 @@ pub fn double_night(y: &mut Byml) -> usize {
     n
 }
 
-pub fn stage(rf: &mut Romfs, have: Have, seed: &str, extra: i64, woken: bool) -> Res<Vec<Out>> {
-    let (plans, temps): (Vec<Plan>, Map<String, Node>) = plan(rf, have, seed, extra)?;
+pub fn stage(rf: &mut Romfs, have: Have, seed: &str, extra: i64, woken: bool, fighters: bool) -> Res<Vec<Out>> {
+    let (plans, temps): (Vec<Plan>, Map<String, Node>) = plan(rf, have, seed, extra, fighters)?;
     let mut by: BTreeMap<String, Vec<&Spot>> = BTreeMap::new();
     for s in plans.iter().flat_map(|p| p.spots.iter()) {
         by.entry(s.file.clone()).or_default().push(s);
@@ -1169,12 +1172,12 @@ mod tests {
             return;
         };
         let mut rf: Romfs = Romfs::open(&root).unwrap();
-        assert!(plan(&mut rf, &none, "game", 0).unwrap().0.is_empty());
-        assert!(plan(&mut rf, &none, "game", 100).unwrap().0.is_empty());
+        assert!(plan(&mut rf, &none, "game", 0, false).unwrap().0.is_empty());
+        assert!(plan(&mut rf, &none, "game", 100, false).unwrap().0.is_empty());
         let mut last: Map<String, usize> = Map::new();
         let mut all: Vec<(i64, Vec<Plan>)> = Vec::new();
         for e in [200, 400, 900] {
-            let (ps, _): (Vec<Plan>, Map<String, Node>) = plan(&mut rf, &none, "game", e).unwrap();
+            let (ps, _): (Vec<Plan>, Map<String, Node>) = plan(&mut rf, &none, "game", e, false).unwrap();
             for m in WATCH {
                 let (v, b, n): (usize, usize, usize) = count(&ps, m);
                 eprintln!("{}x {m}: vanilla {v}, before {b}, after {n}", (e + 100) / 100);
@@ -1267,13 +1270,13 @@ mod tests {
                 }
             }
         }
-        let again: (Vec<Plan>, Map<String, Node>) = plan(&mut rf, &none, "game", 900).unwrap();
+        let again: (Vec<Plan>, Map<String, Node>) = plan(&mut rf, &none, "game", 900, false).unwrap();
         assert_eq!(again.0, all[2].1);
-        assert_ne!(plan(&mut rf, &none, "other", 900).unwrap().0, all[2].1);
+        assert_ne!(plan(&mut rf, &none, "other", 900, false).unwrap().0, all[2].1);
         if let Some(out) = std::env::var_os("HORDE_DUMP") {
             let copies: Vec<(Out, Vec<crate::difficulty::extras::Made>)> = crate::difficulty::extras::made(&mut rf, &none, "game", crate::difficulty::extras::FULL).unwrap();
             let have = |f: &str| -> Option<Vec<u8>> { copies.iter().find(|c| c.0.path == f).map(|c| c.0.z.clone()) };
-            let (real, _): (Vec<Plan>, Map<String, Node>) = plan(&mut rf, &have, "game", 900).unwrap();
+            let (real, _): (Vec<Plan>, Map<String, Node>) = plan(&mut rf, &have, "game", 900, false).unwrap();
             let mut t: String = String::from("map,age,enemy,x,y,z,class,why,file,area,arrival_dist,zone\n");
             for (o, ms) in &copies {
                 let map: String = map_of(&o.path).unwrap_or_default();
@@ -1310,10 +1313,10 @@ mod tests {
             return;
         };
         let mut rf: Romfs = Romfs::open(&root).unwrap();
-        let outs: Vec<Out> = stage(&mut rf, &none, "game", 900, false).unwrap();
-        let (ps, _): (Vec<Plan>, Map<String, Node>) = plan(&mut rf, &none, "game", 900).unwrap();
+        let outs: Vec<Out> = stage(&mut rf, &none, "game", 900, false, false).unwrap();
+        let (ps, _): (Vec<Plan>, Map<String, Node>) = plan(&mut rf, &none, "game", 900, false).unwrap();
         assert!(outs.iter().any(|o| o.path == wake::PACK), "the knights get their wake edit");
-        assert!(stage(&mut rf, &none, "game", 900, true).unwrap().iter().all(|o| o.path != wake::PACK));
+        assert!(stage(&mut rf, &none, "game", 900, true, false).unwrap().iter().all(|o| o.path != wake::PACK));
         for o in outs.iter().filter(|o| o.path.ends_with(EXT)) {
             let was: Byml = rf.read_byml(&o.path).unwrap();
             let now: Byml = Byml::parse(&rf.zs.decompress(&o.z).unwrap()).unwrap();
@@ -1339,5 +1342,34 @@ mod tests {
         for s in ps.iter().flat_map(|p| p.spots.iter()) {
             assert_eq!(seen.get(&s.hash), Some(&2), "{} id is not unique", s.gyaml);
         }
+    }
+
+    #[test]
+    fn the_gerudo_fighter_joins_only_when_asked_and_only_as_a_miniboss() {
+        let Some(root) = dump() else {
+            eprintln!("skipped: set OOTRR_ROMFS");
+            return;
+        };
+        let mut rf: Romfs = Romfs::open(&root).unwrap();
+        let fighter = |p: &Plan| -> usize { p.spots.iter().filter(|s| s.gyaml == crate::difficulty::gerudo::CLASS).count() };
+        let (off, _): (Vec<Plan>, Map<String, Node>) = plan(&mut rf, &none, "game", 900, false).unwrap();
+        assert!(off.iter().all(|p| fighter(p) == 0));
+        let (on, temps): (Vec<Plan>, Map<String, Node>) = plan(&mut rf, &none, "game", 900, true).unwrap();
+        let n: usize = on.iter().map(fighter).sum();
+        assert!(n > 0, "no fighter was placed anywhere at 10x");
+        for p in &on {
+            assert!(fighter(p) == 0 || (!SKIP_MAPS.contains(&p.map.as_str()) && !NO_MINIBOSS.contains(&p.map.as_str())), "{}", p.map);
+            for s in p.spots.iter().filter(|s| s.gyaml == crate::difficulty::gerudo::CLASS) {
+                assert_eq!(s.class, Class::Mini);
+                let nd: Node = node(s, &temps, 1);
+                assert_eq!(nd.get("Dynamic"), Some(&crate::difficulty::gerudo::dynamic()));
+                assert!(nd.get("Links").is_none());
+            }
+        }
+        assert_eq!(kind(crate::difficulty::gerudo::CLASS).map(|k| k.class), Some(Class::Mini));
+        assert!(big(crate::difficulty::gerudo::CLASS));
+        assert!(FIGHTERS.iter().all(|k| k.gyaml.starts_with("Enemy_") && !KINDS.iter().any(|o| o.gyaml == k.gyaml)));
+        let (again, _): (Vec<Plan>, Map<String, Node>) = plan(&mut rf, &none, "game", 900, false).unwrap();
+        assert_eq!(again, off);
     }
 }
