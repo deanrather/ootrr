@@ -58,11 +58,11 @@ pub const DROP_SUB_NONE: &str = "Drop/DropSubTable/DropTable_None.game__drop__Dr
 pub const DROP_PARAM_CLONE: &str = "Component/DropParam/Enemy_Volvagia_Roam.game__component__DropParam.bgyml";
 pub const DROP_TABLE_CLONE: &str = "Drop/DropTable/Enemy_Volvagia_Roam.game__drop__DropTable.bgyml";
 pub const DROP_SUB_CLONE: &str = "Drop/DropSubTable/Enemy_Volvagia_Roam.game__drop__DropSubTable.bgyml";
-pub const RUPEE: &str = "Obj_Rupee_Red";
+pub const RUPEE: &str = "Obj_Rupee_Purple";
 pub const RUPEE_TYPE: u32 = 995_674_644;
 pub const BEATEN: &str = "HavePlayedEvent.Dm_FireTemple_BossOut";
 pub const PRESENCE: &str = "Presence";
-pub const NOTE: &str = "Volvagia roams Hyrule Field: as an adult, a copy of Volvagia under its own actor name flies over the open middle of Hyrule Field, coming out of the ground and diving back in at eight spots around one point, and breathes fire at you. It has no boss music, no intro scene and no death scene: beating it gives one red rupee and changes no story flag, a beaten one is never written down, so it is back the next time the field loads, and it stops appearing once you have beaten the real Volvagia in the Fire Temple (the flag that the Fire Temple victory scene has played). The Fire Temple fight is unchanged. Functional WIP: when beaten in the field she vanishes at once and leaves a red rupee; she does not heal over time and does not flee.";
+pub const NOTE: &str = "Volvagia roams Hyrule Field: as an adult, a copy of Volvagia under its own actor name flies over the open middle of Hyrule Field, coming out of the ground and diving back in at eight spots around one point, and breathes fire at you. It has no boss music, no intro scene and no death scene: beating it gives one purple rupee (50 rupees) and changes no story flag, a beaten one is never written down, so it is back the next time the field loads, and it stops appearing once you have beaten the real Volvagia in the Fire Temple (the flag that the Fire Temple victory scene has played). The Fire Temple fight is unchanged. Functional WIP: when beaten in the field she vanishes at once and leaves a purple rupee (50 rupees); she does not heal over time and does not flee.";
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Arena {
@@ -908,7 +908,7 @@ mod tests {
     }
 
     #[test]
-    fn the_clone_drops_one_red_rupee_from_its_own_table_and_nothing_else_of_the_floormaster_is_copied() {
+    fn the_clone_drops_one_purple_rupee_from_its_own_table_and_nothing_else_of_the_floormaster_is_copied() {
         let Some(r) = root() else { return };
         let mut rf: Romfs = Romfs::open(&r).unwrap();
         let dn: Vec<Entry> = donor(&mut rf);
@@ -924,15 +924,20 @@ mod tests {
         assert_eq!(items[0], rupee_item());
         assert_eq!(items[0].get("Type"), Some(&Node::U32(RUPEE_TYPE)));
         assert_eq!(items[0].get("DropProbability"), Some(&Node::I32(100)));
-        assert_eq!(s(&items[0], &["DropActorName"]), "Work/Actor/Obj_Rupee_Red.engine__actor__ActorParam.gyml");
+        assert_eq!(s(&items[0], &["DropActorName"]), "Work/Actor/Obj_Rupee_Purple.engine__actor__ActorParam.gyml");
         let table: Byml = y(&es, DROP_TABLE_CLONE);
         assert_eq!(table.root.get("SubTableList"), Some(&Node::Arr(vec![Node::Str(work(DROP_SUB_CLONE))])));
         assert!(table.root.get("DropTableName").is_none());
         let param: Byml = y(&es, DROP_PARAM_CLONE);
         assert_eq!(param.root.get("DropTableResourceList"), Some(&Node::Arr(vec![Node::Str(work(DROP_TABLE_CLONE))])));
         assert!(dn.iter().any(|e| e.name == DROP_SUB_NONE) && !format!("{:?}", y(&dn, DROP_SUB_NONE).root).contains("Rupee"));
-        let rupee_actor: String = format!("Pack/Actor/{RUPEE}.pack.zs");
-        assert!(r.join(rupee_actor).is_file());
+        let pack: Vec<Entry> = sarc::parse(&rf.read_zs(&pack_of(RUPEE)).unwrap()).unwrap();
+        assert!(pack.iter().any(|e| e.name == actor_file(RUPEE)));
+        let kid: Vec<Entry> = sarc::parse(&rf.read_zs(&pack_of("Enemy_SkullKid")).unwrap()).unwrap();
+        let gold: Byml = y(&kid, "Drop/DropSubTable/Enemy_SkullKid.game__drop__DropSubTable.bgyml");
+        let shipped: &Node = &gold.root.get("Items").and_then(|i| i.as_arr()).unwrap()[0];
+        assert_eq!(shipped.get("Type"), Some(&Node::U32(RUPEE_TYPE)));
+        assert!(s(shipped, &["DropActorName"]).contains("Obj_Rupee_Gold"));
     }
 
     #[test]
