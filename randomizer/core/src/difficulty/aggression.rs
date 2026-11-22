@@ -16,8 +16,10 @@ pub const SHARED: [&str; 2] = ["Default", "EnemyCommon"];
 pub const PAUSES: [&str; 2] = ["GlobalPlayerNoAttackTime", "GlobalPlayerNoAttackTimePlay"];
 pub const SENSES: [&str; 7] = ["IsEnabledByDefault", "IsForceSystemRange", "UseHearing", "UseIntuition", "UseSensor", "UseSight", "UseTerror"];
 pub const BOSSES: [&str; 4] = ["DungeonBoss", "MiddleBoss", "BattleManager", "KotakeKoume"];
-pub const AWAKE: [&str; 14] = [
-    "Enemy_Scrub",
+pub const AWAKE: [&str; 16] = [
+    "Enemy_Scrub_Business",
+    "Enemy_Scrub_ForestStage",
+    "Enemy_Scrub_Deku_Brothers",
     "Enemy_Amos",
     "Enemy_IronKnuckle",
     "Enemy_DeadHand",
@@ -100,7 +102,7 @@ pub fn note(aggression: i64) -> Option<String> {
         return None;
     }
     if aggression == PEACEFUL {
-        return Some("Enemies are peaceful: ordinary enemies never notice Link, so they wait or wander instead of attacking. Bosses, minibosses and the enemies a check or a puzzle needs awake (Deku and Business Scrubs, Poe sisters, Big Poes, Armos, Iron Knuckles, Dead Hand, Skull Kid, Gold Skulltulas) behave as usual. Experimental: not played in the game yet.".to_string());
+        return Some("Enemies are peaceful: ordinary enemies never notice Link, so they wait or wander instead of attacking. Bosses, minibosses and the enemies a check or a puzzle needs awake (Business Scrubs, the Deku Scrubs of the Deku Salesmen and the forest stage, Poe sisters, Big Poes, Armos, Iron Knuckles, Dead Hand, Skull Kid, Gold Skulltulas) behave as usual. Experimental: not played in the game yet.".to_string());
     }
     let t: String = format!("{:.2}", aggression as f64 / NORMAL as f64);
     let t: &str = t.trim_end_matches('0').trim_end_matches('.');
@@ -124,7 +126,10 @@ mod tests {
         assert!(calms("Enemy_Wolfos_White"));
         assert!(!calms("Enemy_DungeonBoss_Gohma"));
         assert!(!calms("Enemy_MiddleBoss_DarkLink"));
+        assert!(calms("Enemy_Scrub_Mad"));
+        assert!(calms("Enemy_Scrub_Deku"));
         assert!(!calms("Enemy_Scrub_Business"));
+        assert!(!calms("Enemy_Scrub_ForestStage_Elder"));
         assert!(!calms("Enemy_Scrub_Deku_Brothers"));
         assert!(!calms("Enemy_Poe_Joelle"));
         assert!(!calms("Enemy_IronKnuckle_White"));

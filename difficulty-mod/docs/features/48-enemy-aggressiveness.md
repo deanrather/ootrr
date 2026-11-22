@@ -18,7 +18,7 @@ Most enemies use the game's shared attack-permission system:
 ## How it works
 
 - **0.5x to 3x:** every `AttackInterval` file except bosses' and minibosses' own has all six waits divided by the multiplier, and `GlobalPlayerNoAttackTime` and `GlobalPlayerNoAttackTimePlay` in `Default`, `EnemyCommon` and the enemies' own client files are divided too. Zero waits stay zero. Stacks with Enemy speed, which already divided the enemies' own interval files: the two multiply (`aggression::pace_pct`), so speed 1.5x and aggressiveness 2x make the waits a third.
-- **0x, peaceful:** every enemy perception receiver gets `IsEnabledByDefault`, `IsForceSystemRange` and all `Use*` senses set to false, so the enemy never notices Link. Attack timing is left alone. Kept awake, because a fight, a check or a puzzle needs them: bosses and minibosses (`DungeonBoss`, `MiddleBoss`, battle managers), Deku and Business Scrubs (nut deflecting, sales, the Deku Tree 2-3-1), Poe sisters and Meg, Big Poes, Armos, Iron Knuckles, Dead Hand, Skull Kid, Gold Skulltulas, the Guay boss.
+- **0x, peaceful:** every enemy perception receiver gets `IsEnabledByDefault`, `IsForceSystemRange` and all `Use*` senses set to false, so the enemy never notices Link. Attack timing is left alone. Kept awake, because a fight, a check or a puzzle needs them: bosses and minibosses (`DungeonBoss`, `MiddleBoss`, battle managers), Business Scrubs, the Deku Brothers and the forest stage scrubs with their Leaf and Seed shots (sales, the Deku Tree 2-3-1, the stage check). Mad Scrubs and ordinary Deku Scrubs are calmed like any other enemy (the first hands-on showed Mad Scrubs still shooting when every Enemy_Scrub name was exempt), Poe sisters and Meg, Big Poes, Armos, Iron Knuckles, Dead Hand, Skull Kid, Gold Skulltulas, the Guay boss.
 - Only boolean and float values change, so every file keeps its size (checked; an edit that grew a file is refused).
 
 ## Which enemies change (from the files, not yet seen in the game)
@@ -49,7 +49,8 @@ Most enemies use the game's shared attack-permission system:
 
 - Unit tests in `aggression.rs`: which names scale and which stay awake, the speed-times-aggressiveness rule, pauses divided with the file size kept, every sense turned off, the report line.
 - With the game files (`OOTRR_ROMFS`): the real Stalfos pack at 2x has its waits halved and its pause 40; at 0x its receiver is off and its waits untouched; Keese sight off; Business Scrub, Iron Knuckle, Joelle, Gohma and Dark Link receivers unchanged; Gohma's own interval file unchanged at 2x.
-- Not played in the game.
+- Hands-on 15 (23 Nov, played by the user, Temple of Time): at 0x, 60+ enemy kinds spawned in batches; all ordinary enemies stayed peaceful even when hit, except Mad Scrubs (fixed afterwards by narrowing the exempt scrub names; not re-played). The exempt ones still fought as designed: Iron Knuckles after being bumped, Dead Hand, the field Big Poe. At 3x Stalfos, Lizalfos, Wolfos, ReDead, Iron Knuckle and Like Like were judged "perfect, exactly what you'd want".
+- Not tested: whether a kill-to-open room still opens at 0x when its enemies hide until they notice Link (Leevers, Peahat larvae). Known risk.
 
 ## How to test it in the game
 
