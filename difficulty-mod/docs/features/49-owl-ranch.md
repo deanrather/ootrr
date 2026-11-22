@@ -1,4 +1,4 @@
-# Owl ride to Lon Lon Ranch
+# Owl ride to Lon Lon Ranch (an improvement to More owl rides)
 
 ## The request (23 Nov)
 
@@ -8,19 +8,18 @@ Measured by the user in the game: owl spot in `ZoraFountain_Child` (17.1, 105.2,
 
 ## Interpretation
 
-One more row in the ride table of `38-owl-warps.md` (`RIDES` in `randomizer/core/src/qol/owl.rs`), behind its own setting so it can be used without the other owl changes.
+One more row in the ride table of `38-owl-warps.md` (`RIDES` in `randomizer/core/src/qol/owl.rs`). It is not a new setting: the user's call (23 Nov) was that it improves the existing More owl rides setting (`owl_warps`, number 153), so turning that on adds this ride too. The first version had its own setting (`owl_ranch`, 204); it was removed again, so the settings list, default settings string and default seeds are unchanged.
 
 ## How it works
 
-- Setting `owl_ranch`, number 204, "Owl ride to Lon Lon Ranch", default off, World page, section Travel (next to More owl rides).
+- No new setting; the ride belongs to More owl rides (`owl_warps`), and its tooltip and build note name the new owl.
 - Nothing in the game files has an owl at Zora's Fountain, so the Death Mountain Trail owl actor is placed there, like the Kakariko owl. The map check in the Death Mountain owl's event flow (`Sequence_CurrentBanc`) picks the ride by map; a new question is added to the owl's message file in every language archive.
 - The landing has no start point in the field, so the map change action is given coordinates: `NextStartPos` empty, `NextPosition` and `NextStartRot` set (the coordinates mode of the teleport work, `teleport_flow.rs`). The rotation unit is degrees (the same as `tp-build` defaults).
 - The ride uses the same yes talk, boarding line, refusal path and map change action as the other owl rides, so the flow ends the way the game's own owl paths end.
-- With only this setting on, the Death Mountain Trail owl keeps its vanilla behaviour: the chain of map checks falls back to the original next event of its mask talk, and the owls are not made permanent. With More owl rides also on, both work.
 
 ## Tests
 
-Unit and game-file tests (`cargo test -p ootrr-core owl`): the flow walked for the fountain owl (asks, yes goes to `HyruleField_Child` with empty start name), refusal ends in the game's line; the maps gain exactly one owl each in Kakariko and Zora's Fountain; staging with this setting alone adds the flow, the fountain map and the language archives only; a second patch is refused. Not tested in the game by the author (see the test plan).
+Unit and game-file tests (`cargo test -p ootrr-core owl`): the flow walked for the fountain owl (asks, yes goes to `HyruleField_Child` with empty start name), refusal ends in the game's line; the maps gain exactly one owl each in Kakariko and Zora's Fountain; staging with More owl rides adds the flow, the logic file, four maps and the language archives; a second patch is refused. Played by hand on 23 Nov, with the earlier separate setting and the same ride data: refusing once and riding both behave like the other owls, and Link lands at the ranch with control.
 
 ## How to test in the game
 
@@ -28,4 +27,4 @@ Child Link. `teleport ZoraFountain_Child` then `warp 17.1 105.2 15.4`; talk to t
 
 ## Notes for the next feature
 
-A new ride is one row in `RIDES`; `coords: Some((pos, yaw_degrees))` lands at measured coordinates when the destination has no start point. Open question: whether the yaw is read in degrees by the game (the teleport work says so).
+A new ride is one row in `RIDES`; `coords: Some((pos, yaw_degrees))` lands at measured coordinates when the destination has no start point. The yaw is read in degrees (confirmed in the game on 23 Nov).

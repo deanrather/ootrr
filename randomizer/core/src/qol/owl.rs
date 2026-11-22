@@ -15,8 +15,6 @@ use crate::zs;
 
 pub const SETTING: &str = "owl_warps";
 pub const NUM: u16 = 153;
-pub const RANCH_SETTING: &str = "owl_ranch";
-pub const RANCH_NUM: u16 = 204;
 pub const FILE: &str = "Event/EventFlow/Npc_Kaepora_DeathMountainTrail.bfevfl.zs";
 pub const FLOW: &str = "Npc_Kaepora_DeathMountainTrail";
 pub const MSG: &str = "EventFlowMsg/Npc_Kaepora_DeathMountainTrail.msbt";
@@ -27,9 +25,7 @@ pub const PRESENCE: &str = "Presence";
 pub const SEED: &str = "ootrr owl warps";
 pub const PREFIX: &str = "OOTRROwl";
 pub const LABEL: &str = "OOTRR_Owl_";
-pub const NOTE: &str = "The owls on the Death Mountain Trail and at Lake Hylia stay for the whole game, so you can ride them again and again, and the Death Mountain Trail owl offers his ride to Kakariko Village every time, with or without Din's Fire. A new owl stands in Kakariko Village and carries you to Kokiri Forest. The rides are for a child Link, as in the original game.";
-
-pub const RANCH_NOTE: &str = "A new owl stands at Zora's Fountain beside Jabu-Jabu and carries you to Lon Lon Ranch. The ride is for a child Link, as in the original game.";
+pub const NOTE: &str = "The owls on the Death Mountain Trail and at Lake Hylia stay for the whole game, so you can ride them again and again, and the Death Mountain Trail owl offers his ride to Kakariko Village every time, with or without Din's Fire. A new owl stands in Kakariko Village and carries you to Kokiri Forest. A new owl stands at Zora's Fountain beside Jabu-Jabu and carries you to Lon Lon Ranch. The rides are for a child Link, as in the original game.";
 
 pub const FOUNTAIN_SPOT: [f32; 3] = [17.1, 105.2, 15.4];
 pub const FOUNTAIN_TURN: f32 = -3.0369;
@@ -57,7 +53,6 @@ pub struct Ride {
     pub turn: f32,
     pub to: (&'static str, &'static str),
     pub ask: &'static str,
-    pub ranch: bool,
     pub coords: Option<([f32; 3], f32)>,
 }
 
@@ -69,7 +64,6 @@ pub const RIDES: [Ride; 2] = [Ride {
     turn: KAKARIKO_TURN,
     to: HOME_CHILD,
     ask: "{3.0:0f0000}If you're heading for the forest, I can carry\nyou as far as Kokiri Forest. {5.0}What do you say?",
-    ranch: false,
     coords: None,
 }, Ride {
     name: "zora_fountain_to_lon_lon_ranch",
@@ -80,13 +74,8 @@ pub const RIDES: [Ride; 2] = [Ride {
     to: ("HyruleField_Child", ""),
     ask: "{3.0:0f0000}If you're heading for the ranch, I can carry
 you as far as Lon Lon Ranch. {5.0}What do you say?",
-    ranch: true,
     coords: Some((RANCH_AT, RANCH_YAW)),
 }];
-
-pub fn on(r: &Ride, base: bool, ranch: bool) -> bool {
-    if r.ranch { ranch } else { base }
-}
 
 pub fn file(dir: &str, map: &str) -> String {
     format!("Banc/{dir}/{map}_Static.bcett.byml.zs")
@@ -100,15 +89,12 @@ pub fn label(i: usize) -> String {
     format!("{LABEL}{i}")
 }
 
-pub fn files(base: bool, ranch: bool) -> Vec<String> {
-    let mut out: Vec<String> = vec![FILE.to_string()];
-    if base {
-        out.push(LAKE_LOGIC.to_string());
-        for (d, m) in STAY {
-            out.push(file(d, m));
-        }
+pub fn files() -> Vec<String> {
+    let mut out: Vec<String> = vec![FILE.to_string(), LAKE_LOGIC.to_string()];
+    for (d, m) in STAY {
+        out.push(file(d, m));
     }
-    for r in RIDES.iter().filter(|r| on(r, base, ranch)) {
+    for r in RIDES {
         let f: String = file(r.dir, r.map);
         if !out.contains(&f) {
             out.push(f);
@@ -171,17 +157,17 @@ fn map_out(rf: &mut Romfs, have: Have, dir: &str, map: &str, f: impl FnOnce(&mut
     Ok(Out { path: p, old: raw.len(), new: bytes.len(), z: zs::compress_raw(&bytes, Some(dict))? })
 }
 
-pub fn stage_maps(rf: &mut Romfs, have: Have, base: bool, ranch: bool) -> Res<Vec<Out>> {
+pub fn stage_maps(rf: &mut Romfs, have: Have) -> Res<Vec<Out>> {
     let mut outs: Vec<Out> = Vec::new();
-    let mut dirs: Vec<(&str, &str)> = if base { STAY.to_vec() } else { Vec::new() };
-    for r in RIDES.iter().filter(|r| on(r, base, ranch)) {
+    let mut dirs: Vec<(&str, &str)> = STAY.to_vec();
+    for r in RIDES {
         if !dirs.contains(&(r.dir, r.map)) {
             dirs.push((r.dir, r.map));
         }
     }
     for (dir, map) in dirs {
-        let stays: bool = base && STAY.contains(&(dir, map));
-        let here: Vec<Ride> = RIDES.iter().filter(|r| r.dir == dir && r.map == map && on(r, base, ranch)).copied().collect();
+        let stays: bool = STAY.contains(&(dir, map));
+        let here: Vec<Ride> = RIDES.iter().filter(|r| r.dir == dir && r.map == map).copied().collect();
         outs.push(map_out(rf, have, dir, map, |y, raws| {
             if stays && keep(y)? == 0 {
                 return Err(Error::Format("owl warps: the map has no owl with a presence flag, the game files differ"));
@@ -267,7 +253,7 @@ fn warp(banc: &str, start: &str, coords: Option<([f32; 3], f32)>) -> Cont {
     Cont { items: items.into_iter().map(|(k, v)| (k.to_string(), v)).collect() }
 }
 
-pub fn patch_flow(b: &mut Bf, base: bool, ranch: bool) -> Res<usize> {
+pub fn patch_flow(b: &mut Bf) -> Res<usize> {
     let f: &mut Flow = b.flows.iter_mut().find(|f| f.name == FLOW).ok_or(Error::Format("owl warps: the Death Mountain owl flow is not in the file"))?;
     if f.events.iter().any(|e| e.name.starts_with(PREFIX)) {
         return Err(Error::Format("owl warps: the owl flow is already edited"));
@@ -285,15 +271,8 @@ pub fn patch_flow(b: &mut Bf, base: bool, ranch: bool) -> Res<usize> {
     }
     let q: (u16, u16) = member(f, "GameDataActor", "EventQueryIsGameDataString64", true)?;
     let w: (u16, u16) = member(f, "GameSystemActor", "EventReserveBancChange", false)?;
-    let mut tail: u16 = if base {
-        idx(offer)?
-    } else {
-        match &f.events[mask].kind {
-            Kind::Sub { next, .. } => *next,
-            _ => return Err(Error::Format("owl warps: the owl's mask talk is not a sub call")),
-        }
-    };
-    for (i, r) in RIDES.iter().enumerate().rev().filter(|(_, r)| on(r, base, ranch)) {
+    let mut tail: u16 = idx(offer)?;
+    for (i, r) in RIDES.iter().enumerate().rev() {
         let go: u16 = push(f, Kind::Action { next: NONE, actor: w.0, act: w.1, params: Some(warp(r.to.0, r.to.1, r.coords)) })?;
         let board: u16 = push(f, with_next(&f.events[boarding].kind.clone(), go)?)?;
         let sure: u16 = push(f, with_next(&f.events[yes].kind.clone(), board)?)?;
@@ -321,9 +300,9 @@ pub fn patch_flow(b: &mut Bf, base: bool, ranch: bool) -> Res<usize> {
     Ok(f.events.len() - before)
 }
 
-pub fn patch(raw: &[u8], base: bool, ranch: bool) -> Res<Vec<u8>> {
+pub fn patch(raw: &[u8]) -> Res<Vec<u8>> {
     let mut b: Bf = Bf::parse(raw)?;
-    patch_flow(&mut b, base, ranch)?;
+    patch_flow(&mut b)?;
     let out: Vec<u8> = b.write()?;
     if Bf::parse(&out)? != b {
         return Err(Error::Format("owl warps: the written flow does not parse back to the edited model"));
@@ -331,31 +310,29 @@ pub fn patch(raw: &[u8], base: bool, ranch: bool) -> Res<Vec<u8>> {
     Ok(out)
 }
 
-pub fn apply_text(raw: &[u8], base: bool, ranch: bool) -> Res<Vec<u8>> {
+pub fn apply_text(raw: &[u8]) -> Res<Vec<u8>> {
     let mut es: Vec<sarc::Entry> = sarc::parse(raw)?;
     let mut m: Msbt = msbt::parse(&sarc::get(&es, MSG).ok_or(Error::Format("owl warps: the language archive has no owl texts"))?.data)?;
-    for (i, r) in RIDES.iter().enumerate().filter(|(_, r)| on(r, base, ranch)) {
+    for (i, r) in RIDES.iter().enumerate() {
         m.put_markup(&label(i), r.ask)?;
     }
     sarc::set(&mut es, MSG, m.write()?);
     sarc::write(&es)
 }
 
-pub fn stage(rf: &mut Romfs, have: Have, outs: &mut Vec<Out>, base: bool, ranch: bool) -> Res<()> {
-    outs.push(edit_zs(rf, have, FILE, |raw| patch(raw, base, ranch))?);
-    if base {
-        outs.push(edit_plain(rf, have, LAKE_LOGIC, lake_logic)?);
-    }
-    outs.extend(stage_maps(rf, have, base, ranch)?);
+pub fn stage(rf: &mut Romfs, have: Have, outs: &mut Vec<Out>) -> Res<()> {
+    outs.push(edit_zs(rf, have, FILE, patch)?);
+    outs.push(edit_plain(rf, have, LAKE_LOGIC, lake_logic)?);
+    outs.extend(stage_maps(rf, have)?);
     for l in crate::hints::languages(rf)? {
         match outs.iter().position(|o| o.path == l) {
             Some(i) => {
                 let id: Option<u32> = dict_id(&outs[i].z);
                 let raw: Vec<u8> = rf.zs.decompress(&outs[i].z)?;
-                let text: Vec<u8> = apply_text(&raw, base, ranch)?;
+                let text: Vec<u8> = apply_text(&raw)?;
                 outs[i] = Out { path: l, old: outs[i].old, new: text.len(), z: zs::compress_raw(&text, id)? };
             }
-            None => outs.push(edit_zs(rf, have, &l, |raw| apply_text(raw, base, ranch))?),
+            None => outs.push(edit_zs(rf, have, &l, apply_text)?),
         }
     }
     Ok(())
@@ -442,9 +419,8 @@ mod tests {
         }
         assert_eq!(RIDES[0].at, KAKARIKO_SPOT);
         assert_eq!(NUM, 153);
-        assert!(files(true, false).contains(&FILE.to_string()));
-        assert_eq!(files(true, false).len(), 5);
-        assert_eq!(files(false, true).len(), 2);
+        assert!(files().contains(&FILE.to_string()));
+        assert_eq!(files().len(), 6);
     }
 
     #[test]
@@ -455,8 +431,8 @@ mod tests {
         };
         let mut rf: Romfs = Romfs::open(&root).unwrap();
         let raw: Vec<u8> = rf.zs.decompress(&rf.read(FILE).unwrap()).unwrap();
-        let out: Vec<u8> = patch(&raw, true, true).unwrap();
-        assert!(patch(&out, true, true).is_err());
+        let out: Vec<u8> = patch(&raw).unwrap();
+        assert!(patch(&out).is_err());
         let b: Bf = Bf::parse(&out).unwrap();
         let f: &Flow = &b.flows[0];
         let mask: usize = named(f, "Event41").unwrap();
@@ -488,7 +464,7 @@ mod tests {
             return;
         };
         let mut rf: Romfs = Romfs::open(&root).unwrap();
-        let outs: Vec<Out> = stage_maps(&mut rf, &none, true, true).unwrap();
+        let outs: Vec<Out> = stage_maps(&mut rf, &none).unwrap();
         assert_eq!(outs.len(), 4);
         for o in &outs {
             let was: Byml = rf.read_byml(&o.path).unwrap();
@@ -532,14 +508,11 @@ mod tests {
         let off: Vec<Out> = crate::qol::stage(&mut rf, &Opts::default(), &none).unwrap();
         assert!(off.iter().all(|o| o.path != FILE));
         let on: Vec<Out> = crate::qol::stage(&mut rf, &Opts { owls: true, ..Opts::default() }, &none).unwrap();
-        for f in files(true, false) {
+        for f in files() {
             assert!(on.iter().any(|o| o.path == f), "{f} not staged");
         }
         let langs: usize = crate::hints::languages(&rf).unwrap().len();
-        assert_eq!(on.len() - off.len(), 1 + 1 + 3 + langs);
-        let ranch: Vec<Out> = crate::qol::stage(&mut rf, &Opts { owl_ranch: true, ..Opts::default() }, &none).unwrap();
-        assert_eq!(ranch.len() - off.len(), 1 + 1 + langs);
-        assert!(ranch.iter().any(|o| o.path == file("ZoraFountain", "ZoraFountain_Child")));
+        assert_eq!(on.len() - off.len(), 1 + 1 + 4 + langs);
         let both: Vec<Out> = crate::qol::stage(&mut rf, &Opts { owls: true, navi: crate::qol::navi_return::Mode::Everywhere, ..Opts::default() }, &none).unwrap();
         let mut paths: Vec<&String> = both.iter().map(|o| &o.path).collect();
         paths.sort();

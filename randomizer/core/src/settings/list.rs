@@ -647,11 +647,7 @@ pub fn build() -> Schema {
     );
     s.push(
         Setting::toggle(crate::qol::owl::NUM, crate::qol::owl::SETTING, "world", "More owl rides", false)
-            .tip("The owls on the Death Mountain Trail and at Lake Hylia stay all game and offer their flights every time, and a new owl in Kakariko Village flies you to Kokiri Forest. Child Link only."),
-    );
-    s.push(
-        Setting::toggle(crate::qol::owl::RANCH_NUM, crate::qol::owl::RANCH_SETTING, "world", "Owl ride to Lon Lon Ranch", false)
-            .tip("A new owl stands at Zora's Fountain beside Jabu-Jabu and flies you to Lon Lon Ranch. Child Link only."),
+            .tip("The owls on the Death Mountain Trail and at Lake Hylia stay all game and offer their flights every time, a new owl in Kakariko Village flies you to Kokiri Forest, and a new owl at Zora's Fountain flies you to Lon Lon Ranch. Child Link only."),
     );
     s.push(
         Setting::toggle(45, crate::chest_size::SETTING, "world", "Chest size matches contents", false)

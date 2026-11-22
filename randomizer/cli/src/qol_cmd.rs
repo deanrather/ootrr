@@ -23,7 +23,6 @@ pub fn run(a: &[String]) -> Res<()> {
         "bunny-speed" => Opts { bunny: bunny::Mode::Speed, ..Opts::default() },
         "bunny-jump" => Opts { bunny: bunny::Mode::Jump, ..Opts::default() },
         "owl-warps" => Opts { owls: true, ..Opts::default() },
-        "owl-ranch" => Opts { owl_ranch: true, ..Opts::default() },
         "big-chest-anim" => Opts { big_chests: true, ..Opts::default() },
         x => return Err(Error::Msg(format!("unknown option {x}"))),
     };
