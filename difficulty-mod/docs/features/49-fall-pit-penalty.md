@@ -26,7 +26,7 @@ First: "near-death falls: falling down a hole takes you down to 1 heart" (22 Nov
 The on/off version brought falls above 1 heart down to 1 heart, then ran the base game's event at 1 heart or less, assuming it costs one heart. In Shadow Temple pits it costs half a heart, so a fall at 1 heart left half a heart instead of ending the game. The scripted check had used lava, which does cost one heart, so it passed. The new levels never depend on the size of the game's own cost: to take the rest, they bring life down to a quarter heart first, and then any cost kills.
 
 ## Implementation
-(The low-life branches below were replaced on 23 Nov: see "Fix after the first tester run".)
+(Levels 0 and 2 were rebuilt on 23 Nov as an entry wrapper: see "Fixes after the tester runs". The descriptions of their low-life branches below are the old ones.)
 
 In `DmF_SY_FallDown`, the one `EventPlayerAbyss` event is reached through new events (marked `OOTRRPitPenalty`):
 - **0:** a copy of the event with `InvalidDamage` true replaces it. Nothing else.
@@ -66,8 +66,20 @@ Every branch ends where the vanilla event ended, the end of its fork branch, so 
 - The game's own fall cost differs by surface. Never assume one number: test pits and lava both.
 - A negative `EventTriggerHealLife` is a working way for a flow to lower Link's life; to kill, lower it to 1 and let the game's own damage do it, so the death runs through the normal paths.
 
-## Fix after the first tester run (23 Nov)
-The tester found two bugs at low life: level 0 from half a heart (2 quarter hearts) killed Link (2 to 0 in 0.24 s), and level 2 from exactly one heart went 4 to 1 to 0. The second was the old design (take the rest at 1 heart or less); the user's spec is "leaves you on 1 heart", so level 2 now leaves 4 or less unchanged. The first is unexplained: the no-damage copy of the event worked from 80, 20 and 4 but not from 2, and the engine node behind `EventPlayerAbyss` is not readable here. So for life 4 or less, levels 0 and 2 now lift Link by one heart first (a heal of +4), wait one frame, run the no-damage event, then take the heart back (-4), so the fall never happens at a life where the game could kill. This is a workaround, not a confirmed cause: the tester must check lives 1 to 4 at levels 0 and 2, and level 3 is unchanged. Unit walks cover every life from 1 to 80 at each level.
+## Fixes after the tester runs (23 Nov)
+First run: level 0 from half a heart killed Link, and level 2 from exactly one heart went 4 to 1 to 0. The second was the old design (take the rest at 1 heart or less); the user's spec is "leaves you on 1 heart", so level 2 now leaves 4 or less unchanged.
+
+Second run (L0b, L2b: a +4 lift and a -4 undo around the abyss event): lives 3, 4, 5, 8 and 80 passed, but lives 1 and 2 still died, about 0.5 to 1.5 s into the fall, and the vanilla control (level 1) shows why: its cost is 2, a fall at 2 kills at the abyss, while a fall at 4 only loses the 2 after Link is back. So the game seems to decide death from Link's life when the void-out starts, and a lift placed at the abyss event is too late for lives 1 and 2 (it worked at 3 and 4, where nothing would have killed anyway). The engine node behind the event is not readable here, so this is a reading of the samples, not a proof.
+
+Third version (L0c, L2c): the lift moves to the very start of the flow.
+- The flow's own entry now points at a new check, and the old main chain becomes a second entry, `OOTRRPitOriginal`, called as a subflow.
+- Life 2 or less: heal +8, wait 4 frames, run the whole original flow (whose abyss event now has `InvalidDamage` true), then heal -8.
+- Life 3 or 4: the same with +4.
+- Level 0, life above 4: the original flow directly. Level 2, life above 4: the old ladder lowers life to 4, then the +4 path.
+- Every path ends with life back where it was (level 0) or at 4 (level 2, from above 4). Level 3 is unchanged (the old design, which tester runs showed killing from every life).
+- The undo runs after the whole original flow, once Link is back, so it cannot be mistaken for a fall.
+Unit walks follow the subflow call and cover every life from 1 to 80 at each level.
+If lives 1 and 2 still die, the death is decided before any flow can run, and only a code change could fix it; say so in the report.
 
 ## Test status (23 Nov)
 Rebased state is on current `origin/main`. `cargo test -p ootrr-core difficulty` (312 passed), `settings` (114 passed) and `cargo test --workspace` pass; the audit has no failures. Not played yet: a tester plan and one built mod per level (0, 2, 3) are ready. Lava that burns over time is a different mechanism and is untouched; the void-out flow cannot tell a sinking-lava void-out from a pit, so both count as falls.

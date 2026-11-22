@@ -1,6 +1,6 @@
 use super::flows::{action, cont, finish, flow, marked, push, query, redirect};
 use crate::bfevfl::flow::NONE;
-use crate::bfevfl::{Bf, Case, Cont, Flow, Kind, Val};
+use crate::bfevfl::{Bf, Case, Cont, Entry, Flow, Kind, Val};
 use crate::error::{Error, Res};
 
 pub const FILE: &str = "Event/EventFlow/DmF_SY_FallDown.bfevfl.zs";
@@ -14,6 +14,11 @@ pub const WAIT: &str = "EventWait";
 pub const NO_DAMAGE: &str = "InvalidDamage";
 pub const VALUE: &str = "Value";
 pub const MARK: &str = "OOTRRPitPenalty";
+pub const ORIGINAL: &str = "OOTRRPitOriginal";
+pub const LIFT: i32 = 4;
+pub const BIG_LIFT: i32 = 8;
+pub const WEAK: i32 = 2;
+pub const SETTLE: i32 = 4;
 pub const HEART: i32 = 4;
 pub const LAST: i32 = 1;
 pub const TOP: i32 = 80;
@@ -77,13 +82,46 @@ fn to_last(f: &mut Flow, hi: i32, at: u16) -> Res<u16> {
     ladder(f, "Last", LAST + 1, hi, LAST, wait)
 }
 
-fn guarded(f: &mut Flow, actor: u16, act: u16, params: Option<Cont>, next: u16) -> Res<u16> {
+fn local_flow(f: &Flow) -> String {
+    f.events
+        .iter()
+        .find_map(|e| match &e.kind {
+            Kind::Sub { flow, entry, .. } if f.entries.iter().any(|x| &x.name == entry) => Some(flow.clone()),
+            _ => None,
+        })
+        .unwrap_or_default()
+}
+
+fn lifted(f: &mut Flow, by: i32, flow: &str, calls: &mut Vec<u16>) -> Res<u16> {
     let (ha, hn): (u16, u16) = action(f, PLAYER, HEAL)?;
-    let back: u16 = push(f, format!("{MARK}Down"), Kind::Action { next, actor: ha, act: hn, params: cont(vec![(VALUE, Val::Int(-HEART))]) })?;
-    let abyss: u16 = push(f, format!("{MARK}Safe"), Kind::Action { next: back, actor, act, params: Some(spare(params)) })?;
+    let back: u16 = push(f, format!("{MARK}Down{by}"), Kind::Action { next: NONE, actor: ha, act: hn, params: cont(vec![(VALUE, Val::Int(-by))]) })?;
+    let call: u16 = push(f, format!("{MARK}Call{by}"), Kind::Sub { next: back, params: None, flow: flow.to_string(), entry: ORIGINAL.to_string() })?;
+    calls.push(call);
     let (a, n): (u16, u16) = action(f, WAITER, WAIT)?;
-    let wait: u16 = push(f, format!("{MARK}Settle"), Kind::Action { next: abyss, actor: a, act: n, params: cont(vec![("IsWaitEnd", Val::Bool(TRUE)), ("Frames", Val::Int(1))]) })?;
-    push(f, format!("{MARK}Up"), Kind::Action { next: wait, actor: ha, act: hn, params: cont(vec![(VALUE, Val::Int(HEART))]) })
+    let wait: u16 = push(f, format!("{MARK}Settle{by}"), Kind::Action { next: call, actor: a, act: n, params: cont(vec![("IsWaitEnd", Val::Bool(TRUE)), ("Frames", Val::Int(SETTLE))]) })?;
+    push(f, format!("{MARK}Up{by}"), Kind::Action { next: wait, actor: ha, act: hn, params: cont(vec![(VALUE, Val::Int(by))]) })
+}
+
+fn wrap(f: &mut Flow, level: i64) -> Res<()> {
+    let at: usize = f.entries.iter().position(|e| e.name == FLOW).ok_or(Error::Format("difficulty: the fall flow has no entry of its own name"))?;
+    let orig: Entry = f.entries[at].clone();
+    f.entries.push(Entry { name: ORIGINAL.to_string(), ..orig });
+    let flow: String = local_flow(f);
+    let mut calls: Vec<u16> = Vec::new();
+    let big: u16 = lifted(f, BIG_LIFT, &flow, &mut calls)?;
+    let small: u16 = lifted(f, LIFT, &flow, &mut calls)?;
+    let above: u16 = if level == ONE_HEART {
+        ladder(f, "One", HEART + 1, TOP, HEART, small)?
+    } else {
+        let call: u16 = push(f, format!("{MARK}Call"), Kind::Sub { next: NONE, params: None, flow: flow.clone(), entry: ORIGINAL.to_string() })?;
+        calls.push(call);
+        call
+    };
+    let mid: u16 = life_check(f, format!("{MARK}Gate"), HEART, [small, small, above])?;
+    let first: u16 = life_check(f, format!("{MARK}Weak"), WEAK, [big, big, mid])?;
+    f.entries[at].main = first;
+    f.entries[at].subs = calls;
+    Ok(())
 }
 
 pub fn penalty(raw: &[u8], level: i64) -> Res<Vec<u8>> {
@@ -104,22 +142,14 @@ pub fn penalty(raw: &[u8], level: i64) -> Res<Vec<u8>> {
         Kind::Action { next, actor, act, params } => (*next, *actor, *act, params.clone()),
         _ => return Err(Error::Format("difficulty: the fall flow's abyss event is not an action")),
     };
-    let old: usize = f.events.len();
-    let start: u16 = match level {
-        FREE => {
-            let plain: u16 = push(f, format!("{MARK}Abyss"), Kind::Action { next, actor, act, params: Some(spare(params.clone())) })?;
-            let low: u16 = guarded(f, actor, act, params, next)?;
-            life_check(f, format!("{MARK}Gate"), HEART, [low, low, plain])?
-        }
-        ONE_HEART => {
-            let first: u16 = ladder(f, "One", HEART + 1, TOP, HEART, next)?;
-            let spared: u16 = push(f, format!("{MARK}Abyss"), Kind::Action { next: first, actor, act, params: Some(spare(params.clone())) })?;
-            let low: u16 = guarded(f, actor, act, params, next)?;
-            life_check(f, format!("{MARK}Gate"), HEART, [low, low, spared])?
-        }
-        _ => to_last(f, TOP, at)?,
-    };
-    redirect(f, old, at, start);
+    if level == ZERO {
+        let old: usize = f.events.len();
+        let start: u16 = to_last(f, TOP, at)?;
+        redirect(f, old, at, start);
+    } else {
+        f.events[at as usize].kind = Kind::Action { next, actor, act, params: Some(spare(params)) };
+        wrap(f, level)?;
+    }
     finish(&b)
 }
 
@@ -145,7 +175,7 @@ mod tests {
         let gate: Event = Event { name: "IsGameOver".to_string(), kind: Kind::Switch { actor: 0, query: 0, cases: vec![Case { val: 1, ev: 1 }], params: None } };
         let abyss: Event = Event { name: "Abyss".to_string(), kind: Kind::Action { next: NONE, actor: 0, act: 0, params: cont(vec![("IsWaitEnd", Val::Bool(TRUE)), (NO_DAMAGE, Val::Bool(0))]) } };
         let post: Event = Event { name: "Post".to_string(), kind: Kind::Action { next: NONE, actor: 0, act: 1, params: None } };
-        let entries: Vec<Entry> = vec![Entry { name: "Main".to_string(), subs: Vec::new(), vars: Vec::new(), main: 0, pad: 0 }, Entry { name: "Return".to_string(), subs: Vec::new(), vars: Vec::new(), main: 2, pad: 0 }];
+        let entries: Vec<Entry> = vec![Entry { name: FLOW.to_string(), subs: Vec::new(), vars: Vec::new(), main: 0, pad: 0 }, Entry { name: "Return".to_string(), subs: Vec::new(), vars: Vec::new(), main: 2, pad: 0 }];
         let actors: Vec<Actor> = vec![actor(PLAYER, &[ABYSS, "EventPlayerPostAbyss"], &["EventQueryCheckPlayerAbyssType"]), actor(WAITER, &[WAIT], &[])];
         Bf { ver: [0, 4, 0, 0], bom: 0xFEFF, shift: 3, pad: 0, name: FLOW.to_string(), flows: vec![Flow { name: FLOW.to_string(), actors, events: vec![gate, abyss, post], entries }], tls: Vec::new() }.write().unwrap()
     }
@@ -170,10 +200,21 @@ mod tests {
         let mut at: u16 = from;
         let mut heals: usize = 0;
         let mut at_abyss: i32 = 0;
-        while at != NONE {
+        let mut stack: Vec<u16> = Vec::new();
+        loop {
+            while at == NONE && !stack.is_empty() {
+                at = stack.pop().unwrap();
+            }
+            if at == NONE {
+                break;
+            }
             steps += 1;
-            assert!(steps < 40, "the flow loops");
+            assert!(steps < 80, "the flow loops");
             at = match &f.events[at as usize].kind {
+                Kind::Sub { next, entry, .. } => {
+                    stack.push(*next);
+                    f.entries.iter().find(|e| &e.name == entry).unwrap().main
+                }
                 Kind::Switch { actor, query, cases, params } => {
                     let q: &str = &f.actors[*actor as usize].queries[*query as usize];
                     let v: u32 = if q == LIFE {
@@ -188,7 +229,7 @@ mod tests {
                     let name: &str = &f.actors[*actor as usize].actions[*act as usize];
                     if name == HEAL {
                         heals += 1;
-                        assert!(heals <= 2, "healed three times");
+                        assert!(heals <= 3, "healed four times");
                         let Some(Val::Int(n)) = params.as_ref().and_then(|c| c.get(VALUE)) else { panic!() };
                         life += *n;
                         if damage.is_none() {
@@ -216,8 +257,12 @@ mod tests {
         Bf::parse(&penalty(&fall_file(), level).unwrap()).unwrap()
     }
 
+    fn lift_for(life: i32) -> i32 {
+        if life <= WEAK { BIG_LIFT } else { LIFT }
+    }
+
     #[test]
-    fn no_penalty_leaves_every_life_alone_and_lifts_a_low_one_above_a_heart_for_the_fall() {
+    fn no_penalty_leaves_every_life_alone_and_lifts_a_low_one_before_anything_runs() {
         let mut b: Bf = edited(FREE);
         let f: &mut Flow = flow(&mut b, FLOW).unwrap();
         for life in 1..=TOP {
@@ -226,7 +271,7 @@ mod tests {
             if life > HEART {
                 assert_eq!((r.heals, r.at_abyss), (0, life), "life {life}");
             } else {
-                assert_eq!((r.heals, r.at_abyss, r.waited), (2, life + HEART, true), "life {life}");
+                assert_eq!((r.heals, r.at_abyss, r.waited), (2, life + lift_for(life), true), "life {life}");
             }
         }
     }
@@ -235,14 +280,15 @@ mod tests {
     fn one_heart_leaves_one_heart_above_it_and_leaves_a_heart_or_less_alone() {
         let mut b: Bf = edited(ONE_HEART);
         let f: &mut Flow = flow(&mut b, FLOW).unwrap();
-        for life in HEART + 1..=TOP {
+        for life in 1..=TOP {
             let r: Run = walk(f, f.entries[0].main, life);
-            assert_eq!((r.life, r.damage, r.heal_before, r.waited), (HEART, Some(false), false, false), "life {life}");
-            assert!(r.steps <= 12, "life {life} took {} steps", r.steps);
-        }
-        for life in 1..=HEART {
-            let r: Run = walk(f, f.entries[0].main, life);
-            assert_eq!((r.life, r.damage, r.waited, r.heals, r.at_abyss), (life, Some(false), true, 2, life + HEART), "life {life}");
+            let want: i32 = life.min(HEART);
+            assert_eq!((r.life, r.damage, r.waited), (want, Some(false), true), "life {life}");
+            if life > HEART {
+                assert_eq!((r.heals, r.at_abyss), (3, HEART + LIFT), "life {life}");
+            } else {
+                assert_eq!((r.heals, r.at_abyss), (2, life + lift_for(life)), "life {life}");
+            }
         }
     }
 
@@ -253,7 +299,7 @@ mod tests {
         for life in 1..=TOP {
             let r: Run = walk(f, f.entries[0].main, life);
             assert_eq!((r.life, r.damage, r.waited), (LAST, Some(true), true), "life {life}");
-            assert_eq!(r.heal_before, life > LAST);
+            assert!(r.heals <= 1);
             assert!(r.steps <= 12, "life {life} took {} steps", r.steps);
         }
     }
@@ -266,7 +312,8 @@ mod tests {
             assert_eq!(f.entries[1].main, 2);
             assert_eq!(walk(f, f.entries[1].main, 40).steps, 1);
             let Kind::Action { params, next, .. } = &f.events[1].kind else { panic!() };
-            assert_eq!(params.as_ref().unwrap().get(NO_DAMAGE), Some(&Val::Bool(0)));
+            let off: Val = Val::Bool(if level == ZERO { 0 } else { TRUE });
+            assert_eq!(params.as_ref().unwrap().get(NO_DAMAGE), Some(&off));
             assert_eq!(*next, NONE);
             assert_eq!(f.actors.len(), 2);
         }
@@ -297,10 +344,17 @@ mod tests {
             let f: &mut Flow = flow(&mut b, FLOW).unwrap();
             let main: u16 = f.entries[0].main;
             let new: Vec<u16> = (0..f.events.len() as u16).filter(|&i| f.events[i as usize].name.starts_with(MARK)).collect();
-            let first: u16 = *new.last().unwrap();
-            let into: usize = f.events.iter().filter(|e| !e.name.starts_with(MARK) && matches!(&e.kind, Kind::Switch { cases, .. } if cases.iter().any(|c| c.ev == first))).count();
-            assert_eq!(into, 1, "level {level}");
-            assert!(!new.contains(&main));
+            if level == ZERO {
+                let first: u16 = *new.last().unwrap();
+                let into: usize = f.events.iter().filter(|e| !e.name.starts_with(MARK) && matches!(&e.kind, Kind::Switch { cases, .. } if cases.iter().any(|c| c.ev == first))).count();
+                assert_eq!(into, 1, "level {level}");
+                assert!(!new.contains(&main));
+            } else {
+                assert!(new.contains(&main), "level {level}");
+                let o: &Entry = f.entries.iter().find(|e| e.name == ORIGINAL).unwrap();
+                assert_eq!(o.main, 45);
+                assert!(f.entries.iter().filter(|e| e.name == FLOW).count() == 1);
+            }
             let wait: usize = f.actors.iter().position(|a| a.name == WAITER && a.sub.is_empty()).unwrap();
             assert!(f.actors[wait].actions.contains(&WAIT.to_string()));
         }
