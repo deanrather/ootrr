@@ -211,6 +211,7 @@ fn dpad(rf: &mut Romfs, c: &Ctx, more: &mut Vec<Out>) -> Res<()> {
 fn pot_rows(rf: &mut Romfs, c: &Ctx, more: &mut Vec<Out>) -> Res<()> {
     if c.p.drops.rocks != crate::slice::support::Mode::Off {
         more.push(crate::pot_slice::kf_ring::stage(rf)?);
+        more.push(crate::pot_slice::kf_lesson::stage(rf)?);
     }
     crate::pot_slice::rows::stage(rf, more, c.pots)
 }
