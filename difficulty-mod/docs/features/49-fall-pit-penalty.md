@@ -81,6 +81,9 @@ Third version (L0c, L2c): the lift moves to the very start of the flow.
 Unit walks follow the subflow call and cover every life from 1 to 80 at each level.
 If lives 1 and 2 still die, the death is decided before any flow can run, and only a code change could fix it; say so in the report.
 
+## Known limit: half a heart or less (round 3, 23 Nov)
+Round 3 of the tester runs (commit `3d27b69`, mods L0c and L2c) was correct from 3 quarter hearts up: level 0 takes no damage, level 2 ends at exactly 4 from above 4 and leaves 4 or less alone, level 3 ends the game (checked with the fairy-free save). At 1 and 2 quarter hearts both level 0 and level 2 still kill, about 1.2 to 1.75 s into the fall, before any flow step can lift life. The vanilla control (level 1) kills from 2 quarter hearts too, even with a bottled fairy in a bottle, and loses 2 quarter hearts (4 to 2) from 4. So from half a heart or less a pit fall still kills, as in the base game, and the slider cannot change that: the death is decided before the event flow can act. This is accepted as a known limit (default taken, pending the user). The tooltip says so.
+
 ## Test status (23 Nov)
 Rebased state is on current `origin/main`. `cargo test -p ootrr-core difficulty` (312 passed), `settings` (114 passed) and `cargo test --workspace` pass; the audit has no failures. Not played yet: a tester plan and one built mod per level (0, 2, 3) are ready. Lava that burns over time is a different mechanism and is untouched; the void-out flow cannot tell a sinking-lava void-out from a pit, so both count as falls.
 
@@ -90,6 +93,15 @@ Rebased state is on current `origin/main`. `cargo test -p ootrr-core difficulty`
 **Title:** New Difficulty > Fall in pit penalty Feature: Choose what falling into a pit costs
 
 A new Difficulty slider, Fall in pit penalty, 0 to 3: 0 costs nothing, 1 (default) is the game's usual penalty, 2 leaves you on 1 heart (at 1 heart or less nothing more is lost), 3 leaves you on zero hearts (a bottled fairy still revives you). Data edits only; default off, settings strings and default seeds unchanged. Not yet played at levels 0, 2 and 3.
+
+For details about implementation and testing, see difficulty-mod/docs/features/49-fall-pit-penalty.md.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+### 2nd MR Draft
+**Title:** New Difficulty > Fall in pit penalty Feature: Choose what falling into a pit costs
+
+A new Difficulty slider, Fall in pit penalty, 0 to 3: 0 costs nothing, 1 (default) is the game's usual penalty, 2 leaves you on 1 heart (at 1 heart or less nothing more is lost), 3 leaves you on zero hearts (a bottled fairy still revives you). Known limit: from half a heart or less, a fall still kills, as in the base game; this cannot be changed from the event flow. Data edits only; default off, settings strings and default seeds unchanged. Tester-run in the game at levels 0 to 3 from 3 quarter hearts up (Shadow Temple pits and Haunted Wasteland quicksand); not hand-played.
 
 For details about implementation and testing, see difficulty-mod/docs/features/49-fall-pit-penalty.md.
 
