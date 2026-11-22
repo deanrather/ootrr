@@ -48,3 +48,17 @@ Never played. To test:
 - **State:** Done
 - **What was seen in the game:** 3x: a bite took 6 quarter hearts instead of 2 (script, rc 5)
 - **Next step:** Grabs (ReDead, Like Like) not covered; parked
+
+## Test status (23 Nov)
+Rebased onto current `origin/main`. `cargo test -p ootrr-core difficulty` (306 passed), `settings` (113 passed) and `cargo test --workspace` pass; the audit has no failures. Not played at 10x: a tester plan and a 10x mod are ready (a Stalfos hit, vanilla 4 to 8 quarter hearts, should cost 40 to 80; a Keese bite, vanilla 2, should cost 20).
+
+## MR Drafts
+
+### Initial MR Draft
+**Title:** Improved Difficulty > Enemy damage Improvement: Slider goes up to 10x
+
+The Enemy damage slider now goes from 0.5x to 10x (it was 0.5x to 5x). Step and default (1x) are unchanged; enemy health keeps 0.5x to 5x. Existing settings strings decode to the same values; a string above 5x falls back to the default for that one setting in builds without this change. Not yet played at 10x.
+
+For details about implementation and testing, see difficulty-mod/docs/features/02-enemy-damage.md.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
