@@ -1,11 +1,3 @@
-//! Kaepora Gaebora in Kokiri Forest names the next item the quest needs.
-//!
-//! The owl is the Death Mountain Trail owl, placed once more in the child
-//! Kokiri Forest map. The generator lists the required items in logic order
-//! and the owl's talk flow checks the game's own `IsGet` flag of each one in
-//! turn, so it speaks about the first one the player does not hold yet. No
-//! saved flag is added.
-
 use std::collections::BTreeMap as BM;
 
 use crate::bfevfl::flow::NONE;
@@ -46,7 +38,6 @@ pub const GAME_DATA: &str = "GameDataName";
 pub const MESSAGE: &str = "MessageId";
 pub const SAMPLE: &str = "Talk_03";
 
-/// The `IsGet` flags of each item, one per tier of a progressive item.
 pub const FLAGS: &[(&str, &[&str])] = &[
     ("Progressive Hookshot", &["Item_Hookshot", "Item_Longshot"]),
     ("Progressive Strength Upgrade", &["Armor_Child_Gauntlet_Goron", "Armor_Adult_Gauntlet_Silver", "Armor_Adult_Gauntlet_Gold"]),
@@ -137,9 +128,6 @@ pub fn told(item: &str, place: &str) -> String {
     format!("Hoo hoo! Heed my words, Link!|Know this: {} awaits you in {}.|You will need it on your journey. Hoo hoo!", hi(&item_phrase(item)), hi(place))
 }
 
-/// The nine dungeon rewards in the order a run usually earns them, each with the
-/// event that holds it when dungeon rewards are not shuffled and the name its
-/// keeper goes by.
 pub const REWARDS: [(&str, &str, &str); 9] = [
     ("Kokiri Emerald", "Queen Gohma", "Queen Gohma"),
     ("Goron Ruby", "King Dodongo", "King Dodongo"),
@@ -170,8 +158,6 @@ fn goal(s: &crate::settings::Settings, mode: &str, stones: &str, medallions: &st
     }
 }
 
-/// The dungeon rewards the seed's Rainbow Bridge and Ganon's Boss Key need, in
-/// the order the owl asks for them.
 pub fn needed(s: &crate::settings::Settings) -> Vec<&'static str> {
     let mut out: Vec<&'static str> = Vec::new();
     let mut add = |v: Vec<&'static str>| {
@@ -197,8 +183,6 @@ pub fn needed(s: &crate::settings::Settings) -> Vec<&'static str> {
 
 pub const ALL_DONE: &str = "Hoo hoo! I have nothing more to tell you, Link. Your path lies clear before you!";
 
-/// The required items in the order the logic needs them, the first ones only,
-/// each with the flag of the tier it is and the place it lies in.
 pub fn chain(d: &Data, seed: &SeedFile) -> Vec<Link> {
     let Some((w, place_of)): Option<(World, Placement)> = crate::slice::starts::rebuild(d, seed).ok() else {
         return Vec::new();

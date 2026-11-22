@@ -1,7 +1,3 @@
-//! The Kokiri Forest owl is its own actor class, a copy of the Death Mountain
-//! Trail owl: its own pack, schedule, event rows and flow. The Trail owl's
-//! pack, flow and schedule are never written.
-
 use std::fs;
 use std::path::PathBuf as PB;
 
