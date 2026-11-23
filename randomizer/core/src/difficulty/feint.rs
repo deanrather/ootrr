@@ -10,18 +10,21 @@ use crate::sarc::{self, Entry};
 use crate::staging::Out;
 use crate::zs;
 
-pub use graph::{patch, taken, Shape, Swing};
+pub use graph::{patch, taken, Hold, Shape};
 
 pub const SETTING: &str = "enemy_feints";
 pub const NUM: u16 = 166;
 pub const HEAP_EXTRA: i32 = 0x8000;
 pub const LABEL: &str = "enemy feints";
-pub const SINGLE_CUT: [f32; 1] = [20.0];
-pub const TRIPLE_CUTS: [f32; 2] = [20.0, 60.0];
-pub const JUMP_CUT: [f32; 1] = [12.0];
-pub const LIZARD_CUT: [f32; 1] = [15.0];
-pub const KNUCKLE_CUT: [f32; 1] = [20.0];
-pub const BABA_CUT: [f32; 1] = [10.0];
+pub const FREEZE_VAR: &str = "OOTRR_FEINT_FREEZE";
+pub const SINGLE_HOLD: [f32; 1] = [28.0];
+pub const TRIPLE_HOLDS: [f32; 2] = [28.0, 70.0];
+pub const JUMP_HOLD: [f32; 1] = [12.0];
+pub const LIZALFOS_HOLD: [f32; 1] = [28.0];
+pub const DINOLFOS_HOLD: [f32; 1] = [26.0];
+pub const KNUCKLE_HOLD: [f32; 1] = [20.0];
+pub const KNUCKLE_GAP_HOLD: f32 = 10.0;
+pub const BABA_HOLD: [f32; 1] = [10.0];
 
 #[derive(Clone, Copy, Debug)]
 pub struct Target {
@@ -31,14 +34,14 @@ pub struct Target {
 }
 
 pub const TARGETS: [Target; 8] = [
-    Target { kind: "Stalfos swing", graph: "AI/Stalfos.action.BasicAttack.module.ainb", shape: Shape { els: 27, state: 9, body: 0, swing: Swing::Copy(1), cuts: &SINGLE_CUT, gap: None } },
-    Target { kind: "Stalfos combo", graph: "AI/Stalfos.action.ConsecutiveAttack.module.ainb", shape: Shape { els: 48, state: 11, body: 1, swing: Swing::Copy(2), cuts: &TRIPLE_CUTS, gap: None } },
-    Target { kind: "Stalfos jump", graph: "AI/Stalfos.action.JumpAttack.module.ainb", shape: Shape { els: 145, state: 16, body: 69, swing: Swing::Named("JumpAttack_St"), cuts: &JUMP_CUT, gap: None } },
-    Target { kind: "Lizalfos swing", graph: "AI/Lizalfos.action.BasicAttack.module.ainb", shape: Shape { els: 26, state: 12, body: 1, swing: Swing::Copy(20), cuts: &LIZARD_CUT, gap: None } },
-    Target { kind: "Dinolfos swing", graph: "AI/Dinolfos.action.BasicAttack.module.ainb", shape: Shape { els: 28, state: 15, body: 4, swing: Swing::Copy(22), cuts: &LIZARD_CUT, gap: None } },
-    Target { kind: "Iron Knuckle overhead", graph: "AI/Enemy_IronKnuckle.action.LargeAttack.module.ainb", shape: Shape { els: 40, state: 17, body: 0, swing: Swing::Copy(21), cuts: &KNUCKLE_CUT, gap: None } },
-    Target { kind: "Iron Knuckle double", graph: "AI/Enemy_IronKnuckle.action.BasicAttack.module.ainb", shape: Shape { els: 26, state: 9, body: 0, swing: Swing::Named("WeaponDoubleAttackFirst"), cuts: &KNUCKLE_CUT, gap: Some((10, 1)) } },
-    Target { kind: "Deku Baba bite", graph: "AI/Dekubaba.action.basicattack.module.ainb", shape: Shape { els: 78, state: 28, body: 0, swing: Swing::Copy(1), cuts: &BABA_CUT, gap: None } },
+    Target { kind: "Stalfos swing", graph: "AI/Stalfos.action.BasicAttack.module.ainb", shape: Shape { els: 27, state: 9, body: 0, holds: &SINGLE_HOLD, gap: None } },
+    Target { kind: "Stalfos combo", graph: "AI/Stalfos.action.ConsecutiveAttack.module.ainb", shape: Shape { els: 48, state: 11, body: 1, holds: &TRIPLE_HOLDS, gap: None } },
+    Target { kind: "Stalfos jump", graph: "AI/Stalfos.action.JumpAttack.module.ainb", shape: Shape { els: 145, state: 16, body: 69, holds: &JUMP_HOLD, gap: None } },
+    Target { kind: "Lizalfos swing", graph: "AI/Lizalfos.action.BasicAttack.module.ainb", shape: Shape { els: 26, state: 12, body: 1, holds: &LIZALFOS_HOLD, gap: None } },
+    Target { kind: "Dinolfos swing", graph: "AI/Dinolfos.action.BasicAttack.module.ainb", shape: Shape { els: 28, state: 15, body: 4, holds: &DINOLFOS_HOLD, gap: None } },
+    Target { kind: "Iron Knuckle overhead", graph: "AI/Enemy_IronKnuckle.action.LargeAttack.module.ainb", shape: Shape { els: 40, state: 17, body: 0, holds: &KNUCKLE_HOLD, gap: None } },
+    Target { kind: "Iron Knuckle double", graph: "AI/Enemy_IronKnuckle.action.BasicAttack.module.ainb", shape: Shape { els: 26, state: 9, body: 0, holds: &KNUCKLE_HOLD, gap: Some((10, 1, KNUCKLE_GAP_HOLD)) } },
+    Target { kind: "Deku Baba bite", graph: "AI/Dekubaba.action.basicattack.module.ainb", shape: Shape { els: 78, state: 28, body: 0, holds: &BABA_HOLD, gap: None } },
 ];
 
 pub fn percent(choice: &str) -> Option<i64> {
@@ -51,7 +54,14 @@ pub fn percent(choice: &str) -> Option<i64> {
 }
 
 pub fn note(pct: i64) -> Option<String> {
-    (pct > 0).then(|| format!("About {pct} in 100 attacks by Stalfos, Lizalfos, Dinolfos, Iron Knuckles and Deku Babas start with a feint: the enemy starts the attack, stops short, waits about two thirds of a second to a second and a third, then attacks for real. Stalfos combos and the Iron Knuckle double swing can instead stop after the first swing. Experimental."))
+    (pct > 0).then(|| format!("About {pct} in 100 attacks by Stalfos, Lizalfos, Dinolfos, Iron Knuckles and Deku Babas are feints: the enemy winds up, then sways back and forth around its ready pose for about two thirds of a second to a second and a third, then strikes. Stalfos combos can hold before the second swing instead, and the Iron Knuckle can also hold before its second swing. The whole body sways, legs included. Experimental."))
+}
+
+pub fn hold_mode() -> Hold {
+    match std::env::var(FREEZE_VAR) {
+        Ok(v) if v.trim() == "1" => Hold::Freeze,
+        _ => Hold::Sway,
+    }
 }
 
 pub fn module_of(graph: &str) -> &str {
@@ -75,13 +85,13 @@ fn repack(path: &str, z: &[u8], old: usize, es: &[Entry]) -> Res<Out> {
     Ok(Out { path: path.to_string(), old, new: out.len(), z: zs::compress_raw(&out, zs::dict_of(z))? })
 }
 
-fn patch_pack(es: &mut [Entry], p: f32, hit: &mut Set<&'static str>) -> Res<bool> {
+fn patch_pack(es: &mut [Entry], p: f32, how: Hold, hit: &mut Set<&'static str>) -> Res<bool> {
     let mut any: bool = false;
     for e in es.iter_mut() {
         let Some(t) = target_of(&e.name) else {
             continue;
         };
-        e.data = patch(&e.data, &t.shape, p, t.kind)?;
+        e.data = patch(&e.data, &t.shape, p, how, t.kind)?;
         hit.insert(t.graph);
         any = true;
     }
@@ -90,11 +100,12 @@ fn patch_pack(es: &mut [Entry], p: f32, hit: &mut Set<&'static str>) -> Res<bool
 
 pub fn stage(rf: &mut Romfs, have: Have, dir: &str, pct: i64) -> Res<(Set<String>, Vec<Out>)> {
     let p: f32 = pct as f32 / 100.0;
+    let how: Hold = hold_mode();
     let mut hit: Set<&'static str> = Set::new();
     let (z, old, mut es): (Vec<u8>, usize, Vec<Entry>) = hook::opened(rf, have, hook::GLOBAL)?;
     let shared: Set<String> = callers(&es);
     let mut outs: Vec<Out> = Vec::new();
-    if patch_pack(&mut es, p, &mut hit)? {
+    if patch_pack(&mut es, p, how, &mut hit)? {
         outs.push(repack(hook::GLOBAL, &z, old, &es)?);
     }
     let mut who: Set<String> = Set::new();
@@ -107,7 +118,7 @@ pub fn stage(rf: &mut Romfs, have: Have, dir: &str, pct: i64) -> Res<(Set<String
             continue;
         }
         who.insert(name);
-        if patch_pack(&mut es, p, &mut hit)? {
+        if patch_pack(&mut es, p, how, &mut hit)? {
             outs.push(repack(&f, &z, old, &es)?);
         }
     }
