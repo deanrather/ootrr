@@ -273,6 +273,12 @@ fn difficulty() -> Vec<Setting> {
             .tip("With random enemy sizes on, an enemy's health is multiplied by its size, so a double-size Stalfos has twice the health and a half-size one half, never less than one. Sizes then come in a few steps. It stacks with the enemy health setting. Not working yet, as the sizes themselves are ignored."),
         Setting::toggle(d::FAIRY_HELPS_NUM, d::FAIRY_HELPS, "difficulty", "Fairies help enemies too", false)
             .tip("When you use a bottled fairy, or one revives you, every awake enemy and boss heals to full too."),
+        Setting::choice(d::feint::NUM, d::feint::SETTING, "difficulty", "Enemy feints", "off")
+            .tip("Stalfos, Lizalfos, Dinolfos, Iron Knuckles and Deku Babas sometimes delay an attack: they wind up, rock in the ready pose for a moment, then strike. A Stalfos combo or an Iron Knuckle double swing can hold before its second swing instead. Experimental.")
+            .opt("off", "Off", "Every attack is real.")
+            .opt("quarter", "25%", "About one attack in four is delayed.")
+            .opt("half", "50%", "About one attack in two is delayed.")
+            .opt("three_quarters", "75%", "About three attacks in four are delayed."),
     ]
 }
 

@@ -33,5 +33,6 @@ All 19 are in rc 4 (`<builds>\rc-4\`).
 | 27 | [Unbreakable Bombchu Bowling grass](27-unbreakable-bowling-grass.md) (idea by Sabriel) | `unbreakable_bowling_grass` | Yes, by hand |
 | 29 | [Fireball storms](29-fireball-storms.md) | `fireball_storms` | Yes, by hand (two of four spots) |
 | 49 | [Fall in pit penalty](49-fall-pit-penalty.md) | `fall_pit_penalty` | Partly (old on/off version, by hand) |
+| 52 | [Enemy feints](52-enemy-feints.md) (Stalfos, Lizalfos, Dinolfos, Iron Knuckles, Deku Babas; held wind-ups) | `enemy_feints` | round 4 by script (boomerang hold; user picked it from clips 23 Nov); not yet played by hand |
 
 Features 01 to 08 I built directly. Features 09 to 19 were built by sub-agents; what those files say about investigation and testing comes from the agents' reports, which I did not re-run except where noted.
