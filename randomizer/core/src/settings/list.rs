@@ -230,7 +230,7 @@ fn difficulty() -> Vec<Setting> {
             .tip("Two bottles can't hold the same thing, so no second fairy, potion or Poe. Different things in different bottles are fine."),
         Setting::number(d::MORE_NUM, d::MORE, "difficulty", "More enemies", d::NORMAL, d::MORE_RANGE.0, d::MORE_RANGE.1)
             .multiplier(d::MORE_STEP, d::NORMAL)
-            .tip("How many enemies each area has, up to 10x. From 5x, new kinds join in. Above 1x you also get special encounters, such as a Skulltula ambush in Zora's Domain once you have a sword, and rare enemies from grass and pots (untested). Towns and boss rooms get none."),
+            .tip("How many enemies each area has, up to 10x. From 5x, new kinds join in, including the Gerudo fighter. Above 1x you also get special encounters, such as a Skulltula ambush in Zora's Domain once you have a sword, and rare enemies from grass and pots (untested). Towns and boss rooms get none."),
         Setting::toggle(d::RESPAWN_NUM, d::RESPAWN, "difficulty", "Enemies respawn sooner", false)
             .tip("Beaten enemies come back when you leave the room or area and return, not only after leaving the dungeon or region. Bosses and minibosses stay beaten. Experimental, untested in the game."),
         Setting::toggle(d::MINIBOSSES_NUM, d::MINIBOSSES, "difficulty", "Bosses spawn minibosses", false)

@@ -36,6 +36,7 @@ pub const SCRIPTED_LIFE: i32 = 100;
 pub const SKIP_MAPS: &[&str] = &["SageRoom", "FinalBattleField"];
 pub const KEEP_KINDS: &[&str] = &[
     "Enemy_MiddleBoss",
+    "Enemy_Gerudo_Fighter",
     "Enemy_DungeonBoss",
     "Enemy_Tentacle",
     "Enemy_TrickyDoor",
