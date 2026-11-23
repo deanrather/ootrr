@@ -1,0 +1,7 @@
+{
+  "ootrr_checkout": "",
+  "romfs": "<folder holding Banc/, RSDB/, Pack/: your own extracted game, read only>",
+  "longshot_scripts": "<Longshot checkout>/scripts",
+  "game": "<Longshot game folder (holds longshot.exe)>",
+  "session": "<a folder for notes, shots and runs; default devtools/session>"
+}

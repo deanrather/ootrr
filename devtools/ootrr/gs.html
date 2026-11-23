@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Skulltula Manager</title>
+<link rel="stylesheet" href="/ui.css">
+<style>
+  #title { font-size:18px; font-weight:800; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .why { margin-top:6px; font-size:12px; color:var(--mute); }
+  .rule { margin-top:6px; font-size:12px; line-height:1.4; padding:6px 8px; border-radius:8px; border:1px dashed var(--line); }
+  .rule b { font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--mute); margin-right:4px; }
+  .nav { display:grid; grid-template-columns:1fr auto; gap:var(--gap); align-items:stretch; margin-bottom:var(--gap); }
+  .pick { width:100%; min-width:0; min-height:var(--tap); padding:0 12px; border-radius:var(--r); border:2px solid var(--line); background:var(--tile);
+    color:var(--ink); font:inherit; font-weight:700; font-size:15px; }
+  .btn.tog.on { border-color:var(--accent); background:var(--accent); color:var(--bg); }
+  .btn.tog.on small { color:var(--bg); opacity:.85; }
+  .travel { margin:-2px 0 var(--gap); font-size:13px; color:var(--mute); }
+  .travel.go { color:var(--accent); } .travel.bad { color:var(--warn); }
+  .mrow .k { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--mute); width:54px; flex:none; }
+  textarea { width:100%; min-height:150px; margin-top:8px; padding:8px; border-radius:8px; border:1.5px solid var(--line); background:var(--tile); color:var(--ink);
+    font:12px/1.35 ui-monospace, Consolas, monospace; }
+</style></head><body>
+<div class="top">
+  <div class="where"><span id="dot" class="dot"></span><b id="place">connecting...</b><span id="count" class="room"></span><a id="back" class="back" href="#">panel</a></div>
+</div>
+<div class="nav">
+  <select id="warp" class="pick" aria-label="Warp to a Gold Skulltula spot"><option value="">Warp to spot...</option></select>
+  <button id="overlay" class="btn tog" type="button">Overlay<small>spots in game</small></button>
+</div>
+<div id="travel" class="travel"></div>
+<div id="near" class="nearcard noph none">
+  <div><div class="k">Nearest new spot</div><div class="t" id="nearT">none on this map</div><div class="d" id="nearD">mark one with the buttons below</div></div>
+  <button id="rmnear" class="btn danger" disabled>Remove<small>nearest</small></button>
+</div>
+<div id="cur" class="card">
+  <div id="title">Gold Skulltula</div>
+  <div id="sub" class="why"></div>
+  <div id="rule" class="rule" hidden></div>
+</div>
+<div class="sec">Place with the crosshair</div>
+<div class="row2">
+  <button id="aimplace" class="btn go" type="button">Place at aim<small>new spot where the crosshair points</small></button>
+  <button id="aimremove" class="btn" type="button">Remove aimed at<small>the new spot nearest the crosshair</small></button>
+  <button id="aimmode" class="btn tog" type="button">Aim mode<small>in-game crosshair and controller</small></button>
+  <button id="spawn" class="btn go" type="button">Spawn Skulltula<small>a Gold Skulltula to test with</small></button>
+</div>
+<div class="sec">Which Gold Skulltula</div>
+<select id="which" class="pick" aria-label="Which Gold Skulltula"><option value="">Nearest original</option></select>
+<div class="sec">New spot at Link</div>
+<div class="row2">
+  <button id="wall" class="btn go">On a wall</button>
+  <button id="ground" class="btn go">On the ground</button>
+  <button id="skip" class="btn full">Leave in place</button>
+</div>
+<div class="sec">New spots on this map</div>
+<div id="marks" class="list"></div>
+<div id="saved" class="why"></div>
+<details class="legend"><summary>Show the saved file</summary><div class="row2"><button id="export" class="btn full" type="button">Show gs_positions.json<small>saved on every change</small></button></div></details>
+<div id="msg" class="msg"></div>
+<textarea id="out" readonly hidden></textarea>
+<script src="/ui.js"></script>
+<script>
+const { $, el, get, post, label, confirmTap, frame, back, loop } = UI;
+back($('back'));
+let last = null, whichSig = '';
+function drawWhich(s) {
+  const sig = JSON.stringify([s.map, (s.here || []).map(r => [r.hash, r.marked, r.skip])]);
+  const want = s.target && s.target.chosen ? s.target.hash : '';
+  if (sig !== whichSig) {
+    whichSig = sig;
+    const sel = $('which'); sel.innerHTML = '';
+    sel.appendChild(el('option', null, 'Nearest original')).value = '';
+    (s.here || []).forEach(r => { const o = el('option', null, `${r.name} - ${r.dist} m` + (r.marked ? ' (moved)' : r.skip ? ' (left)' : '')); o.value = r.hash; sel.appendChild(o); });
+  }
+  if (document.activeElement !== $('which')) $('which').value = want;
+}
+function draw(s) {
+  last = s;
+  $('dot').className = 'dot ' + (s.connected ? 'on' : 'off');
+  $('place').textContent = s.connected ? (s.place || s.map || '?') : 'game not answering';
+  $('count').textContent = s.inventory ? `${s.marked} moved, ${s.skipped} left, of ${s.inventory}` : 'no inventory';
+  const o = $('overlay');
+  o.classList.toggle('on', !!s.overlay);
+  label(o, s.overlay ? 'Hide overlay' : 'Show overlay', 'new (GS) + old spots in game', 'ov');
+  $('aimmode').classList.toggle('on', !!s.aim_on);
+  label($('aimmode'), s.aim_on ? 'Aim mode on' : 'Aim mode off', s.aim_other ? 'on for enemies: tap to switch here' : 'B tap place, B hold remove', 'a');
+  const tg = s.target;
+  $('aimplace').disabled = !s.connected;
+  label($('aimplace'), 'Place at aim', tg ? tg.short + ': new spot where the crosshair points' : 'no Gold Skulltula in this map', 'p');
+  $('spawn').disabled = !s.connected;
+  $('saved').textContent = s.saved || 'Every change is saved at once (marks and the file for the mod).';
+  const tr = s.travel || {}, tv = $('travel');
+  tv.textContent = tr.message || ''; tv.className = 'travel' + (tr.busy ? ' go' : tr.ok === false ? ' bad' : '');
+  $('warp').disabled = !!tr.busy;
+  const n = s.nearest;
+  $('near').classList.toggle('none', !n);
+  $('nearT').textContent = n ? n.name : 'none on this map';
+  $('nearD').textContent = n ? n.dist + ' m away' : 'mark one with the buttons below';
+  $('rmnear').disabled = !n;
+  label($('rmnear'), 'Remove', n ? 'this new spot' : 'nothing here', n ? 'n' + n.n : '');
+  drawWhich(s);
+  const t = s.target, ti = $('title'); ti.innerHTML = '';
+  $('cur').classList.toggle('on', !!t);
+  $('rule').hidden = !t;
+  if (!t) {
+    ti.textContent = 'No Gold Skulltula here';
+    $('sub').textContent = s.inventory ? 'This map has no Gold Skulltula: the mod moves one inside its own map only.' : 'The inventory (cache/gs-list.json) was not found.';
+  } else {
+    ti.appendChild(document.createTextNode(t.short));
+    ti.appendChild(el('span', 'pill' + (t.marked ? ' ok' : t.skip ? '' : ' todo'), t.marked ? `moved ${t.moved} m` : t.skip ? 'left in place' : 'not moved'));
+    const bits = [`${t.chosen ? 'Chosen' : 'Nearest original'}, ${t.dist} m away.`, t.age ? t.age + '.' : '', t.night ? 'Night only.' : ''];
+    if (t.room != null) bits.push(`Dungeon room ${t.room}: keep the new spot in it.`);
+    if (t.both_ages) bits.push('Same spot in the other age: the move is copied there unless you mark it there too.');
+    $('sub').textContent = bits.filter(Boolean).join(' ');
+    $('rule').innerHTML = ''; $('rule').appendChild(el('b', null, 'logic')); $('rule').appendChild(document.createTextNode(t.rule || 'none recorded'));
+  }
+  const ok = s.connected && s.pos && t;
+  ['wall', 'ground', 'skip'].forEach(id => $(id).disabled = !ok);
+  label($('wall'), t && t.marked ? 'Move: wall' : 'On a wall', 'face the wall: 0.8 ahead, 1 up', 'w');
+  label($('ground'), t && t.marked ? 'Move: ground' : 'On the ground', 'at your feet, looks where you look', 'g');
+  label($('skip'), t && t.skip ? 'Move it after all' : 'Leave in place', t ? (t.skip ? 'mark it again' : 'clears its new spot') : '', 'sk');
+  $('marks').innerHTML = '';
+  if (!(s.marks || []).length) $('marks').appendChild(el('div', 'empty', 'No new spots on this map yet.'));
+  (s.marks || []).forEach(m => {
+    const r = el('div', 'mrow' + (m.near ? ' near' : ''));
+    r.appendChild(el('span', 'k', m.surface));
+    r.appendChild(el('span', 'grow', m.name));
+    r.appendChild(el('span', 'mute', m.dist + ' m'));
+    $('marks').appendChild(r);
+  });
+  if (s.message && !$('msg').textContent) $('msg').textContent = s.message;
+}
+async function refresh() { try { draw(await get('/api/gs/state')); } catch (e) { $('dot').className = 'dot off'; } }
+const act = (op, body) => async () => { await post('/api/gs/' + op, body || {}, $('msg')); refresh(); };
+$('wall').onclick = act('wall');
+$('ground').onclick = act('ground');
+$('skip').onclick = act('skip');
+$('overlay').onclick = act('overlay');
+$('aimplace').onclick = act('aimplace');
+$('aimremove').onclick = act('aimremove');
+$('spawn').onclick = act('spawn');
+$('aimmode').onclick = async () => { await post('/api/gs/aim', { on: !(last && last.aim_on) }, $('msg')); refresh(); };
+$('which').onchange = async e => { await post('/api/gs/target', { hash: e.target.value || null }, $('msg')); refresh(); };
+confirmTap($('rmnear'), () => last && last.nearest ? 'remove ' + last.nearest.name : '', act('removenearest'));
+$('export').onclick = async () => {
+  const r = await post('/api/gs/export', {}, $('msg'));
+  if (r && r.json) { $('out').hidden = false; $('out').value = (r.notes || []).map(x => '// ' + x).join('\n') + (r.notes && r.notes.length ? '\n' : '') + r.json; }
+};
+let warpSig = '';
+async function loadWarps() {
+  try {
+    const w = (await get('/api/gs/warps')).spots || [];
+    const sig = JSON.stringify(w.map(x => [x.key, x.label]));
+    if (sig === warpSig) return;
+    warpSig = sig;
+    const sel = $('warp'); sel.innerHTML = '';
+    sel.appendChild(el('option', null, `Warp to spot... (${w.filter(x => x.kind === 'mark').length} new)`)).value = '';
+    const groups = {};
+    w.forEach(x => { const k = (x.kind === 'mark' ? 'New: ' : 'Original: ') + x.map.replace(/_(Child|Adult)$/, m => m === '_Child' ? ' (child)' : ' (adult)'); (groups[k] = groups[k] || []).push(x); });
+    Object.keys(groups).sort((a, b) => (a.startsWith('New') ? 0 : 1) - (b.startsWith('New') ? 0 : 1)).forEach(k => {
+      const og = el('optgroup'); og.label = k;
+      groups[k].forEach(x => { const op = el('option', null, x.label); op.value = x.key; og.appendChild(op); });
+      sel.appendChild(og);
+    });
+  } catch (e) {}
+}
+$('warp').onchange = async e => {
+  const key = e.target.value;
+  if (!key) return;
+  e.target.value = '';
+  await post('/api/gs/goto', { key }, $('msg'));
+  refresh(); loadWarps();
+};
+loadWarps();
+setInterval(loadWarps, 5000);
+frame('gsHeight');
+loop(async () => draw(await get('/api/gs/state')), 1000);
+</script></body></html>

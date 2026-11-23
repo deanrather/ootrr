@@ -1,0 +1,12 @@
+[
+  {"label": "Full health", "do": [{"cmd": "health", "n": 20}]},
+  {"label": "Refill magic", "do": [{"cmd": "spawn", "name": "Obj_MagicJar_Large", "dist": 1.5}, {"cmd": "spawn", "name": "Obj_MagicJar_Large", "dist": 2.5}], "note": "two large magic jars in front of Link"},
+  {"label": "Fairy", "do": [{"cmd": "spawn", "name": "Obj_Fairy", "dist": 2}], "note": "a fairy in front of Link"},
+  {"label": "Kokiri Sword", "do": [{"cmd": "give", "item": "Kokiri Sword"}]},
+  {"label": "Adult swords", "do": [{"cmd": "give", "item": "Master Sword"}, {"cmd": "give", "item": "Biggoron's Sword"}]},
+  {"label": "Din's Fire + magic", "do": [{"cmd": "give", "item": "Din's Fire"}, {"cmd": "give", "item": "Magic"}]},
+  {"label": "Bottled fairy", "do": [{"cmd": "give", "item": "Bottle: Fairy"}]},
+  {"label": "99 rupees", "do": [{"cmd": "rupees", "n": 99}]},
+  {"label": "Press A", "do": [{"cmd": "press", "buttons": "A", "frames": 8}]},
+  {"label": "All items", "action": "all_items", "confirm": "Give every item (about 60 item boxes; the panel presses A through them)?"}
+]

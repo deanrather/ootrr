@@ -1,0 +1,203 @@
+[
+ {
+  "label": "Kokiri Sword",
+  "do": [
+   {
+    "cmd": "give",
+    "item": "Kokiri Sword"
+   }
+  ]
+ },
+ {
+  "label": "Adult swords",
+  "do": [
+   {
+    "cmd": "give",
+    "item": "Master Sword"
+   },
+   {
+    "cmd": "give",
+    "item": "Biggoron's Sword"
+   }
+  ]
+ },
+ {
+  "label": "Din's Fire + magic",
+  "do": [
+   {
+    "cmd": "give",
+    "item": "Din's Fire"
+   },
+   {
+    "cmd": "give",
+    "item": "Magic full"
+   }
+  ]
+ },
+ {
+  "label": "Refill magic",
+  "do": [
+   {
+    "cmd": "give",
+    "item": "Magic full"
+   }
+  ]
+ },
+ {
+  "label": "Full health",
+  "do": [
+   {
+    "cmd": "health",
+    "n": 20
+   }
+  ]
+ },
+ {
+  "label": "Fairy",
+  "do": [
+   {
+    "cmd": "spawn",
+    "name": "Obj_Fairy",
+    "dist": 2
+   }
+  ]
+ },
+ {
+  "label": "Bottle: fairy",
+  "do": [
+   {
+    "cmd": "give",
+    "item": "Bottle: Fairy"
+   }
+  ]
+ },
+ {
+  "label": "Bottle: red potion",
+  "do": [
+   {
+    "cmd": "give",
+    "item": "Bottle: Red Potion"
+   }
+  ]
+ },
+ {
+  "label": "Bottle: green potion",
+  "do": [
+   {
+    "cmd": "give",
+    "item": "Bottle: Green Potion"
+   }
+  ]
+ },
+ {
+  "label": "Bottle: blue potion",
+  "do": [
+   {
+    "cmd": "give",
+    "item": "Bottle: Blue Potion"
+   }
+  ]
+ },
+ {
+  "label": "Bottle: milk",
+  "do": [
+   {
+    "cmd": "give",
+    "item": "Bottle: Milk"
+   }
+  ]
+ },
+ {
+  "label": "Bottle: fish",
+  "do": [
+   {
+    "cmd": "give",
+    "item": "Bottle: Fish"
+   }
+  ]
+ },
+ {
+  "label": "Bottle: bug",
+  "do": [
+   {
+    "cmd": "give",
+    "item": "Bottle: Bug"
+   }
+  ]
+ },
+ {
+  "label": "Empty bottle",
+  "do": [
+   {
+    "cmd": "give",
+    "item": "Bottle: Empty"
+   }
+  ]
+ },
+ {
+  "label": "Press A",
+  "do": [
+   {
+    "cmd": "press",
+    "buttons": "A",
+    "frames": 8
+   }
+  ]
+ },
+ {
+  "label": "Equip Deku Nut (X)",
+  "do": [
+   {
+    "cmd": "edit",
+    "verb": "equipset",
+    "arg": "adult:Item_DekuNut",
+    "n": 0
+   },
+   {
+    "cmd": "edit",
+    "verb": "equipset",
+    "arg": "child:Item_DekuNut",
+    "n": 0
+   }
+  ]
+ },
+ {
+  "label": "Equip slingshot (X)",
+  "do": [
+   {
+    "cmd": "edit",
+    "verb": "equipset",
+    "arg": "adult:Weapon_Range_SlingShot",
+    "n": 0
+   },
+   {
+    "cmd": "edit",
+    "verb": "equipset",
+    "arg": "child:Weapon_Range_SlingShot",
+    "n": 0
+   }
+  ]
+ },
+ {
+  "label": "Read X item",
+  "do": [
+   {
+    "cmd": "edit",
+    "verb": "equipget",
+    "arg": "child",
+    "n": 0
+   },
+   {
+    "cmd": "edit",
+    "verb": "equipget",
+    "arg": "adult",
+    "n": 0
+   }
+  ]
+ },
+ {
+  "label": "All items",
+  "action": "all_items",
+  "confirm": "Give every item (about 60 item boxes; the panel presses A through them)?"
+ }
+]

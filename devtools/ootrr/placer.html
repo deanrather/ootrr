@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Enemy Placer</title>
+<link rel="stylesheet" href="/ui.css">
+<style>
+  .grid { display:grid; grid-template-columns:repeat(4, 1fr); gap:6px; }
+  @media (min-width:480px) { .grid { grid-template-columns:repeat(auto-fill, minmax(92px, 1fr)); } }
+  .tile { position:relative; aspect-ratio:1; padding:0; overflow:hidden; border:2px solid var(--line); border-radius:var(--r); background:var(--tile); color:var(--ink); cursor:pointer; }
+  .tile img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+  .tile .lab { position:absolute; left:0; right:0; bottom:0; padding:12px 3px 3px; font-size:12px; font-weight:700; color:#fff; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    background:linear-gradient(transparent, rgba(0,0,0,.78) 45%); }
+  .tile.noimg .lab { top:0; display:flex; align-items:center; justify-content:center; padding:4px 4px 26px; background:none; color:var(--ink); font-size:13px; white-space:normal; word-break:break-word; line-height:1.15; }
+  .tile .lab em, .lrow em { font-style:normal; color:var(--amber); font-weight:900; margin-left:1px; }
+  .tile .tl, .tile .tr { position:absolute; top:3px; box-shadow:0 0 0 1.5px rgba(255,255,255,.85); }
+  .tile .tl { left:3px; } .tile .tr { right:3px; }
+  .tile .bl, .tile .br { position:absolute; bottom:22px; box-shadow:0 0 0 1.5px rgba(255,255,255,.85); }
+  .tile.noimg .bl, .tile.noimg .br { bottom:4px; box-shadow:none; }
+  .tile .bl { left:3px; height:18px; min-width:18px; font-size:11px; } .tile .br { right:3px; }
+  .tile.nearkind, .lrow.nearkind { border-color:var(--near); box-shadow:0 0 0 2px var(--near); }
+  .tile.sel, .lrow.sel { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent); }
+  .selcard { display:grid; grid-template-columns:auto 1fr; gap:8px; align-items:center; margin:6px 0; padding:8px; border:2px solid var(--line); border-radius:var(--r); background:var(--tile); }
+  .selcard .k { font-size:11px; text-transform:uppercase; color:var(--mute); }
+  .selcard .t { font-size:17px; font-weight:800; }
+  .selcard .btns { grid-column:1 / 3; display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+  .tile.off, .lrow.off { opacity:.35; }
+  .tile.flash, .lrow.flash { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent); }
+  .tile:active, .lrow:active { transform:scale(.96); }
+  .lst { display:flex; flex-direction:column; gap:5px; }
+  .lrow { display:grid; grid-template-columns:44px 1fr auto 22px 22px 26px; align-items:center; gap:8px; min-height:54px; padding:4px 8px 4px 4px; border:2px solid var(--line);
+    border-radius:var(--r); background:var(--tile); color:var(--ink); text-align:left; cursor:pointer; }
+  .lrow .ph { width:44px; height:44px; border-radius:7px; object-fit:cover; background:var(--line); }
+  .lrow .nm { min-width:0; }
+  .lrow .nm b { font-size:15px; }
+  .lrow .nm span { display:block; font-size:12px; color:var(--mute); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .lrow .n.zero { background:transparent; color:var(--line); }
+  .sortsel { flex:none; height:37px; padding:0 8px; border:1.5px solid var(--line); border-radius:20px; background:var(--tile); color:var(--ink); font:inherit; font-size:13px; font-weight:700; }
+  #stTotal { font-variant-numeric:tabular-nums; }
+  #nearPh { display:flex; align-items:center; justify-content:center; font-weight:800; color:var(--mute); }
+</style></head><body>
+<div class="top">
+  <div class="where"><span id="dot" class="dot"></span><b id="place">connecting...</b><span id="room" class="room"></span><a id="back" class="back" href="#">panel</a></div>
+  <div class="stats" id="stats"></div>
+</div>
+<div id="near" class="nearcard none">
+  <div><div class="k">Nearest marker</div><div class="t" id="nearT">none on this map</div><div class="d" id="nearD">press an enemy to drop a marker at Link</div></div>
+  <button id="rmnear" class="btn danger" disabled>Remove<small>nearest</small></button>
+</div>
+<div id="selcard" class="selcard">
+  <div><div class="k">Next aim placement</div><div class="t" id="selT">no enemy selected</div></div>
+  <div id="selH" class="d" style="text-align:right;color:var(--mute);font-size:12px">tap an enemy to select it</div>
+  <div class="btns">
+    <button id="aimplace" class="btn go" type="button">Place at aim<small>marker where the crosshair points</small></button>
+    <button id="aimremove" class="btn" type="button">Remove aimed at<small>the marker nearest the crosshair</small></button>
+    <button id="aimmode" class="btn tog" type="button">Aim mode<small>in-game crosshair and controller</small></button>
+  </div>
+</div>
+<div class="row2">
+  <button id="kill" class="btn danger">Kill all<small>enemies near Link</small></button>
+  <button id="spawn" class="btn go">Spawn all<small>markers on this map</small></button>
+  <button id="overlay" class="btn tog" type="button">Overlay<small>spawn points in game</small></button>
+  <button id="boxes" class="btn tog" type="button">Boxes<small>model size in game</small></button>
+  <button id="models" class="btn tog" type="button">Show display models<small>real model at each marker</small></button>
+</div>
+<div id="msg" class="msg"></div>
+<div class="tools">
+  <input id="search" type="search" placeholder="Search enemies" autocomplete="off" enterkeyhint="search">
+  <select id="sort" class="sortsel" aria-label="Sort enemies">
+    <option value="hp">Sort: HP</option><option value="name">Sort: name</option><option value="size">Sort: size</option>
+    <option value="hab">Sort: habitat</option><option value="recent">Sort: recently used</option>
+  </select>
+  <div class="seg" id="viewSeg"><button data-v="grid">Grid</button><button data-v="list">List</button></div>
+</div>
+<div class="chips" id="filters"></div>
+<div id="items"></div>
+<div id="none" class="empty" hidden>No enemy matches.</div>
+<details class="legend"><summary>What the badges mean</summary>
+  <div class="lg"><span class="n alive">2</span> alive now <span class="n ours">3</span> our markers <span class="n van">v4</span> vanilla in this room <span><em style="color:var(--amber);font-style:normal;font-weight:900">*</em> needs work</span></div>
+  <div class="lg" id="habLegend"></div>
+  <div class="lg">The Sort menu orders the enemies: HP lowest first, name A to Z, size smallest first (no size data last), habitat, or the ones you used last first. Pressing a button drops a marker only; Spawn all brings the enemies. Fliers go 2 m above Link (not when placed on a wall: the marker is where the crosshair hit). Only Remove nearest deletes a marker. Aim mode: tapping an enemy only selects it; Place at aim (or tap B, the game's put away, with the crosshair on) drops its marker where the crosshair hits, facing you (out of the wall on a wall); Remove aimed at (or hold B 0.6 s) takes away the marker nearest the crosshair and its enemy.</div>
+</details>
+<script src="/ui.js"></script>
+<script>
+const { $, el, get, post, label, confirmTap, frame, back, store, loop, q } = UI;
+back($('back'));
+const HABS = ['fly', 'walk', 'still', 'water', 'sand', 'wall', 'ceil'];
+let view = store('view') === 'list' ? 'list' : 'grid';
+let filter = store('filter') || 'all';
+const SORTS = ['hp', 'name', 'size', 'hab', 'recent'];
+let sort = SORTS.includes(store('sort')) ? store('sort') : 'hp';
+let order = '';
+let search = '';
+let last = null, built = '';
+const items = {};
+function portrait(name) { return '/portraits/' + name.replace('Enemy_', '') + '.png' + q; }
+function matches(b) {
+  if (filter === 'here' && !(b.van || b.count || b.live)) return false;
+  if (HABS.includes(filter) && b.hab !== filter) return false;
+  if (search) { const s = search.toLowerCase(); if (!(b.text.toLowerCase().includes(s) || b.full.toLowerCase().includes(s))) return false; }
+  return true;
+}
+function badge(cls, v, txt) { const n = el('span', 'n ' + cls + (v ? '' : ' zero'), v ? txt : '0'); return n; }
+function fill(e, b) {
+  e.innerHTML = '';
+  const lab = el('span', 'lab', b.text);
+  if (b.wip) lab.appendChild(el('em', null, '*'));
+  if (view === 'grid') {
+    e.className = 'tile' + (b.img ? '' : ' noimg');
+    if (b.img) {
+      const im = el('img'); im.alt = ''; im.loading = 'lazy'; im.src = portrait(b.name);
+      im.onerror = () => { im.remove(); e.classList.add('noimg'); };
+      e.appendChild(im);
+    }
+    e.appendChild(lab);
+    if (b.live) { const n = el('span', 'n alive tl', String(b.live)); n.title = 'alive now'; e.appendChild(n); }
+    if (b.count) { const n = el('span', 'n ours tr', String(b.count)); n.title = 'our markers'; e.appendChild(n); }
+    if (b.van) { const n = el('span', 'n van bl', 'v' + b.van); n.title = 'vanilla in this room'; e.appendChild(n); }
+    e.appendChild(el('span', 'hab br ' + b.hab, b.hab));
+  } else {
+    e.className = 'lrow';
+    if (b.img) { const im = el('img', 'ph'); im.alt = ''; im.loading = 'lazy'; im.src = portrait(b.name); im.onerror = () => im.replaceWith(el('span', 'ph')); e.appendChild(im); }
+    else e.appendChild(el('span', 'ph'));
+    const nm = el('span', 'nm'); const t = el('b', null, b.text); if (b.wip) t.appendChild(el('em', null, '*'));
+    nm.appendChild(t); nm.appendChild(el('span', null, b.full + (b.hp != null ? ' - HP ' + b.hp : '') + (b.wip ? ' - needs work' : '')));
+    e.appendChild(nm);
+    e.appendChild(el('span', 'hab ' + b.hab, b.hab));
+    e.appendChild(badge('alive', b.live, String(b.live)));
+    e.appendChild(badge('ours', b.count, String(b.count)));
+    e.appendChild(badge('van', b.van, 'v' + b.van));
+  }
+}
+function sorted(list) {
+  const idx = new Map(list.map((b, i) => [b.name, i]));
+  const hp = (a, b) => idx.get(a.name) - idx.get(b.name);
+  const by = {
+    hp: hp,
+    name: (a, b) => a.text.toLowerCase().localeCompare(b.text.toLowerCase()),
+    size: (a, b) => ((a.size || 1e9) - (b.size || 1e9)) || hp(a, b),
+    hab: (a, b) => (HABS.indexOf(a.hab) - HABS.indexOf(b.hab)) || hp(a, b),
+    recent: (a, b) => ((b.used || 0) - (a.used || 0)) || hp(a, b),
+  };
+  return list.slice().sort(by[sort] || hp);
+}
+function build(list) {
+  const box = $('items'); box.innerHTML = ''; box.className = view === 'grid' ? 'grid' : 'lst';
+  list.forEach(b => {
+    const e = el('button');
+    e.type = 'button';
+    e.onclick = async () => {
+      const r = await post('/api/press', { name: b.name }, $('msg'));
+      if (r && r.ok) { e.classList.add('flash'); setTimeout(() => e.classList.remove('flash'), 700); }
+      refresh();
+    };
+    box.appendChild(e);
+    items[b.name] = e;
+  });
+  built = view; order = list.map(b => b.name).join('|');
+  list.forEach(b => { items[b.name].dataset.k = ''; });
+}
+function chips(s) {
+  const counts = { all: s.buttons.length, here: s.buttons.filter(b => b.van || b.count || b.live).length };
+  HABS.forEach(h => counts[h] = s.buttons.filter(b => b.hab === h).length);
+  const box = $('filters');
+  const sig = JSON.stringify(counts) + filter;
+  if (box.dataset.k === sig) return;
+  box.dataset.k = sig; box.innerHTML = '';
+  ['all', 'here'].concat(HABS).forEach(f => {
+    const c = el('button', 'chip' + (f === filter ? ' on' : ''));
+    c.type = 'button';
+    if (HABS.includes(f)) c.appendChild(el('i', f));
+    c.appendChild(document.createTextNode(f === 'all' ? 'All' : f === 'here' ? 'In this room' : f));
+    c.appendChild(el('span', 'c', String(counts[f])));
+    c.onclick = () => { filter = f; store('filter', f); box.dataset.k = ''; draw(last); };
+    box.appendChild(c);
+  });
+}
+const aimE = s => !!(s.aim_on && s.aim_for !== 'gs');
+function header(s) {
+  $('dot').className = 'dot ' + (s.connected ? 'on' : 'off');
+  $('place').textContent = s.connected ? (s.place || s.map || '?') : 'game not answering';
+  $('room').textContent = s.connected ? (s.room != null ? 'room ' + s.room : (s.known ? 'whole map' : 'no vanilla data')) : '';
+  const st = $('stats'); st.innerHTML = '';
+  if (!s.connected) return;
+  const tot = el('span', 'pill' + (s.met ? ' met' : ''));
+  tot.id = 'stTotal';
+  tot.appendChild(el('b', null, String(s.current)));
+  tot.appendChild(document.createTextNode(s.target ? ' / ' + s.target + (s.met ? '  met' : '') : ' enemies'));
+  tot.title = 'vanilla + added, against 10x vanilla';
+  st.appendChild(tot);
+  st.appendChild(el('span', 'pill van', 'vanilla ' + s.vanilla));
+  st.appendChild(el('span', 'pill ours', 'added ' + s.added));
+  if (s.mult) st.appendChild(el('span', 'pill', s.mult));
+  st.appendChild(el('span', 'pill' + (aimE(s) ? ' met' : ''), 'next: ' + (s.selected ? s.selected.text : 'none') + (aimE(s) ? ' (aim on)' : s.aim_on ? ' (aim is on for Skulltulas)' : '')));
+  if (!s.live_ok) st.appendChild(el('span', 'pill todo', 'alive: no reading'));
+}
+function nearest(s) {
+  const n = s.nearest, card = $('near');
+  card.classList.toggle('none', !n);
+  const want = n ? n.name + '|' + n.img : '';
+  if (card.dataset.ph !== want) {
+    const old = card.querySelector('.ph'); if (old) old.remove();
+    if (n) {
+      const ph = n.img ? Object.assign(el('img', 'ph'), { src: portrait(n.name), alt: '' }) : el('span', 'ph', n.label.slice(0, 2));
+      if (!n.img) ph.id = 'nearPh';
+      card.insertBefore(ph, card.firstChild);
+    }
+    card.dataset.ph = want;
+  }
+  if (n) {
+    $('nearT').textContent = n.label + ' #' + n.n;
+    const bits = [n.dist + ' m away'];
+    if (Math.abs(n.rise) >= 1) bits.push(Math.abs(n.rise) + ' m ' + (n.rise > 0 ? 'up' : 'down'));
+    bits.push(n.alive ? 'spawned' : 'not spawned');
+    $('nearD').textContent = bits.join(' - ');
+  } else {
+    $('nearT').textContent = 'none on this map';
+    $('nearD').textContent = 'press an enemy to drop a marker at Link';
+  }
+  const b = $('rmnear');
+  b.disabled = !n;
+  label(b, 'Remove', n ? (n.alive ? 'and kill it' : 'nearest') : 'nothing here', n ? 'n' + n.n : '');
+}
+function selection(s) {
+  const c = s.selected;
+  $('selT').textContent = c ? c.text : 'no enemy selected';
+  $('selH').textContent = !c ? 'tap an enemy to select it' : c.chosen ? (aimE(s) ? 'aim mode: tapping only selects' : c.full) : 'last placed (tap an enemy to choose)';
+  $('aimplace').disabled = !c;
+  $('aimmode').classList.toggle('on', aimE(s));
+  label($('aimmode'), aimE(s) ? 'Aim mode on' : 'Aim mode off', s.aim_on && !aimE(s) ? 'on for Skulltulas: tap to switch to enemies' : 'B tap place, B hold remove', 'a');
+  label($('aimplace'), 'Place at aim', c ? c.text + ' where the crosshair points' : 'select an enemy first', 'p');
+}
+function draw(s) {
+  if (!s) return;
+  last = s;
+  selection(s);
+  header(s); nearest(s); chips(s);
+  label($('kill'), 'Kill all', 'enemies within ' + (s.kill_radius || 30) + ' m', 'k');
+  label($('spawn'), 'Spawn all', s.here ? s.here + ' marker' + (s.here === 1 ? '' : 's') + ' on this map' : 'no markers on this map', 's');
+  $('spawn').disabled = !s.here;
+  $('overlay').classList.toggle('on', !!s.overlay);
+  label($('overlay'), s.overlay ? 'Hide overlay' : 'Show overlay', s.overlay && s.debug === false ? 'on; the game overlay is starting' : 'spawn points + vanilla enemies', 'ov');
+  $('boxes').classList.toggle('on', !!s.boxes);
+  label($('boxes'), s.boxes ? 'Boxes on' : 'Boxes off', 'model size in game', 'b');
+  $('models').classList.toggle('on', !!s.models);
+  label($('models'), s.models ? 'Display models on' : 'Show display models', 'real model at each marker', 'm');
+  document.querySelectorAll('#viewSeg button').forEach(b => b.classList.toggle('on', b.dataset.v === view));
+  const ord = sorted(s.buttons);
+  if (built !== view || order !== ord.map(b => b.name).join('|')) build(ord);
+  let shown = 0;
+  s.buttons.forEach(b => {
+    const e = items[b.name];
+    if (!e) return;
+    const k = view + '|' + b.text + b.img + '|' + b.count + '|' + b.live + '|' + b.van + '|' + b.hab;
+    if (e.dataset.k !== k) { fill(e, b); e.dataset.k = k; }
+    e.classList.toggle('sel', !!(s.selected && s.selected.name === b.name));
+    e.classList.toggle('nearkind', !!(s.nearest && s.nearest.name === b.name));
+    e.classList.toggle('off', !!b.off);
+    const vis = matches(b);
+    e.style.display = vis ? '' : 'none';
+    if (vis) shown++;
+  });
+  $('none').hidden = shown > 0;
+  if (s.message && !$('msg').textContent) $('msg').textContent = s.message;
+}
+async function refresh() { try { draw(await get('/api/state')); } catch (e) { $('dot').className = 'dot off'; $('place').textContent = 'no connection'; } }
+document.querySelectorAll('#viewSeg button').forEach(b => b.onclick = () => { view = b.dataset.v; store('view', view); draw(last); });
+$('sort').value = sort;
+$('sort').onchange = e => { sort = e.target.value; store('sort', sort); draw(last); };
+$('search').addEventListener('input', e => { search = e.target.value.trim(); draw(last); });
+$('kill').onclick = async () => { await post('/api/killall', {}, $('msg')); refresh(); };
+$('overlay').onclick = async () => { await post('/api/overlay', { on: !(last && last.overlay) }, $('msg')); refresh(); };
+$('boxes').onclick = async () => { await post('/api/boxes', { on: !(last && last.boxes) }, $('msg')); refresh(); };
+$('models').onclick = async () => { await post('/api/models', { on: !(last && last.models) }, $('msg')); refresh(); };
+$('aimremove').onclick = async () => { await post('/api/aimremove', {}, $('msg')); refresh(); };
+$('aimplace').onclick = async () => { await post('/api/aimplace', {}, $('msg')); refresh(); };
+$('aimmode').onclick = async () => { await post('/api/aim', { on: !(last && aimE(last)) }, $('msg')); refresh(); };
+$('spawn').onclick = async () => { await post('/api/spawnall', {}, $('msg')); refresh(); };
+confirmTap($('rmnear'), () => last && last.nearest ? 'remove ' + last.nearest.label + ' #' + last.nearest.n + (last.nearest.alive ? ' + kill' : '') : '', async () => { await post('/api/removenearest', {}, $('msg')); refresh(); });
+function legend(s) {
+  const box = $('habLegend');
+  if (box.childElementCount || !s.habitats) return;
+  HABS.forEach(h => { const s2 = el('span'); s2.appendChild(el('span', 'hab ' + h, h)); s2.appendChild(document.createTextNode(' ' + (s.habitats[h] || ''))); box.appendChild(s2); });
+}
+frame('placerHeight');
+loop(async () => { const s = await get('/api/state'); legend(s); draw(s); }, 1000);
+</script></body></html>

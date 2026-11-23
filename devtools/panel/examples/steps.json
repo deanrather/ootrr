@@ -1,0 +1,22 @@
+[
+  {
+    "id": 1,
+    "title": "Example: the panel reaches the game",
+    "do": "Load a save and press Go to under this step. Link should land in the middle of Hyrule Field.",
+    "expect": "The status line at the top shows HyruleField_Child and Link's position; Recent shows the go to.",
+    "goto": [{"label": "Hyrule Field, open middle (child)", "map": "HyruleField_Child", "warps": [[123.68, 159.5, 159.04]]}]
+  },
+  {
+    "id": 2,
+    "title": "Example: a step that must be played without a sword",
+    "do": "Walk around; do not take the sword.",
+    "expect": "Pressing the Kokiri Sword button asks first, because this step lists it in warn_buttons.",
+    "warn_buttons": ["Kokiri Sword"]
+  },
+  {
+    "id": 3,
+    "title": "Example: watch a flag change",
+    "do": "Open Story flags, tick 'changed while watching', then open a chest or talk to someone.",
+    "expect": "The flags the game sets show at the top of 'What the game just changed' and are highlighted in the list."
+  }
+]

@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mod UI</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#2f6f4f">
+<link rel="icon" type="image/png" href="/icon-192.png">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<style>
+  :root { --bg:#f6f5f2; --card:#fff; --ink:#1d1d1b; --mute:#6b6a66; --line:#dcdad4; --accent:#2f6f4f; --warn:#a2452c; --hot:#fbe7a6; --hot2:#fdf4d6; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#161615; --card:#201f1d; --ink:#ecebe7; --mute:#9a9893; --line:#363531; --accent:#6fbf94; --warn:#e08a6d; --hot:#5a4a12; --hot2:#3a3216; } }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:14px 16px; background:var(--bg); color:var(--ink); font:14px/1.4 system-ui, sans-serif; }
+  h1 { font-size:15px; margin:0 0 10px; display:flex; justify-content:space-between; align-items:baseline; gap:8px; flex-wrap:wrap; }
+  h1 small { color:var(--mute); font-weight:400; font-size:12px; font-variant-numeric:tabular-nums; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:12px; margin-bottom:10px; }
+  details.card > summary { cursor:pointer; color:var(--ink); font-size:14px; font-weight:600; }
+  details.card[open] > summary { margin-bottom:8px; }
+  details.card > summary .status { font-weight:400; }
+  details.sub { margin-top:6px; }
+  details.sub > summary { cursor:pointer; color:var(--mute); font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
+  .step-title { font-weight:600; font-size:15px; }
+  .label { color:var(--mute); font-size:12px; text-transform:uppercase; letter-spacing:.04em; margin-top:8px; }
+  .label.first { margin-top:0; }
+  .row { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; align-items:center; }
+  button { font:inherit; padding:7px 11px; border-radius:6px; border:1px solid var(--line); background:var(--card); color:var(--ink); cursor:pointer; }
+  button:hover { border-color:var(--accent); }
+  button.primary { background:var(--accent); color:var(--card); border-color:var(--accent); }
+  button.pass { color:var(--accent); border-color:var(--accent); }
+  button.fail { color:var(--warn); border-color:var(--warn); }
+  input, select, textarea { font:inherit; padding:6px 8px; border-radius:6px; border:1px solid var(--line); background:var(--bg); color:var(--ink); }
+  textarea { width:100%; min-height:70px; resize:vertical; }
+  .grow { flex:1; min-width:120px; }
+  .status { color:var(--mute); font-size:12px; font-variant-numeric:tabular-nums; }
+  .log div { border-top:1px solid var(--line); padding:5px 0; font-size:12px; }
+  .log div:first-child { border-top:0; }
+  .toast { color:var(--accent); font-size:12px; min-height:16px; margin-top:6px; }
+  .flags { max-height:420px; overflow:auto; margin-top:8px; border-top:1px solid var(--line); }
+  .flag { display:flex; gap:8px; align-items:center; padding:3px 2px; border-bottom:1px solid var(--line); font-size:12px; font-family:ui-monospace, monospace; }
+  .flag .name { flex:1; overflow-wrap:anywhere; }
+  .flag input[type=number] { width:90px; padding:2px 4px; }
+  .flag.hot { background:var(--hot); }
+  .flag.warm { background:var(--hot2); }
+  .changes { font-size:12px; font-family:ui-monospace, monospace; max-height:150px; overflow:auto; }
+  .changes div { cursor:pointer; padding:2px 0; }
+  .changes div:hover { color:var(--accent); }
+  .hint { color:var(--mute); font-size:12px; }
+  #cards { display:flex; flex-direction:column; }
+  #extras { display:contents; }
+  .grip { float:right; margin:-4px -4px 0 8px; padding:4px 10px; font-size:18px; line-height:1; color:var(--mute); cursor:grab; touch-action:none; user-select:none; -webkit-user-select:none; border-radius:6px; }
+  .grip:hover, .grip:focus-visible { color:var(--accent); outline:1px solid var(--line); }
+  .card.dragging { border-color:var(--accent); box-shadow:0 4px 16px rgba(0,0,0,.25); }
+  .card.dragging .grip { cursor:grabbing; color:var(--accent); }
+  h1 button.mini { padding:2px 8px; font-size:11px; color:var(--mute); }
+  @media (max-width: 600px) { body { padding:10px 10px; } button { padding:10px 12px; } .flag { padding:7px 2px; } .flag input[type=checkbox] { width:20px; height:20px; } .flags { max-height:60vh; } }
+</style>
+</head>
+<body>
+<h1><span id="paneltitle">Mod UI</span> <button class="mini" id="resetlayout" title="Put the cards back in their original order">Reset layout</button> <small id="status">connecting…</small></h1>
+
+<div class="card" id="msgcard" style="display:none;border-color:var(--accent)"></div>
+
+<div id="cards">
+<details class="card" id="stepcard" data-card="guide" open>
+  <summary>Playtest Guide <span class="status" id="guidefile"></span></summary>
+  <div class="row" style="margin-top:0;justify-content:space-between">
+    <button onclick="move(-1)">‹ Prev</button>
+    <span class="status" id="count"></span>
+    <button class="primary" onclick="next()">Next ›</button>
+  </div>
+  <div class="step-title" id="title" style="margin-top:10px"></div>
+  <div class="label">Do</div><div id="do"></div>
+  <div class="label">Expect</div><div id="expect"></div>
+  <div class="row" id="stepacts"></div>
+  <div class="toast" id="steptoast"></div>
+  <div class="row">
+    <button class="pass" onclick="verdict('pass')">✓ Worked</button>
+    <button class="fail" onclick="verdict('fail')">✗ Didn't</button>
+    <button onclick="verdict('skip')">Skip</button>
+  </div>
+</details>
+
+<details class="card" data-card="give" open>
+  <summary>Give/Take</summary>
+  <div class="row" id="buttons" style="margin-top:0"></div>
+  <div class="toast" id="toast"></div>
+</details>
+
+<details class="card" data-card="goto" open>
+  <summary>Go To</summary>
+  <div class="row" id="gotos" style="margin-top:0"></div>
+  <div id="places"></div>
+  <details class="sub"><summary>Teleport to area</summary>
+    <div class="row"><select id="dest" class="grow"></select><button onclick="teleport()">Teleport</button></div>
+  </details>
+  <details class="sub"><summary>Warp to x y z (same area)</summary>
+    <div class="row"><input id="wx" placeholder="x" size="6"><input id="wy" placeholder="y" size="6"><input id="wz" placeholder="z" size="6"><button onclick="warp()">Warp</button><button onclick="here()">Use my position</button></div>
+  </details>
+</details>
+
+<details class="card" data-card="notes" open>
+  <summary>Notes</summary>
+  <div class="label first">A note saves your position and a screenshot</div>
+  <textarea id="note" placeholder="What you saw, what felt wrong…"></textarea>
+  <div class="row"><button class="primary" onclick="note()">Add note</button><button onclick="rec(15)">Record 15 s</button><button onclick="rec(30)">Record 30 s</button></div>
+</details>
+
+<details class="card" id="flagcard" data-card="flags">
+  <summary>Story Flags <span class="status" id="flagstat"></span></summary>
+  <div class="row">
+    <input id="fq" class="grow" placeholder="search (Enter on an exact name teaches it)" oninput="drawFlags()" onkeydown="if(event.key==='Enter')learn()">
+    <select id="fprefix" onchange="drawFlags()"><option value="">every prefix</option></select>
+    <select id="fkind" onchange="drawFlags()"><option value="">bools and ints</option><option value="b">bools</option><option value="i">ints</option></select>
+  </div>
+  <div class="row">
+    <label><input type="checkbox" id="frecent" onchange="drawFlags()"> changed while watching</label>
+    <label><input type="checkbox" id="funnamed" onchange="drawFlags()"> unnamed too</label>
+    <label><input type="checkbox" id="flive" checked onchange="if(this.checked)pollFlags()"> live</label>
+    <button onclick="clearSeen()">Clear highlights</button>
+  </div>
+  <div class="label">What the game just changed</div>
+  <div class="changes" id="fchanges"><span class="hint">nothing yet</span></div>
+  <div class="flags" id="flist"></div>
+  <div class="hint" id="fmore"></div>
+</details>
+
+<div id="extras"></div>
+
+<details class="card" data-card="recent" open>
+  <summary>Recent</summary>
+  <div class="log" id="log"></div>
+</details>
+</div>
+
+<script src="/layout.js"></script>
+
+<script>
+let steps = [], i = 0, lastStatus = {}, loaded = false, stepsSig = null;
+try { i = parseInt(localStorage.getItem('step') || '0', 10) || 0; } catch (e) {}
+const $ = id => document.getElementById(id);
+let KEY = new URLSearchParams(location.search).get('key') || '';
+try { if (KEY) localStorage.setItem('panelKey', KEY); else KEY = localStorage.getItem('panelKey') || ''; } catch (e) {}
+function api(url, opts) { opts = opts || {}; opts.headers = Object.assign({}, opts.headers, KEY ? { 'X-Panel-Key': KEY } : {}); return fetch(url, opts); }
+function el(tag, props, text) { const e = document.createElement(tag); Object.assign(e, props || {}); if (text !== undefined) e.textContent = text; return e; }
+function save() { try { localStorage.setItem('step', String(i)); } catch (e) {} }
+function toast(t) { $('toast').textContent = t; setTimeout(() => { if ($('toast').textContent === t) $('toast').textContent = ''; }, 5000); }
+async function post(path, body) {
+  const r = await api(path, { method:'POST', headers:{ 'Content-Type':'application/json', 'X-Panel':'1' }, body: JSON.stringify(body || {}) });
+  return r.json();
+}
+function cur() { return steps[i] ? steps[i].id : null; }
+function store(k, v) { try { if (v === undefined) return localStorage.getItem('modui.' + k); localStorage.setItem('modui.' + k, v); } catch (e) {} return v === undefined ? null : v; }
+function pingFrames(d) {
+  const go = () => d.querySelectorAll('iframe').forEach(f => { try { f.contentWindow.postMessage('heightPing', '*'); } catch (e) {} });
+  go(); setTimeout(go, 400);
+}
+function wireCard(d, key, open) {
+  const saved = store('card.' + key);
+  d.open = saved === null ? open : saved === '1';
+  d.addEventListener('toggle', () => { store('card.' + key, d.open ? '1' : '0'); if (d.open) pingFrames(d); });
+}
+function takeSteps(s) {
+  const info = s.steps_info || {}, keep = cur();
+  steps = s.steps || [];
+  const was = store('stepsSig');
+  if (stepsSig === null && was !== null && was !== info.sig) i = 0;
+  else if (stepsSig !== null) { const at = steps.findIndex(x => x.id === keep); i = at >= 0 ? at : 0; }
+  if (i >= steps.length) i = 0;
+  stepsSig = info.sig; store('stepsSig', info.sig);
+  const g = $('guidefile'); g.textContent = info.file ? '(' + info.file + ', ' + steps.length + ' steps)' : '';
+  g.title = info.path || '';
+  save(); show();
+}
+function show() {
+  const s = steps[i];
+  $('stepcard').style.display = steps.length ? '' : 'none';
+  if (!s) return;
+  $('count').textContent = `Step ${i + 1} of ${steps.length}`;
+  $('title').textContent = s.title || ''; $('do').textContent = s.do || ''; $('expect').textContent = s.expect || '';
+  const sa = $('stepacts'); sa.innerHTML = '';
+  (s.actions || []).forEach(a => sa.appendChild(el('button', { onclick: () => act(a), title: a.note || '' }, a.label)));
+  (s.quick || []).forEach(q => sa.appendChild(el('button', { className:'primary', onclick: async () => { $('steptoast').textContent = 'saving “' + q + '”…'; await post('/note', { step: cur(), text: q }); $('steptoast').textContent = 'noted: ' + q; refresh(); } }, '📍 ' + q)));
+  const g = $('gotos'); g.innerHTML = '';
+  (s.goto || []).forEach(t => g.appendChild(el('button', { onclick: () => goto(t) }, t.label)));
+  if (!(s.goto || []).length) g.appendChild(el('span', { className:'hint' }, 'nothing preset for this step'));
+}
+async function act(a) { if (a.confirm && !confirm(a.confirm)) return; $('steptoast').textContent = a.label + '…'; const r = await post('/action', { step: cur(), label: a.label }); $('steptoast').textContent = r.ok ? (r.reply || []).join(' · ') : (r.error || 'error'); refresh(); }
+function move(d) { i = Math.max(0, Math.min(steps.length - 1, i + d)); save(); show(); }
+async function goto(t) { toast('going to ' + t.label + '…'); const r = await post('/goto', { step: cur(), ...t }); toast((r.reply || []).join(' · ') || 'done'); refresh(); }
+async function teleport() { toast('teleporting…'); const r = await post('/teleport', { step: cur(), to: $('dest').value }); toast(r.reply); refresh(); }
+async function warp() { const x = $('wx').value, y = $('wy').value, z = $('wz').value; if (!x || !y || !z) return; const r = await post('/warp', { step: cur(), x, y, z }); toast(r.reply); refresh(); }
+function here() { const p = lastStatus.pos || []; if (p.length === 3) { $('wx').value = p[0].toFixed(2); $('wy').value = p[1].toFixed(2); $('wz').value = p[2].toFixed(2); } }
+async function button(b) {
+  if (b.confirm && !confirm(b.confirm)) return;
+  const s = steps[i];
+  if (s && (s.warn_buttons || []).includes(b.label) && !confirm(`This step says not to use “${b.label}”. Use it anyway?`)) return;
+  toast('sending ' + b.label + '…'); const r = await post('/button', { label: b.label, step: cur() }); toast(r.ok ? 'done: ' + b.label + ' · ' + (r.reply || []).join(' · ') : 'error'); refresh();
+}
+async function rec(secs) { const r = await post('/record', { step: cur(), secs, text: $('note').value.trim() }); $('note').value = ''; toast(r.ok ? 'recording ' + secs + ' s…' : r.error); refresh(); }
+async function note() { const text = $('note').value.trim(); if (!text) return; toast('saving…'); await post('/note', { step: cur(), text }); $('note').value = ''; toast('note saved'); refresh(); }
+async function verdict(v) { await post('/verdict', { step: cur(), verdict: v, text: $('note').value.trim() }); $('note').value = ''; toast('recorded: ' + v); move(1); refresh(); }
+async function next() { await post('/next', { step: cur() }); move(1); refresh(); }
+async function loadDest() {
+  try {
+    const d = await (await api('/destinations')).json();
+    const sel = $('dest'); sel.innerHTML = '';
+    d.forEach(x => sel.appendChild(el('option', { value: x.index }, (x.child || x.adult || ('#' + x.index)).replace(/_(Child|Adult)$/, '') + (x.child && x.adult ? '' : x.child ? ' (child)' : ' (adult)'))));
+  } catch (e) {}
+}
+function drawPlaces(pl) {
+  const box = $('places'); box.innerHTML = '';
+  const list = pl.places || [], seen = {};
+  list.forEach(t => { const k = t.group || 'Places'; (seen[k] = seen[k] || []).push(t); });
+  const order = (pl.groups || []).concat(Object.keys(seen).filter(k => !(pl.groups || []).includes(k)));
+  order.forEach(k => {
+    if (!seen[k]) return;
+    const d = el('details', { className:'sub' });
+    d.appendChild(el('summary', {}, k + ' (' + seen[k].length + ')'));
+    const r = el('div', { className:'row' }); r.style.marginTop = '3px';
+    seen[k].forEach(t => r.appendChild(el('button', { onclick: () => goto(t), title: t.note || '' }, t.label)));
+    d.appendChild(r);
+    box.appendChild(d);
+  });
+}
+async function loadExtras(list) {
+  const box = $('extras');
+  for (const x of list) {
+    try {
+      const card = el('details', { className:'card', id:'extra-' + x.name });
+      card.dataset.card = 'x-' + x.name;
+      card.appendChild(el('summary', {}, x.title || x.name));
+      const body = el('div');
+      body.innerHTML = await (await api('/extras/' + encodeURIComponent(x.name) + '.html')).text();
+      card.appendChild(body);
+      wireCard(card, 'x-' + x.name, x.open !== false);
+      box.appendChild(card);
+      card.querySelectorAll('script').forEach(old => { const s = el('script'); s.textContent = old.textContent; old.replaceWith(s); });
+      ModLayout.refresh();
+      if (x.js) { const s = el('script', { src: '/extras/' + encodeURIComponent(x.name) + '.js' + (KEY ? '?key=' + encodeURIComponent(KEY) : '') }); card.appendChild(s); }
+    } catch (e) { box.appendChild(el('div', { className:'card' }, 'card ' + (x.title || x.name) + ' did not load: ' + e.message)); }
+  }
+}
+const statusHooks = [];
+window.panel = {
+  post, toast, refresh, step: () => steps[i], status: () => lastStatus,
+  bridge: (cmd, args) => post('/bridge', { cmd, ...(args || {}) }),
+  onStatus: fn => statusHooks.push(fn),
+};
+async function refresh() {
+  try {
+    const s = await (await api('/state')).json();
+    if (!loaded) {
+      loaded = true;
+      takeSteps(s);
+      document.querySelectorAll('details[data-card]').forEach(d => wireCard(d, d.dataset.card, d.hasAttribute('open')));
+      if (s.title) { document.title = s.title; $('paneltitle').textContent = s.title; }
+      drawPlaces(s.places || {});
+      const bx = $('buttons'); bx.innerHTML = '';
+      (s.buttons || []).forEach(b => bx.appendChild(el('button', { onclick: () => button(b), title: b.note || '' }, b.label)));
+      ModLayout.init($('cards'));
+      loadExtras(s.extras || []);
+    }
+    if (loaded && s.steps_info && s.steps_info.sig !== stepsSig) takeSteps(s);
+    const g = s.status || {}; lastStatus = g;
+    $('status').textContent = g.map ? `${g.map} · ${(g.pos || []).map(v => v.toFixed(1)).join(', ')} · life ${g.life}/${g.max_life}` : 'game not answering' + (g.error ? ': ' + g.error : '');
+    const mc = $('msgcard'), ms = (s.messages || []).slice().reverse();
+    mc.style.display = ms.length ? '' : 'none'; mc.innerHTML = '';
+    if (ms.length) { mc.appendChild(el('div', { className:'label first' }, 'Messages')); ms.forEach(m => mc.appendChild(el('div', { style:'margin-top:6px' }, (m.time ? m.time + ' · ' : '') + (m.text || '')))); }
+    statusHooks.forEach(fn => { try { fn(g); } catch (e) {} });
+    const log = $('log'); log.innerHTML = '';
+    (s.recent || []).slice().reverse().forEach(e => {
+      const what = e.kind === 'command' ? e.name : e.kind === 'verdict' ? e.verdict : e.kind === 'clip' ? 'clip saved' : e.kind;
+      log.appendChild(el('div', {}, `${e.time} · step ${e.step ?? '-'} · ${what}${e.text ? ' · ' + e.text : ''}${e.reply ? ' · ' + e.reply : ''}`));
+    });
+  } catch (e) { $('status').textContent = 'panel server not answering'; }
+}
+
+/* ---- story flags ---- */
+const F = { seq: 0, values: {}, names: {}, changed: {}, changes: [], polling: false };
+function fname(h) { return F.names[h] || ('0x' + h); }
+async function pollFlags() {
+  if (F.polling) return;
+  F.polling = true;
+  while ($('flagcard').open && $('flive').checked) {
+    try {
+      const r = await (await api('/flags?since=' + F.seq)).json();
+      if (r.all) { F.values = r.all; F.names = r.names || {}; fillPrefixes(); }
+      let any = !!r.all;
+      (r.changes || []).forEach(c => {
+        if (F.values[c.hash]) F.values[c.hash][1] = c.new;
+        F.changed[c.hash] = c.t; F.changes.push(c); any = true;
+      });
+      F.changes = F.changes.slice(-300);
+      F.seq = r.seq;
+      $('flagstat').textContent = r.error ? '· ' + r.error : `· ${Object.keys(F.values).length} flags, ${Object.keys(F.names).length} named`;
+      if (any) { drawChanges(); drawFlags(); } else drawHeat();
+    } catch (e) { $('flagstat').textContent = '· not answering'; }
+    await new Promise(res => setTimeout(res, 1000));
+  }
+  F.polling = false;
+}
+function fillPrefixes() {
+  const sel = $('fprefix'), keep = sel.value, count = {};
+  Object.keys(F.values).forEach(h => { const n = F.names[h]; const p = n ? (n.includes('.') ? n.split('.')[0] : n.split('_')[0]) : '(unnamed)'; count[p] = (count[p] || 0) + 1; });
+  sel.innerHTML = '';
+  sel.appendChild(el('option', { value:'' }, 'every prefix'));
+  Object.keys(count).sort().forEach(p => sel.appendChild(el('option', { value:p }, `${p} (${count[p]})`)));
+  sel.value = keep;
+}
+function drawChanges() {
+  const box = $('fchanges'); box.innerHTML = '';
+  if (!F.changes.length) { box.appendChild(el('span', { className:'hint' }, 'nothing yet')); return; }
+  F.changes.slice(-40).reverse().forEach(c => {
+    const t = new Date(c.t * 1000).toLocaleTimeString();
+    box.appendChild(el('div', { onclick: () => { $('fq').value = F.names[c.hash] || ('0x' + c.hash); $('fprefix').value = ''; drawFlags(); } }, `${t}  ${fname(c.hash)}  ${c.old} → ${c.new}`));
+  });
+}
+function heat(h) { const t = F.changed[h]; if (!t) return ''; const age = Date.now() / 1000 - t; return age < 10 ? 'hot' : age < 120 ? 'warm' : ''; }
+function drawHeat() { document.querySelectorAll('#flist .flag').forEach(r => { r.className = 'flag ' + heat(r.dataset.h); }); }
+function drawFlags() {
+  const q = $('fq').value.trim().toLowerCase(), prefix = $('fprefix').value, kind = $('fkind').value;
+  const recent = $('frecent').checked, unnamed = $('funnamed').checked || prefix === '(unnamed)';
+  let rows = Object.keys(F.values).filter(h => {
+    const n = F.names[h];
+    if (!n && !unnamed && !q.startsWith('0x')) return false;
+    if (kind && F.values[h][0] !== kind) return false;
+    if (recent && !F.changed[h]) return false;
+    if (prefix && prefix !== '(unnamed)' && !(n && (n.startsWith(prefix + '.') || n.startsWith(prefix + '_') || n === prefix))) return false;
+    if (prefix === '(unnamed)' && n) return false;
+    return !q || (n || '').toLowerCase().includes(q) || ('0x' + h).includes(q);
+  });
+  rows.sort((a, b) => (F.changed[b] || 0) - (F.changed[a] || 0) || fname(a).localeCompare(fname(b)));
+  const box = $('flist'); box.innerHTML = '';
+  const limit = 400;
+  rows.slice(0, limit).forEach(h => {
+    const [k, v] = F.values[h];
+    const r = el('div', { className: 'flag ' + heat(h) }); r.dataset.h = h;
+    if (k === 'b') {
+      const c = el('input', { type:'checkbox', checked: !!v, title: 'click to set it in the game' });
+      c.onchange = () => setFlag(h, c.checked ? 1 : 0);
+      r.appendChild(c);
+    } else {
+      const n = el('input', { type:'number', value: v, title: 'Enter to set it in the game' });
+      n.onkeydown = e => { if (e.key === 'Enter') setFlag(h, parseInt(n.value, 10) || 0); };
+      r.appendChild(n);
+    }
+    r.appendChild(el('span', { className:'name' }, fname(h)));
+    box.appendChild(r);
+  });
+  $('fmore').textContent = rows.length > limit ? `${rows.length - limit} more: narrow the search` : `${rows.length} shown`;
+}
+async function setFlag(h, v) {
+  const r = await post('/flag', { hash: h, name: F.names[h], value: v, step: cur() });
+  toast(r.ok ? fname(h) + ': ' + r.done : 'flag: ' + (r.message || r.error));
+}
+async function learn() {
+  const name = $('fq').value.trim(); if (!name || name.startsWith('0x')) return;
+  const r = await post('/flags/learn', { name });
+  if (r.known) { F.names[r.hash] = name; fillPrefixes(); drawFlags(); toast('named 0x' + r.hash + ': ' + name); }
+  else toast(name + ' (0x' + r.hash + ') is not a flag of this game');
+}
+function clearSeen() { F.changed = {}; F.changes = []; drawChanges(); drawFlags(); }
+$('flagcard').addEventListener('toggle', () => { if ($('flagcard').open) pollFlags(); });
+
+$('resetlayout').onclick = () => { ModLayout.reset(); toast('layout reset'); };
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+refresh(); setInterval(refresh, 4000); setTimeout(loadDest, 1500);
+</script>
+</body>
+</html>

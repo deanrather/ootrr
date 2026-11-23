@@ -1,0 +1,12 @@
+<div class="label first">Example extra panel</div>
+<div class="row">
+  <button onclick="helloWhere()">Where is Link?</button>
+  <span class="status" id="hello-out"></span>
+</div>
+<script>
+async function helloWhere() {
+  const r = await panel.bridge('status');
+  const g = r.game || {};
+  document.getElementById('hello-out').textContent = g.map ? g.map + ' ' + (g.pos || []).map(v => v.toFixed(1)).join(' ') : (r.message || 'no game');
+}
+</script>

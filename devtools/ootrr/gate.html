@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Enemy-Gate Manager</title>
+<link rel="stylesheet" href="/ui.css">
+<style>
+  #title { font-size:18px; font-weight:800; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .posts { display:grid; grid-template-columns:1fr 28px 1fr; align-items:center; margin-top:8px; }
+  .post { border:2px dashed var(--line); border-radius:8px; padding:6px 8px; font-size:12px; color:var(--mute); }
+  .post b { display:block; font-size:14px; color:var(--ink); }
+  .post.set { border-style:solid; border-color:var(--accent); }
+  .bar { height:4px; border-radius:2px; background:var(--line); margin:0 2px; }
+  .bar.set { background:var(--accent); }
+  .guards { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+  .g { display:inline-flex; align-items:center; height:30px; padding:0 10px; border-radius:15px; border:1.5px solid var(--line); font-size:13px; font-weight:600; }
+  .g.out { border-color:var(--near); background:var(--near-soft); color:var(--near-ink); }
+  .g.in { border-style:dashed; border-color:var(--accent); color:var(--accent); }
+  .why { margin-top:6px; font-size:12px; color:var(--mute); }
+  .gx { margin-left:8px; border:0; background:none; color:inherit; font-weight:700; cursor:pointer; padding:0 2px; }
+  .g.spot { border-style:dotted; color:var(--mute); }
+  .nav { display:grid; grid-template-columns:1fr auto; gap:var(--gap); align-items:stretch; margin-bottom:var(--gap); }
+  .pick { width:100%; min-width:0; min-height:var(--tap); padding:0 12px; border-radius:var(--r); border:2px solid var(--line); background:var(--tile);
+    color:var(--ink); font:inherit; font-weight:700; font-size:15px; }
+  .btn.tog.on { border-color:var(--accent); background:var(--accent); color:var(--bg); }
+  .btn.tog.on small { color:var(--bg); opacity:.85; }
+  .travel { margin:-2px 0 var(--gap); font-size:13px; color:var(--mute); min-height:0; }
+  .travel.go { color:var(--accent); } .travel.bad { color:var(--warn); }
+</style></head><body>
+<div class="top">
+  <div class="where"><span id="dot" class="dot"></span><b id="place">connecting...</b><span id="count" class="room"></span><a id="back" class="back" href="#">panel</a></div>
+</div>
+<div class="nav">
+  <select id="warp" class="pick" aria-label="Warp to gate"><option value="">Warp to gate...</option></select>
+  <button id="overlay" class="btn tog" type="button">Overlay<small>wire boxes: walls + guards</small></button>
+</div>
+<div class="nav">
+  <select id="pick" class="pick" aria-label="Selected gate"><option value="auto">Auto: the gate Link is at</option></select>
+  <button id="models" class="btn tog" type="button">Display models<small>guards' real models</small></button>
+</div>
+<div id="travel" class="travel"></div>
+<div id="gate" class="card">
+  <div id="title">Manage gate</div>
+  <div id="sub" class="why"></div>
+  <div id="posts" class="posts" hidden>
+    <div id="pl" class="post"></div><div id="pbar" class="bar"></div><div id="pr" class="post"></div>
+  </div>
+  <div id="guards" class="guards"></div>
+</div>
+<div class="sec">Guards</div>
+<div class="row2">
+  <button id="mark" class="btn go">Mark guard</button>
+  <button id="unmark" class="btn nearb">Unmark guard</button>
+</div>
+<div class="sec">Posts (where Link stands)</div>
+<div class="row2">
+  <button id="left" class="btn">Left post</button>
+  <button id="right" class="btn">Right post</button>
+</div>
+<div class="sec">Remove</div>
+<div class="row2"><button id="remove" class="btn danger full">Remove gate</button></div>
+<div id="msg" class="msg"></div>
+<script src="/ui.js"></script>
+<script>
+const { $, el, get, post, label, confirmTap, frame, back, loop } = UI;
+back($('back'));
+let last = null;
+const xz = p => p ? `x ${p[0].toFixed(1)}, z ${p[2].toFixed(1)}` : 'not placed';
+function postBox(id, side, p) {
+  const b = $(id); b.className = 'post' + (p ? ' set' : ''); b.innerHTML = '';
+  b.appendChild(el('b', null, side + (p ? '' : ' - missing'))); b.appendChild(document.createTextNode(xz(p)));
+}
+function willText(w, side) {
+  if (!w) return '';
+  if (w.how === 'new') return 'starts gate ' + w.gate;
+  if (w.how === 'moved') return 'moves gate ' + w.gate + "'s post here (" + w.dist + ' m)';
+  return 'finishes gate ' + w.gate + ' (' + w.dist + ' m away)';
+}
+function draw(s) {
+  last = s;
+  $('dot').className = 'dot ' + (s.connected ? 'on' : 'off');
+  $('place').textContent = s.connected ? (s.place || s.map || '?') : 'game not answering';
+  $('count').textContent = s.on_map ? s.on_map + ' gate' + (s.on_map === 1 ? '' : 's') + ' on this map' : '';
+  const g = s.near;
+  $('gate').classList.toggle('on', !!g);
+  $('posts').hidden = !g;
+  $('guards').innerHTML = '';
+  const t = $('title'); t.innerHTML = '';
+  if (!g) {
+    t.textContent = 'No gate selected';
+    const bits = [s.closest ? `Nearest gate is ${s.closest.id}, ${s.closest.dist} m from its wall or guards; walk within ${s.near_radius} m of them, or pick it in the list above.` : 'Place a left or right post where Link stands to start a gate.'];
+    (s.waiting || []).forEach(w => bits.push(`Gate ${w.id} has only its ${w.has} post (${w.dist} m): the other post goes to it.`));
+    $('sub').textContent = bits.join(' ');
+  } else {
+    t.appendChild(document.createTextNode('Gate ' + g.id));
+    const rows = g.rows || [];
+    const nm = rows.length ? `${rows.length} guard${rows.length === 1 ? '' : 's'} (${g.guards.length ? 'marked here' : "the mod's guard spot" + (rows.length === 1 ? '' : 's')}).` : 'No guards.';
+    const ed = g.shipped ? (g.edited ? ' Edited from gates.rs: Undo edits puts it back.' : ' As shipped in gates.rs.') : '';
+    $('sub').textContent = (g.name ? g.name + '. ' : '') + (g.how === 'pinned' ? `Picked by hand: stays selected until you pick another or Auto. Link is ${g.area} m from its wall or guards. ` : `Selected because Link is within ${s.near_radius} m of its wall or guards (${g.area} m); it stays selected a few metres further. `) + nm + ed + (s.model_note ? ' ' + s.model_note + '.' : '');
+    postBox('pl', 'Left', g.left); postBox('pr', 'Right', g.right);
+    $('pbar').className = 'bar' + (g.left && g.right ? ' set' : '');
+  }
+  const o = $('overlay');
+  o.classList.toggle('on', !!s.overlay);
+  label(o, s.overlay ? 'Hide overlay' : 'Show overlay', 'wire boxes: walls + guards', 'ov');
+  const md = $('models');
+  md.classList.toggle('on', !!s.models);
+  label(md, s.models ? 'Hide display models' : 'Show display models', "guards' real models where the game has one", 'md');
+  const pk = $('pick'), want = s.pinned == null ? 'auto' : String(s.pinned), sig = JSON.stringify((s.gates_here || []).map(x => x.id));
+  if (pk.dataset.sig !== sig) {
+    pk.dataset.sig = sig; pk.innerHTML = '';
+    pk.appendChild(el('option', null, 'Auto: the gate Link is at')).value = 'auto';
+    (s.gates_here || []).forEach(x => pk.appendChild(el('option', null, x.label)).value = String(x.id));
+  }
+  if (document.activeElement !== pk) pk.value = want;
+  const tr = s.travel || {}, tv = $('travel');
+  tv.textContent = tr.message || ''; tv.className = 'travel' + (tr.busy ? ' go' : tr.ok === false ? ' bad' : '');
+  $('warp').disabled = !!tr.busy;
+  const m = $('mark');
+  m.disabled = !(g && s.mark);
+  label(m, 'Mark guard', !g ? 'select a gate first' : s.mark ? `${s.mark.label} #${s.mark.n} (${s.mark.dist} m)` + (s.mark.gate ? ` - moves it from gate ${s.mark.gate}` : '') : 'no free spawn point near', 'm');
+  const u = $('unmark');
+  u.disabled = !(g && s.unmark);
+  label(u, 'Unmark guard', !g ? 'select a gate first' : s.unmark ? `removes ${s.unmark.label} ${s.unmark.source === 'marked' ? '#' + s.unmark.n : "(the mod's spot)"}, ${s.unmark.dist} m away` : (g && (g.rows || []).length ? `nearest guard is ${g.rows[0].dist} m away: stand within 8 m` : 'this gate has none'), 'u');
+  const w = s.will || {};
+  $('left').disabled = $('right').disabled = !s.connected || !s.pos;
+  label($('left'), g && g.left ? 'Move left post' : 'Place left post', willText(w.left, 'left'), 'l');
+  label($('right'), g && g.right ? 'Move right post' : 'Place right post', willText(w.right, 'right'), 'r');
+  const r = $('remove');
+  r.disabled = !g || (g.shipped && !g.edited);
+  if (g && g.shipped) label(r, g.edited ? 'Undo edits' : 'Remove gate', g.edited ? `put gate ${g.id} back as the mod has it` : 'in the mod: remove it in gates.rs', 'g' + g.id + (g.edited ? 'e' : ''));
+  else label(r, 'Remove gate', g ? `gate ${g.id} and its ${g.guards.length} guard mark${g.guards.length === 1 ? '' : 's'}; spawn points stay` : 'select a gate first', g ? 'g' + g.id : '');
+  if (s.message && !$('msg').textContent) $('msg').textContent = s.message;
+}
+async function refresh() { try { draw(await get('/api/gate/state')); } catch (e) { $('dot').className = 'dot off'; } }
+const act = op => async () => { await post('/api/gate/' + op, {}, $('msg')); refresh(); };
+$('mark').onclick = act('markguard');
+$('unmark').onclick = act('unmarkguard');
+$('left').onclick = act('left');
+$('right').onclick = act('right');
+confirmTap($('remove'), () => last && last.near ? (last.near.shipped ? 'undo edits to gate ' : 'remove gate ') + last.near.id : '', act('remove'));
+$('overlay').onclick = async () => { await post('/api/gate/overlay', {}, $('msg')); refresh(); };
+$('models').onclick = async () => { await post('/api/gate/models', {}, $('msg')); refresh(); };
+$('pick').onchange = async e => { await post('/api/gate/select', { id: e.target.value }, $('msg')); e.target.blur(); refresh(); };
+let warpSig = '';
+async function loadWarps() {
+  try {
+    const w = (await get('/api/gate/warps')).gates || [];
+    const sig = JSON.stringify(w.map(x => [x.id, x.map, x.label]));
+    if (sig === warpSig) return;
+    warpSig = sig;
+    const sel = $('warp'); sel.innerHTML = '';
+    sel.appendChild(el('option', null, `Warp to gate... (${w.length})`)).value = '';
+    const groups = {};
+    w.forEach(x => { const k = x.map.replace(/_(Child|Adult)$/, '') + (x.age ? ` (${x.age})` : ''); (groups[k] = groups[k] || []).push(x); });
+    Object.keys(groups).forEach(k => {
+      const og = el('optgroup'); og.label = k;
+      groups[k].forEach(x => { const op = el('option', null, x.label + (x.how === 'measured' ? '' : ` [${x.how}]`)); op.value = x.id; og.appendChild(op); });
+      sel.appendChild(og);
+    });
+  } catch (e) {}
+}
+$('warp').onchange = async e => {
+  const id = e.target.value;
+  if (!id) return;
+  e.target.value = '';
+  await post('/api/gate/goto', { id: Number(id) }, $('msg'));
+  refresh();
+};
+loadWarps();
+setInterval(loadWarps, 10000);
+frame('gateHeight');
+loop(async () => draw(await get('/api/gate/state')), 1000);
+</script></body></html>

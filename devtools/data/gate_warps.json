@@ -1,0 +1,134 @@
+[
+    {
+        "label": "Gate 9: Lost Woods Wolfos (child)",
+        "group": "Gates",
+        "map": "LostWood_Child",
+        "warps": [
+            [
+                3.99,
+                100.87,
+                -0.77
+            ]
+        ]
+    },
+    {
+        "label": "Gate 14: Crater west ledge Dodongo (adult only)",
+        "group": "Gates",
+        "map": "DeathMountainCrater_Adult",
+        "warps": [
+            [
+                -20.66,
+                120.39,
+                40.41
+            ]
+        ]
+    },
+    {
+        "label": "Gate 15: Trail Dodongo (child) [position may move up the Trail]",
+        "group": "Gates",
+        "map": "DeathMountainTrail_Child",
+        "warps": [
+            [
+                -13.62,
+                124.61,
+                -20.02
+            ]
+        ]
+    },
+    {
+        "label": "Gate 16: Trail Dodongos (adult) [position may move up the Trail]",
+        "group": "Gates",
+        "map": "DeathMountainTrail_Adult",
+        "warps": [
+            [
+                -13.69,
+                124.13,
+                -20.01
+            ]
+        ]
+    },
+    {
+        "label": "Gate 17: Graveyard Poes (child)",
+        "group": "Gates",
+        "map": "Graveyard_Child",
+        "warps": [
+            [
+                63.6,
+                109.2,
+                2.52
+            ]
+        ]
+    },
+    {
+        "label": "Gate 18: Graveyard Poes (adult)",
+        "group": "Gates",
+        "map": "Graveyard_Adult",
+        "warps": [
+            [
+                63.6,
+                109.4,
+                2.52
+            ]
+        ]
+    },
+    {
+        "label": "Gate 19: Field to Lake Lizalfos (child)",
+        "group": "Gates",
+        "map": "HyruleField_Child",
+        "warps": [
+            [
+                -79.86,
+                142.2,
+                370.07
+            ]
+        ]
+    },
+    {
+        "label": "Gate 20: Lon Lon north Leevers (child)",
+        "group": "Gates",
+        "map": "HyruleField_Child",
+        "warps": [
+            [
+                -60.38,
+                151.02,
+                164.0
+            ]
+        ]
+    },
+    {
+        "label": "Gate 21: Lake lab Like Like (child)",
+        "group": "Gates",
+        "map": "HyruleField_Child",
+        "warps": [
+            [
+                -159.89,
+                138.05,
+                415.66
+            ]
+        ]
+    },
+    {
+        "label": "Gate 22: Lake lab Like Like (adult)",
+        "group": "Gates",
+        "map": "HyruleField_Adult",
+        "warps": [
+            [
+                -159.89,
+                138.02,
+                415.66
+            ]
+        ]
+    },
+    {
+        "label": "Gate 23: Ganon's Castle Dark Link (adult)",
+        "group": "Gates",
+        "map": "InsideGanonCastle",
+        "warps": [
+            [
+                0,
+                110.3,
+                80
+            ]
+        ]
+    }
+]

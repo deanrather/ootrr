@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Timed Rupee Puzzle Manager</title>
+<link rel="stylesheet" href="/ui.css">
+<style>
+  #title { font-size:18px; font-weight:800; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .timer { display:grid; grid-template-columns:var(--tap) 1fr var(--tap); gap:var(--gap); align-items:center; margin-top:10px; }
+  .timer .btn { padding:0; font-size:18px; }
+  .timer .v { text-align:center; font-size:26px; font-weight:800; font-variant-numeric:tabular-nums; }
+  .timer .v small { display:block; font-size:12px; font-weight:500; color:var(--mute); }
+  .check { display:grid; grid-template-columns:1fr 1fr; gap:4px 12px; margin-top:10px; font-size:13px; }
+  .check span::before { content:''; display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:6px; background:var(--line); }
+  .check span.y::before { background:var(--met); }
+  .check span.opt::before { background:transparent; border:1.5px solid var(--line); }
+  .probs { margin:8px 0 0; padding-left:18px; font-size:13px; color:var(--amber); }
+  .hints { margin:4px 0 0; padding-left:18px; font-size:12px; color:var(--mute); }
+  .mrow .k { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--mute); width:64px; flex:none; }
+  textarea { width:100%; min-height:150px; margin-top:8px; padding:8px; border-radius:8px; border:1.5px solid var(--line); background:var(--tile); color:var(--ink);
+    font:12px/1.35 ui-monospace, Consolas, monospace; }
+  details.more summary { cursor:pointer; padding:8px 0 4px; font-size:13px; color:var(--mute); }
+  .btn.tog.on { border-color:var(--accent); background:var(--accent); color:var(--bg); }
+  .btn.tog.on small { color:var(--bg); opacity:.85; }
+  .nav { display:grid; grid-template-columns:1fr auto; gap:var(--gap); align-items:stretch; margin-bottom:var(--gap); }
+  .pick { width:100%; min-width:0; min-height:var(--tap); padding:0 12px; border-radius:var(--r); border:2px solid var(--line); background:var(--tile);
+    color:var(--ink); font:inherit; font-weight:700; font-size:15px; }
+  .travel { margin:-2px 0 var(--gap); font-size:13px; color:var(--mute); min-height:0; }
+  .travel.go { color:var(--accent); } .travel.bad { color:var(--warn); }
+</style></head><body>
+<div class="top">
+  <div class="where"><span id="dot" class="dot"></span><b id="place">connecting...</b><span id="count" class="room"></span><a id="back" class="back" href="#">panel</a></div>
+</div>
+<div class="nav">
+  <select id="warp" class="pick" aria-label="Warp to puzzle"><option value="">Warp to puzzle...</option></select>
+  <button id="overlay" class="btn tog" type="button">Overlay<small>switch, rupees, chest in game</small></button>
+</div>
+<div id="travel" class="travel"></div>
+<div id="near" class="nearcard noph none">
+  <div><div class="k">Nearest mark</div><div class="t" id="nearT">none on this map</div><div class="d" id="nearD">mark a switch to start a puzzle</div></div>
+  <button id="rmnear" class="btn danger" disabled>Remove<small>nearest</small></button>
+</div>
+<div id="cur" class="card">
+  <div id="title">Timed rupee puzzle</div>
+  <div id="sub" class="why mute small"></div>
+  <div class="timer">
+    <button id="minus" class="btn" type="button">-5</button>
+    <div class="v"><span id="secs">20</span> s<small id="secsSub">switch timer</small></div>
+    <button id="plus" class="btn" type="button">+5</button>
+  </div>
+  <div class="check" id="check"></div>
+  <ul class="probs" id="probs"></ul>
+  <ul class="hints" id="hints"></ul>
+</div>
+<div class="sec">Mark at Link</div>
+<div class="row2">
+  <button id="switch" class="btn go">Switch</button>
+  <button id="gem" class="btn go">Add rupee</button>
+  <button id="chest" class="btn">Chest spot</button>
+  <button id="counter" class="btn">Counter spot</button>
+</div>
+<details class="more"><summary>A wall instead of a chest</summary>
+  <div class="row2">
+    <button id="wall_a" class="btn">Wall end A</button>
+    <button id="wall_b" class="btn">Wall end B</button>
+  </div>
+</details>
+<div class="sec">Marks in this puzzle</div>
+<div id="marks" class="list"></div>
+<div class="sec">Puzzles</div>
+<div class="row2">
+  <button id="new" class="btn">New puzzle<small>here, empty</small></button>
+  <button id="export" class="btn">Rust rows<small>saved after every change</small></button>
+</div>
+<div id="msg" class="msg"></div>
+<textarea id="out" readonly hidden></textarea>
+<script src="/ui.js"></script>
+<script>
+const { $, el, get, post, label, confirmTap, frame, back, loop } = UI;
+back($('back'));
+let last = null;
+const KIND = { switch: 'Switch', chest: 'Chest', counter: 'Counter', wall_a: 'Wall A', wall_b: 'Wall B' };
+function draw(s) {
+  last = s;
+  $('dot').className = 'dot ' + (s.connected ? 'on' : 'off');
+  $('place').textContent = s.connected ? (s.place || s.map || '?') : 'game not answering';
+  $('count').textContent = s.on_map ? s.on_map + ' puzzle' + (s.on_map === 1 ? '' : 's') + ' here' : '';
+  const n = s.nearest, card = $('near');
+  card.classList.toggle('none', !n);
+  $('nearT').textContent = n ? `${n.label} (puzzle ${n.puzzle})` : 'none on this map';
+  $('nearD').textContent = n ? n.dist + ' m away' : 'mark a switch to start a puzzle';
+  $('rmnear').disabled = !n;
+  label($('rmnear'), 'Remove', n ? 'this mark' : 'nothing here', n ? 'n' + n.n : '');
+  const c = s.current;
+  $('cur').classList.toggle('on', !!c);
+  const t = $('title'); t.innerHTML = '';
+  ['minus', 'plus'].forEach(id => $(id).disabled = !c);
+  $('check').innerHTML = ''; $('probs').innerHTML = ''; $('hints').innerHTML = ''; $('marks').innerHTML = '';
+  const nid = s.next_id || 1;
+  if (!c) {
+    t.textContent = 'No puzzle selected';
+    $('sub').textContent = `Marking anything here starts puzzle ${nid}. A puzzle is selected while Link is within 60 m of one of its marks.`;
+    $('secs').textContent = '20';
+    $('marks').appendChild(el('div', 'empty', 'No marks yet.'));
+  } else {
+    t.appendChild(document.createTextNode('Puzzle ' + c.id));
+    if (c.shipped) t.appendChild(el('span', 'pill ok', "the mod's room " + c.shipped));
+    t.appendChild(el('span', 'pill ' + (c.problems.length ? 'todo' : 'ok'), c.problems.length ? c.problems.length + ' to fix' : 'ready'));
+    $('sub').textContent = (c.name ? c.name + '. ' : '') + `${c.marks.length} mark${c.marks.length === 1 ? '' : 's'}; a straight run is ${c.route} m.` + (c.chest_hash ? ` Chest ${c.chest_hash}.` : '');
+    $('secs').textContent = c.seconds;
+    $('secsSub').textContent = `switch timer (${s.limits.least} to ${s.limits.most} s)`;
+    const h = c.has;
+    [['Switch', h.switch], [`Rupees ${c.gems}/${s.limits.gems}`, c.gems > 0], [c.chest_hash ? "Chest (the game's)" : 'Chest', h.chest || !!c.chest_hash], ['Counter' + (h.counter ? '' : ' (auto)'), h.counter, !h.counter],
+     ['Wall' + (h.wall_a || h.wall_b ? (h.wall_a && h.wall_b ? '' : ' (half)') : ' (none)'), h.wall_a && h.wall_b, !(h.wall_a || h.wall_b)]].forEach(([txt, y, opt]) =>
+      $('check').appendChild(el('span', y ? 'y' : opt ? 'opt' : '', txt)));
+    c.problems.forEach(p => $('probs').appendChild(el('li', null, p)));
+    c.hints.forEach(p => $('hints').appendChild(el('li', null, p)));
+    c.marks.forEach(m => {
+      const r = el('div', 'mrow' + (m.near ? ' near' : ''));
+      r.appendChild(el('span', 'k', m.kind === 'gem' ? 'rupee' : m.kind.replace('_', ' ')));
+      r.appendChild(el('span', 'grow', m.label));
+      r.appendChild(el('span', 'mute', m.dist + ' m'));
+      $('marks').appendChild(r);
+    });
+  }
+  const h = c ? c.has : {};
+  const pz = c ? 'puzzle ' + c.id : 'new puzzle ' + nid;
+  label($('switch'), h.switch ? 'Move switch' : 'Switch', `${pz}, ${c ? c.seconds : 20} s, faces as Link faces`, 'sw');
+  label($('gem'), 'Add rupee', c ? `rupee ${c.gems + 1} of up to ${s.limits.gems}` : pz, 'gem');
+  $('gem').disabled = !!(c && c.gems >= s.limits.gems);
+  label($('chest'), h.chest ? 'Move chest spot' : 'Chest spot', 'stand at the chest', 'ch');
+  label($('counter'), h.counter ? 'Move counter' : 'Counter spot', 'optional: else above the rupees', 'co');
+  label($('wall_a'), h.wall_a ? 'Move wall A' : 'Wall end A', 'one end of a fence', 'wa');
+  label($('wall_b'), h.wall_b ? 'Move wall B' : 'Wall end B', 'the other end', 'wb');
+  ['switch', 'gem', 'chest', 'counter', 'wall_a', 'wall_b', 'new'].forEach(id => { if (id !== 'gem' || !c || c.gems < s.limits.gems) $(id).disabled = !s.connected || !s.pos; });
+  const o = $('overlay');
+  o.classList.toggle('on', !!s.overlay);
+  label(o, s.overlay ? 'Hide overlay' : 'Show overlay', 'switch, rupees and chest spots in game', 'ov');
+  if (s.message && !$('msg').textContent) $('msg').textContent = s.message;
+  const tr = s.travel || {}, tv = $('travel');
+  tv.textContent = tr.message || ''; tv.className = 'travel' + (tr.busy ? ' go' : tr.ok === false ? ' bad' : '');
+  $('warp').disabled = !!tr.busy;
+}
+async function refresh() { try { draw(await get('/api/puzzle/state')); } catch (e) { $('dot').className = 'dot off'; } }
+const act = (op, body) => async () => { await post('/api/puzzle/' + op, body || {}, $('msg')); refresh(); };
+['switch', 'gem', 'chest', 'counter', 'wall_a', 'wall_b', 'new'].forEach(k => $(k).onclick = act(k));
+$('overlay').onclick = act('overlay');
+$('minus').onclick = act('seconds', { delta: -5 });
+$('plus').onclick = act('seconds', { delta: 5 });
+confirmTap($('rmnear'), () => last && last.nearest ? 'remove ' + last.nearest.label : '', act('removenearest'));
+$('export').onclick = async () => {
+  const r = await post('/api/puzzle/export', {}, $('msg'));
+  if (r && r.rust) { $('out').hidden = false; $('out').value = r.rust; }
+};
+let warpSig = '';
+async function loadWarps() {
+  try {
+    const w = (await get('/api/puzzle/warps')).puzzles || [];
+    const sig = JSON.stringify(w.map(x => [x.id, x.map, x.label]));
+    if (sig === warpSig) return;
+    warpSig = sig;
+    const sel = $('warp'); sel.innerHTML = '';
+    sel.appendChild(el('option', null, `Warp to puzzle... (${w.length})`)).value = '';
+    const groups = {};
+    w.forEach(x => { const k = x.map.replace(/_(Child|Adult)$/, ' ($1)').replace('(Child)', '(child)').replace('(Adult)', '(adult)'); (groups[k] = groups[k] || []).push(x); });
+    Object.keys(groups).forEach(k => {
+      const og = el('optgroup'); og.label = k;
+      groups[k].forEach(x => { const op = el('option', null, x.label + (x.how === 'measured' ? '' : ` [${x.how}]`)); op.value = x.id; og.appendChild(op); });
+      sel.appendChild(og);
+    });
+  } catch (e) {}
+}
+$('warp').onchange = async e => {
+  const id = e.target.value;
+  if (!id) return;
+  e.target.value = '';
+  await post('/api/puzzle/goto', { id: Number(id) }, $('msg'));
+  refresh();
+};
+loadWarps();
+setInterval(loadWarps, 5000);
+frame('puzzleHeight');
+loop(async () => draw(await get('/api/puzzle/state')), 1000);
+</script></body></html>

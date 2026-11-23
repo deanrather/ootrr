@@ -1,0 +1,306 @@
+<!--{"title": "Actor Viewer", "order": 10, "open": true}-->
+<style>
+#act-root .abig { font-size:15px; font-weight:600; padding:10px 14px; border-radius:8px; }
+#act-root .abig.on { background:var(--accent); color:var(--card); border-color:var(--accent); }
+#act-root table { width:100%; border-collapse:collapse; }
+#act-root th { text-align:left; font-weight:600; padding:2px 8px 2px 0; position:sticky; top:0; background:var(--card); vertical-align:bottom; }
+#act-root td { padding:3px 8px 3px 0; vertical-align:top; border-top:1px solid var(--line); }
+#act-root .num { font-family:ui-monospace,Consolas,monospace; word-break:break-all; }
+#act-root .none { color:var(--mute); font-style:italic; }
+#act-root .miss { color:var(--warn); }
+#act-root .badge { display:inline-block; font-size:11px; padding:0 6px; border-radius:9px; background:var(--hot); color:var(--ink); margin:0 4px 2px 0; }
+#act-root .acts button { padding:3px 8px; font-size:12px; margin:0 4px 3px 0; }
+#act-root .acts a { font-size:12px; margin-right:6px; color:var(--accent); }
+#act-root td:empty { display:none; }
+#act-root .note { color:var(--mute); font-size:12px; margin:4px 0; }
+#act-root details > summary { cursor:pointer; color:var(--mute); font-size:12px; }
+@media (max-width: 700px) {
+  #act-root #act-list { max-height:none !important; }
+  #act-root table, #act-root tbody, #act-root tr, #act-root td { display:block; width:100%; }
+  #act-root thead { display:none; }
+  #act-root tr { border:1px solid var(--line); border-radius:8px; padding:6px 8px; margin-bottom:8px; }
+  #act-root td { border:0; padding:1px 0; }
+  #act-root td::before { content:attr(data-h) ": "; color:var(--mute); font-size:11px; }
+  #act-root td.t-name::before { content:""; }
+  #act-root td.t-name { font-weight:600; font-size:14px; }
+  #act-root .abig { width:100%; padding:14px; font-size:16px; }
+  #act-root button { padding:8px 12px; }
+  #act-root input[type=checkbox] { width:20px; height:20px; }
+}
+#act-root .kinds { display:flex; flex-wrap:wrap; gap:4px 14px; margin-top:6px; }
+#act-root .kind { font-size:12px; white-space:nowrap; }
+</style>
+<div id="act-root">
+<div class="label first">Stand next to a pot, grass, tree or chest and read its id and OOTRR name</div>
+<div class="row">
+  <button class="abig" id="act-labels-btn" onclick="actLabelsToggle()">Show overlay</button>
+  <span class="status" id="act-labels-out"></span>
+</div>
+<div class="note">The overlay writes the id and name above every ticked actor in the game. Actors with no id (made while playing: drops, spawned enemies) cannot be labelled, only listed.</div>
+<div class="row">
+  <button onclick="actRead()">Read now</button>
+  <label class="status"><input type="checkbox" id="act-auto" checked onchange="actAuto()"> every 3 s</label>
+  <label class="status" title="The list and the in-game labels both use this distance from Link (the game takes 1 to 200)">within <input id="act-radius" type="number" value="20" min="1" max="200" style="width:56px" oninput="actDraw();actLabelsChange()"> m</label>
+  <label class="status" title="The game draws at most this many labels, the nearest first (1 to 64)">max labels <input id="act-max" type="number" value="24" min="1" max="64" style="width:52px" onchange="actLabelsChange()"></label>
+  <span class="status" id="act-info"></span>
+</div>
+<div class="label">Show these kinds (the list below and the in-game labels use the same ticks)</div>
+<div class="row" style="margin-top:4px"><button onclick="actSetAll(true)">All</button><button onclick="actSetAll(false)">None</button><button onclick="actSetDefaults()" title="Locations, chests, skulltulas, pots, grass, trees, rocks, rupees, hearts, bugs, enemies on; scenery and the rest off">Defaults</button></div>
+<div id="act-kinds" class="kinds"></div>
+<div class="row">
+  <label class="status"><input type="checkbox" id="act-dead" onchange="actRead(true)"> dead/inactive too</label>
+  <label class="status" title="Write the label colour as a third column of the names file. Needs a Longshot build that reads it; older builds show the colour text in the label"><input type="checkbox" id="act-colour" onchange="actLabelsChange()"> coloured labels (new build)</label>
+</div>
+<div class="row">
+  <input id="act-q" placeholder="search name, hash, id or location" oninput="actDraw()" onchange="actDraw()" style="flex:1;min-width:140px">
+  <button onclick="actCopy()" title="the rows shown, as tab-separated text">Copy rows</button>
+</div>
+<div class="note" id="act-data"></div>
+<div class="note">The hash and the id are the same number in two bases: hex is what the game and objmap show, decimal is what OOTRR's files and the location notes use. A dash means the actor is not a placed actor (made at run time: spawned enemies, drops, effects, Link), so it has no placement id.</div>
+<div id="act-list" style="max-height:420px;overflow:auto;font-size:12px;font-variant-numeric:tabular-nums;margin-top:6px"></div>
+</div>
+<script>
+(function () {
+  const $ = id => document.getElementById(id);
+  const KEY = 'ootrr-actors-kinds-v2', FKEY = 'ootrr-actors-filters-v2';
+  const card = $('act-root').closest('.card');
+  if (card) { const mc = $('msgcard'); const cs = $('cards'); if (cs) cs.prepend(card); else if (mc) mc.after(card); else { const f = document.querySelector('body > .card'); if (f && f !== card) f.before(card); } }
+  let rows = [], chosen = {}, timer = null, names = window.OOTRR_NAMES || null, labelsOn = false, lastSent = '', kindRx = null;
+  try { chosen = JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch (e) { chosen = {}; }
+  try { const f = JSON.parse(localStorage.getItem(FKEY) || '{}'); if (f.radius) $('act-radius').value = f.radius; if (f.colour != null) $('act-colour').checked = f.colour; if (f.max) $('act-max').value = f.max; if (f.auto != null) $('act-auto').checked = !!f.auto; } catch (e) {}
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(chosen)); localStorage.setItem(FKEY, JSON.stringify({ radius: $('act-radius').value, colour: $('act-colour').checked, max: $('act-max').value, auto: $('act-auto').checked })); } catch (e) {} };
+  const KT = () => (names && names.kinds_table) || { kinds: [{ id: 'other', label: 'Everything (name data not loaded)', re: '.*', on: true }], locations: { id: 'locations', label: 'OOTRR locations', on: true } };
+  const allKinds = () => [KT().locations].concat(KT().kinds);
+  const isOn = k => chosen[k.id] != null ? !!chosen[k.id] : !!k.on;
+  const kindOf = r => {
+    if (!kindRx) kindRx = KT().kinds.map(k => [k.id, new RegExp(k.re)]);
+    const n = r.name || '';
+    for (const [id, rx] of kindRx) if (rx.test(n)) return id;
+    return 'other';
+  };
+  const isDead = r => (r.hp != null && r.hp <= 0) || r.live === false || (r.state != null && r.state >= 7 && r.state <= 11);
+  const PAL = () => (names && names.palette) || {};
+  const COLKEY = { chests: 'chest', pots: 'pot', hearts: 'heart', rupees: 'item', enemies: 'enemy', npcs: 'npc', other: 'object' };
+  const colourKind = r => {
+    const c = names && names.colour_of && r.hash_id && names.colour_of[r.hash_id];
+    if (c && c !== 'object') return c;
+    const k = kindOf(r);
+    return COLKEY[k] || k;
+  };
+  const here = () => { const s = panel.status() || {}; return s.pos || null; };
+  const dist = r => { if (r.dist != null) return r.dist; const p = here(); return p ? Math.hypot(r.x - p[0], r.y - p[1], r.z - p[2]) : null; };
+  const lookup = r => (names && names.ids && r.hash_id) ? (names.ids[r.hash_id] || { l: [], t: [] }) : null;
+  const isLoc = r => { const e = lookup(r); return !!(e && (e.l.length || e.t.length)); };
+  const best = e => e ? (e.l.length ? e.l[0][0] : (e.t.length ? (e.t[0][1] || e.t[0][0]) : '')) : '';
+  const norm = s => String(s || '').trim().toLowerCase();
+  const differs = e => {
+    if (!e || !e.l.length || !e.t.length) return false;
+    const a = new Set(e.l.map(x => norm(x[0]))), b = new Set(e.t.map(x => norm(x[1])).filter(Boolean));
+    if (!b.size) return false;
+    return a.size !== b.size || [...a].some(x => !b.has(x));
+  };
+  const wanted = r => {
+    if (chosen.locations != null ? chosen.locations : KT().locations.on) { if (isLoc(r)) return true; }
+    const k = kindOf(r), def = KT().kinds.find(x => x.id === k);
+    return chosen[k] != null ? !!chosen[k] : !!(def && def.on);
+  };
+  const bandLayer = (scene, map, h, y) => {
+    const fl = (names && names.floors) || {}, ov = fl.overrides || {};
+    if (h && ov[h]) return ov[h];
+    const sc = fl.scenes && fl.scenes[scene];
+    if (sc && y != null) { for (const [top, layer] of sc) if (top == null || y < top) return layer; }
+    return /_(Child|Adult)$/.test(map) ? '00' : '';
+  };
+  const objmap = r => {
+    if (!r.hash_id) return '';
+    const e = lookup(r), s = panel.status() || {}, L = names && names.links;
+    const hex = String(r.hash).replace(/^0x/i, '').toLowerCase().padStart(16, '0');
+    const at = L && L.at && L.at[r.hash_id];
+    let scene, map, layer, x, z;
+    if (at) { scene = L.maps[at[0]][0]; map = L.maps[at[0]][1]; layer = at[1] >= 0 ? L.layers[at[1]] : ''; x = at[2]; z = at[3]; }
+    else {
+      map = s.map || ''; if (!map) return '';
+      const tr = e && e.t.find(t => t[3]);
+      scene = (tr && tr[3]) || map.replace(/_(Child|Adult)$/, '');
+      layer = bandLayer(scene, map, r.hash_id, r.y); x = r.x; z = r.z;
+    }
+    return 'https://objmap-oot.zeldamods.org/#/map/' + scene + '/' + map + '/' + (layer ? layer + '/' : '') + 'z7,' + x.toFixed(1) + ',' + z.toFixed(1) + '?id=' + scene + ',' + map + ',0x' + hex;
+  };
+  window.actObjmap = objmap;
+  const mdLine = r => '[' + r.hash_id + '](' + objmap(r) + ') ">>" ' + best(lookup(r));
+  const copy = (text, what) => {
+    const done = () => panel.toast('copied ' + what);
+    if (navigator.clipboard && window.isSecureContext) { navigator.clipboard.writeText(text).then(done, () => fallback()); return; }
+    fallback();
+    function fallback() {
+      const t = document.createElement('textarea'); t.value = text; t.style.position = 'fixed'; t.style.opacity = '0'; document.body.appendChild(t); t.select();
+      let ok = false; try { ok = document.execCommand('copy'); } catch (e) {}
+      t.remove(); panel.toast(ok ? 'copied ' + what : 'copy failed: select it by hand');
+    }
+  };
+  const radius = () => Math.max(1, Math.min(200, parseFloat($('act-radius').value) || 20));
+  const shown = () => {
+    const q = $('act-q').value.trim().toLowerCase(), rad = radius();
+    return rows.filter(r => {
+      if (!wanted(r)) return false;
+      const d = dist(r); if (d != null && d > rad) return false;
+      if (!q) return true;
+      const e = lookup(r);
+      const hay = [r.name, r.hash, r.hash_id, e ? e.l.map(x => x[0]).join(' ') + ' ' + e.t.map(x => x[0] + ' ' + x[1]).join(' ') : ''].join(' ').toLowerCase();
+      return hay.includes(q);
+    });
+  };
+  const td = (tr, h, cls) => { const c = tr.insertCell(); c.dataset.h = h; if (cls) c.className = cls; return c; };
+  const txt = (p, s, cls) => { const sp = document.createElement('span'); sp.textContent = s; if (cls) sp.className = cls; p.appendChild(sp); return sp; };
+  const btn = (p, label, title, fn) => { const b = document.createElement('button'); b.textContent = label; b.title = title; b.onclick = fn; p.appendChild(b); };
+  const drawKinds = () => {
+    const counts = {}, rad = radius();
+    rows.forEach(r => { const d = dist(r); if (d != null && d > rad) return; const k = kindOf(r); counts[k] = (counts[k] || 0) + 1; if (isLoc(r)) counts.locations = (counts.locations || 0) + 1; });
+    const box = $('act-kinds'); box.innerHTML = '';
+    allKinds().forEach(k => {
+      const l = document.createElement('label'); l.className = 'kind'; l.dataset.kind = k.id;
+      const c = document.createElement('input'); c.type = 'checkbox'; c.checked = isOn(k);
+      c.onchange = () => { chosen[k.id] = c.checked; save(); actDraw(); actLabelsChange(); };
+      const dot = document.createElement('span'); dot.textContent = '● '; dot.style.color = PAL()[k.id === 'locations' ? 'chest' : (COLKEY[k.id] || k.id)] || '#999';
+      l.appendChild(c); l.appendChild(dot); l.appendChild(document.createTextNode(k.label + ' (' + (counts[k.id] || 0) + ')'));
+      box.appendChild(l);
+    });
+  };
+  window.actDraw = function () {
+    save();
+    drawKinds();
+    const list = $('act-list'); list.innerHTML = '';
+    const t = document.createElement('table');
+    const head = t.createTHead().insertRow();
+    [['name', ''], ['hash (hex, game/objmap)', 'The placement hash as the game and objmap write it.'], ['id (decimal, OOTRR)', 'The same number in decimal: the id OOTRR files and the location notes use.'],
+     ['m', 'metres from Link'], ['locations.json', 'the randomizer name(s) for this id'], ['tracker', 'tracker_targets.json: its own name, and the randomizer name (OOTR)'],
+     ['check', 'differences and repeats'], ['link / copy', ''], ['x y z / state', '']].forEach(([h, tip]) => { const th = document.createElement('th'); th.textContent = h; th.title = tip; head.appendChild(th); });
+    const tb = t.createTBody();
+    const vis = shown().map(r => [r, dist(r)]).sort((a, b) => (a[1] ?? 1e9) - (b[1] ?? 1e9));
+    vis.forEach(([r, d]) => {
+      const e = lookup(r), tr = tb.insertRow();
+      const cn = td(tr, 'name', 't-name'), ck = colourKind(r), dead = isDead(r), dot = txt(cn, dead ? '○ ' : '● ', 'cdot');
+      dot.style.color = dead ? '#9a9893' : PAL()[ck]; dot.title = dead ? kindOf(r) + ' (dead or going)' : kindOf(r);
+      txt(cn, r.name || '?');
+      txt(td(tr, 'hash (hex, game/objmap)', 'num'), r.hash_id ? r.hash : '—', r.hash_id ? '' : 'none');
+      txt(td(tr, 'id (decimal, OOTRR)', 'num'), r.hash_id || '—', r.hash_id ? '' : 'none');
+      txt(td(tr, 'm'), d == null ? '' : d.toFixed(1));
+      const cl = td(tr, 'locations.json'), ct = td(tr, 'tracker'), cf = td(tr, 'check');
+      if (!r.hash_id) { txt(cl, '—', 'none'); txt(ct, '—', 'none'); }
+      else if (!e) { txt(cl, 'name data not loaded', 'none'); txt(ct, 'name data not loaded', 'none'); }
+      else {
+        if (e.l.length) e.l.forEach((x, i) => { if (i) cl.appendChild(document.createElement('br')); txt(cl, x[0]); });
+        else txt(cl, 'not in locations.json', 'miss');
+        if (e.t.length) e.t.forEach((x, i) => { if (i) ct.appendChild(document.createElement('br')); txt(ct, x[0] + (x[1] ? ' (OOTR: ' + x[1] + ')' : '')); });
+        else txt(ct, 'not in tracker', 'miss');
+        if (differs(e)) txt(cf, 'names differ', 'badge');
+        if (e.l.length > 1) txt(cf, 'id used by ' + e.l.length + ' locations (locations.json)', 'badge');
+        if (e.t.length > 1) txt(cf, 'id used by ' + e.t.length + ' tracker rows', 'badge');
+        if (!e.l.length && !e.t.length) txt(cf, 'unknown to OOTRR', 'badge');
+      }
+      const ca = td(tr, 'link / copy', 'acts');
+      if (r.hash_id) {
+        const url = objmap(r);
+        if (url) { const a = document.createElement('a'); a.href = url; a.target = '_blank'; a.rel = 'noopener'; a.textContent = 'objmap'; ca.appendChild(a); }
+        btn(ca, 'copy id', 'the decimal id', () => copy(r.hash_id, r.hash_id));
+        btn(ca, 'copy line', 'markdown line in the notes style: [id](objmap link) ">>" name', () => copy(mdLine(r), 'the line'));
+      }
+      const cx = td(tr, 'x y z / state'); txt(cx, [r.x, r.y, r.z].map(v => v.toFixed(1)).join(' ') + (r.state != null ? '  state ' + r.state : ''));
+    });
+    list.appendChild(t);
+    if (!vis.length) { const p = document.createElement('div'); p.className = 'note'; p.textContent = 'Nothing matches: widen "within" or tick more kinds.'; list.appendChild(p); }
+    $('act-info').textContent = vis.length + ' shown of ' + rows.length;
+  };
+  window.actNamesSet = function (d) {
+    names = d; kindRx = null;
+    const el = $('act-data');
+    if (!d || !d.ok) el.textContent = 'Name data not found: no locations.json or tracker_targets.json under ' + (d && d.locations_path ? d.locations_path.replace(/[\\/]data[\\/].*$/, '') : 'the OOTRR checkout') + '. Start the panel with --ootrr PATH or set OOTRR_CHECKOUT.';
+    else el.textContent = 'Names: ' + Object.keys(d.ids).length + ' ids known, from ' + (d.loc_found ? d.n_loc + ' locations.json locations' : 'no locations.json') + ' and ' + (d.trk_found ? d.n_trk + ' tracker targets' : 'no tracker_targets.json') + '.';
+    actDraw();
+  };
+  if (names) actNamesSet(names); else $('act-data').textContent = 'Name data not loaded (run devtools/build_cache.py, then start.py).';
+  window.actRead = async function (noSync) {
+    const r = await panel.bridge('actors', { limit: 800, all: $('act-dead').checked });
+    if (!r.ok) { $('act-info').textContent = (r.error || 'error') + ': ' + (r.message || ''); return; }
+    rows = r.actors || [];
+    actDraw();
+    if (r.walk_us != null) $('act-info').textContent += ' · walk ' + (r.walk_us / 1000).toFixed(1) + ' ms';
+    if (noSync !== true) await labelsSync();
+    if (labelsOn) actLabelsApply();
+  };
+  window.actAuto = function () { save(); clearInterval(timer); timer = $('act-auto').checked ? setInterval(actRead, 3000) : null; };
+  window.actSetAll = function (on) { allKinds().forEach(k => { chosen[k.id] = on; }); save(); actDraw(); actLabelsChange(); };
+  window.actSetDefaults = function () { chosen = {}; save(); actDraw(); actLabelsChange(); };
+  window.actCopy = function () {
+    const text = shown().map(r => { const e = lookup(r); return [r.name, r.hash || '', r.hash_id || '', dist(r)?.toFixed(1) ?? '', r.x, r.y, r.z, e ? e.l.map(x => x[0]).join(' | ') : '', e ? e.t.map(x => x[0]).join(' | ') : ''].join('\t'); }).join('\n');
+    copy(text, shown().length + ' rows');
+  };
+  const setBtn = () => { const b = $('act-labels-btn'); b.textContent = labelsOn ? 'Hide overlay' : 'Show overlay'; b.classList.toggle('on', labelsOn); };
+  async function labelsAsk(args) {
+    let r = await panel.bridge('labels', args);
+    if (!r.ok && (args.format || args.names)) {
+      const a2 = Object.assign({}, args); delete a2.format; delete a2.names;
+      const r2 = await panel.bridge('labels', a2);
+      if (r2.ok) { r2.fell_back = true; return r2; }
+    }
+    return r;
+  }
+  window.actLabelsChange = function () { save(); if (labelsOn) actLabelsApply(); };
+  const labelText = r => { const e = lookup(r); return r.hash_id + ' ' + (best(e) || (r.name || '?')); };
+  window.actLabelPlan = function () {
+    const picked = rows.filter(r => r.hash_id && wanted(r));
+    const colour = $('act-colour').checked;
+    const lines = picked.map(r => r.hash_id + '\t' + labelText(r).replace(/[\t\r\n]/g, ' ') + (colour ? '\t' + (PAL()[colourKind(r)] || '') : ''));
+    if (!lines.length) lines.push('1\t-');
+    const mx = Math.max(1, Math.min(64, parseInt($('act-max').value, 10) || 24));
+    return { text: lines.join('\n') + '\n', count: picked.length, args: { op: 'on', prefixes: [], range: radius(), max: mx, placed: true, named_only: true, format: 'dec' } };
+  };
+  window.actLabelsApply = async function () {
+    const out = $('act-labels-out'), plan = actLabelPlan();
+    const sig = plan.text + '|' + JSON.stringify(plan.args);
+    if (sig === lastSent) return;
+    let path = plan.path;
+    if (!plan.noFile) {
+      const f = await panel.post('/extras_file', { name: 'actor-labels-live.tsv', text: plan.text });
+      if (!f || !f.ok) { out.textContent = 'could not write the label list: ' + ((f && f.error) || 'this panel server has no /extras_file'); return; }
+      path = f.path;
+    }
+    const r = await labelsAsk(Object.assign({}, plan.args, { names: path }));
+    if (!r.ok) { labelsOn = false; setBtn(); out.textContent = (r.error || 'error') + ': ' + (r.message || 'this build has no labels command (needs the ootrr-tools build)'); return; }
+    lastSent = sig;
+    const l = r.labels || {};
+    out.textContent = plan.count + ' actors ticked' + (l.shown != null ? ' · ' + l.shown + ' labelled' : '') + (r.fell_back ? ' · this build has no decimal ids or name list: labels are hex and unfiltered' : '');
+  };
+  let toggling = false;
+  async function labelsSync() {
+    if (toggling) return;
+    const r = await panel.bridge('labels', { op: 'get' });
+    if (toggling || !r || !r.ok || !r.labels) return;
+    const was = labelsOn, now = !!r.labels.on;
+    labelsOn = now;
+    if (now && !was) { lastSent = ''; $('act-labels-out').textContent = 'overlay is on in the game' + (r.labels.shown != null ? ' (' + r.labels.shown + ' labelled)' : ''); }
+    if (!now && was) { lastSent = ''; $('act-labels-out').textContent = 'overlay is off in the game'; }
+    setBtn();
+  }
+  window.actLabelsToggle = async function () {
+    toggling = true;
+    try { await labelsToggle(); } finally { toggling = false; }
+  };
+  async function labelsToggle() {
+    if (labelsOn) {
+      const r = await panel.bridge('labels', { op: 'off' });
+      labelsOn = false; lastSent = ''; setBtn(); $('act-labels-out').textContent = r.ok ? 'overlay off' : (r.error || 'error') + ': ' + (r.message || '');
+      return;
+    }
+    labelsOn = true; lastSent = ''; setBtn();
+    if (!rows.length) await actRead(true);
+    else await actLabelsApply();
+  }
+  try { const q = new URLSearchParams(location.search).get('q'); if (q != null) $('act-q').value = q; } catch (e) {}
+  let lastQ = $('act-q').value;
+  $('act-q').addEventListener('input', () => { lastQ = $('act-q').value; });
+  $('act-q').addEventListener('change', () => { lastQ = $('act-q').value; });
+  setInterval(() => { const v = $('act-q').value; if (v !== lastQ) { lastQ = v; actDraw(); } }, 400);
+  actAuto(); actRead(); setBtn();
+})();
+</script>
