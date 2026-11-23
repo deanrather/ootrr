@@ -83,7 +83,9 @@ Data edits only: AI graph edits, no code patch, nothing runtime-specific, no new
   - every new node has the shape of a game node of that kind (the rate node and busy result from the paralysed Stalfos; the Club Moblin counter, sequence and timed parallel; Dark Link's random bool; the Stalfos module's switch); the paralysis module holds its frozen pose beside a busy result;
   - the Stalfos hold points sit before the measured hits (with a 7-frame lag allowance) and the mid-combo point between the first and second hits;
   - the stage edits only attack modules, keeps each pack's compression dictionary, writes the AI pack, the 4 Stalfos packs, the Dinolfos pack, the 4 Iron Knuckle packs and the 2 Deku Baba packs, grows the listed heaps by 0x8000 and every module's own size-table entry; with enemy regen on, both edits are in the AI pack and the heap growths add up.
-- Results: see the 3rd MR Draft notes below (test counts are filled in there).
+- Results (round 3, boomerang default; every module test also runs the freeze build): `cargo test -p ootrr-core difficulty` 312 passed, `settings` 113 passed, `cargo test --workspace` core 1617 passed, 0 failed, every other crate passed. Audit: FAIL 0 (randomizer: 8 WARN, all in files this branch doesn't touch; difficulty-mod: 0 WARN).
+- Parity: a default build (time savers, open forest, 20 hearts) from this branch and from upstream main (c139d4e) gives the same `.ootrr`, spoiler and 257 mod files byte for byte, each built into an empty folder.
+- The round 3 harness classifier, run on the round 2 trace, finds 0 holds in every control and round-2 run (no false positives on vanilla swings).
 - In the game: nothing from round 3 yet. Round 1's Stalfos single-swing feint was played by hand (hands-on 16).
 
 ## How to test it in the game
