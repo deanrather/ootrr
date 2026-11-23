@@ -1,5 +1,6 @@
 use super::node::guid;
 use super::tab::{INSZ, OUTSZ, PSZ};
+use super::attach::COUNT;
 use super::{Ainb, EL};
 use crate::error::{Error, Res};
 
@@ -42,6 +43,7 @@ pub fn graft(dst: &mut Ainb, src: &Ainb, ids: &[usize], seed: &str) -> Res<Vec<u
     let map = |i: usize| ids.iter().position(|&x| x == i).map(|p| first + p);
     let mut links: usize = dst.qids.len() / 4;
     let mut fresh: Vec<usize> = Vec::new();
+    let mut copied: Vec<(usize, usize)> = Vec::new();
     for (n, &t) in ids.iter().enumerate() {
         let mut e: [u8; EL] = src.els[t];
         w16(&mut e, 2, (first + n) as i16);
@@ -67,8 +69,7 @@ pub fn graft(dst: &mut Ainb, src: &Ainb, ids: &[usize], seed: &str) -> Res<Vec<u
                     w32(c, 8, v);
                 }
             }
-            p.pe[k][0] = (dst.props[k].len() / PSZ[k]) as u32;
-            dst.props[k].extend(pr);
+            p.pe[k][0] = dst.put_props(k, &pr)?;
             let mut ins: Vec<u8> = slice(&src.ins[k], p.ioe[k][0], p.ioe[k][1], INSZ[k])?;
             for c in ins.chunks_mut(INSZ[k]) {
                 let a: u32 = pool(src, dst, r32(c, 0))?;
@@ -105,8 +106,25 @@ pub fn graft(dst: &mut Ainb, src: &Ainb, ids: &[usize], seed: &str) -> Res<Vec<u
             g.a = map(g.a as usize).ok_or(Error::Format("ainb graft: a plug leaves the copied nodes"))? as u32;
             g.b = pool(src, dst, g.b)?;
         }
+        let had: Vec<usize> = src.el_atts(t);
+        e[COUNT..COUNT + 2].copy_from_slice(&[0; 2]);
         dst.els.push(e);
         dst.params.push(p);
+        if !had.is_empty() {
+            let mut mine: Vec<usize> = Vec::new();
+            for j in had {
+                let to: usize = match copied.iter().find(|c| c.0 == j) {
+                    Some(c) => c.1,
+                    None => {
+                        let x: usize = dst.copy_att(src, j)?;
+                        copied.push((j, x));
+                        x
+                    }
+                };
+                mine.push(to);
+            }
+            dst.set_el_atts(first + n, &mine)?;
+        }
         fresh.push(first + n);
     }
     Ok(fresh)

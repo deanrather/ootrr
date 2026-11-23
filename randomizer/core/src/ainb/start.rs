@@ -88,8 +88,7 @@ fn clone_el(a: &mut Ainb, t: usize, seed: &str) -> Res<usize> {
     for k in 0..6 {
         let (b, c): (usize, usize) = (p.pe[k][0] as usize, p.pe[k][1] as usize);
         let d: Vec<u8> = take(&a.props[k], b, c, PSZ[k])?;
-        p.pe[k][0] = (a.props[k].len() / PSZ[k]) as u32;
-        a.props[k].extend(d);
+        p.pe[k][0] = a.put_props(k, &d)?;
         let (ib, ic, ob, oc): (usize, usize, usize, usize) = (p.ioe[k][0] as usize, p.ioe[k][1] as usize, p.ioe[k][2] as usize, p.ioe[k][3] as usize);
         let di: Vec<u8> = take(&a.ins[k], ib, ic, INSZ[k])?;
         let dout: Vec<u8> = take(&a.outs[k], ob, oc, OUTSZ[k])?;
@@ -98,8 +97,11 @@ fn clone_el(a: &mut Ainb, t: usize, seed: &str) -> Res<usize> {
         a.ins[k].extend(di);
         a.outs[k].extend(dout);
     }
+    let had: Vec<usize> = a.el_atts(t);
+    e[super::attach::COUNT..super::attach::COUNT + 2].copy_from_slice(&[0; 2]);
     a.els.push(e);
     a.params.push(p);
+    a.set_el_atts(n, &had)?;
     Ok(n)
 }
 

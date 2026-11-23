@@ -11,6 +11,7 @@ use ootrr_core::modpack::Pack;
 use ootrr_core::murmur::murmur3_32;
 use ootrr_core::romfs::Romfs;
 use ootrr_core::rsizetable::{self, Rst};
+use ootrr_core::sarc;
 
 const MARGIN: u32 = 0x400;
 const LISTED: usize = 40;
@@ -29,7 +30,9 @@ pub fn run(a: &[String]) -> Res<()> {
     let root: &str = a.first().ok_or(Error::Format("missing romfs_root"))?;
     let sub: &str = a.get(1).ok_or(Error::Format("missing subfolder"))?;
     let mut rf: Romfs = Romfs::open(P::new(root))?;
-    let files: Vec<String> = rf.list(sub)?.into_iter().filter(|p| p.ends_with(".ainb") || p.ends_with(".ainb.zs")).collect();
+    let files: Vec<String> = rf.list(sub)?.into_iter().filter(|p| p.ends_with(".ainb") || p.ends_with(".ainb.zs") || p.ends_with(".pack.zs")).collect();
+    let mut graphs: usize = 0;
+    let mut atts: usize = 0;
     let t0: Instant = Instant::now();
     let mut parsed: usize = 0;
     let mut same: usize = 0;
@@ -41,8 +44,8 @@ pub fn run(a: &[String]) -> Res<()> {
     let mut pushes_ok: usize = 0;
     let mut kinds: Map<String, usize> = Map::new();
     let mut shown: Vec<String> = Vec::new();
-    for f in &files {
-        let raw: Vec<u8> = load(&mut rf, f)?;
+    for (f, raw) in files.iter().flat_map(|f| members(&mut rf, f)) {
+        graphs += 1;
         let ab: Ainb = match Ainb::parse(&raw) {
             Ok(x) => x,
             Err(e) => {
@@ -52,6 +55,9 @@ pub fn run(a: &[String]) -> Res<()> {
             }
         };
         parsed += 1;
+        if !ab.atts.is_empty() {
+            atts += 1;
+        }
         if ainb::audit(&ab).is_empty() {
             clean += 1;
         } else {
@@ -96,11 +102,13 @@ pub fn run(a: &[String]) -> Res<()> {
         }
     }
     println!(
-        "files: {}  parsed: {}  byte-identical rewrites: {}  differing or failed: {}  reparse structurally equal: {}",
+        "files: {}  graphs: {}  parsed: {}  with attachments: {}  byte-identical rewrites: {}  differing or failed: {}  reparse structurally equal: {}",
         files.len(),
+        graphs,
         parsed,
+        atts,
         same,
-        files.len() - same,
+        graphs - same,
         eq
     );
     println!("layout audits clean: {clean} of {parsed}");
@@ -116,11 +124,27 @@ pub fn run(a: &[String]) -> Res<()> {
     Ok(())
 }
 
+fn members(rf: &mut Romfs, f: &str) -> Vec<(String, Vec<u8>)> {
+    let Ok(raw) = load(rf, f) else {
+        return Vec::new();
+    };
+    if !f.ends_with(".pack.zs") {
+        return vec![(f.to_string(), raw)];
+    }
+    let Ok(es) = sarc::parse(&raw) else {
+        return Vec::new();
+    };
+    es.into_iter().filter(|e| e.name.ends_with(".ainb")).map(|e| (format!("{f} {}", e.name), e.data)).collect()
+}
+
 pub fn dump(a: &[String]) -> Res<()> {
     let root: &str = a.first().ok_or(Error::Format("missing romfs_root"))?;
     let r: &str = a.get(1).ok_or(Error::Format("missing relative path"))?;
     let mut rf: Romfs = Romfs::open(P::new(root))?;
-    let raw: Vec<u8> = load(&mut rf, r)?;
+    let raw: Vec<u8> = match a.get(2) {
+        Some(m) => sarc::parse(&load(&mut rf, r)?)?.into_iter().find(|e| &e.name == m).ok_or(Error::Format("the pack has no such member"))?.data,
+        None => load(&mut rf, r)?,
+    };
     print!("{}", ainb::show::show(&Ainb::parse(&raw)?));
     Ok(())
 }

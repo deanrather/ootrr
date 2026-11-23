@@ -1,5 +1,5 @@
 use super::param::GROUPS;
-use super::tab::{INSZ, OUTSZ, PSZ, VALSZ};
+use super::tab::{INSZ, OUTSZ, VALSZ};
 use super::{Ainb, Param, EL};
 use crate::error::{Error, Res};
 use crate::murmur::murmur3_32;
@@ -39,13 +39,14 @@ pub fn new_node(a: &mut Ainb, ty: &str, seed: &str, ins: &[In]) -> Res<usize> {
     e[0x2c..0x3c].copy_from_slice(&guid(seed));
     let mut p: Param = Param { pe: [[0; 2]; 6], ioe: [[0; 4]; 6], pl: [[0; 2]; GROUPS], plugs: Vec::new() };
     for k in 0..6 {
-        p.pe[k][0] = (a.props[k].len() / PSZ[k]) as u32;
+        p.pe[k][0] = a.node_props_end(k) as u32;
         p.ioe[k][0] = (a.ins[k].len() / INSZ[k]) as u32;
         p.ioe[k][2] = (a.outs[k].len() / OUTSZ[k]) as u32;
     }
     let pn: u32 = a.pool.add(ONCE);
-    a.props[BOOL].extend_from_slice(&pn.to_le_bytes());
-    a.props[BOOL].extend_from_slice(&[0; 8]);
+    let mut r: Vec<u8> = pn.to_le_bytes().to_vec();
+    r.extend_from_slice(&[0; 8]);
+    a.put_props(BOOL, &r)?;
     p.pe[BOOL][1] = 1;
     for x in ins {
         let nm: u32 = a.pool.add(x.name);

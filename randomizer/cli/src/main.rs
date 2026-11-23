@@ -67,7 +67,7 @@ const USAGE: &str = "usage:
   ootrr check-sarc <romfs_root> <subfolder> <suffix>
   ootrr check-rstbl <romfs_root> [sample_per_group]
   ootrr check-ainb <romfs_root> <subfolder>
-  ootrr ainb-dump <romfs_root> <relative_path>
+  ootrr ainb-dump <romfs_root> <relative_path> [pack_member]
   ootrr ainb-start <romfs_root> <load_dir_or_-> <mod_name> [--hearts N] [--item NAME[:COUNT]]... [--flag NAME=true|false]...
   ootrr check-bfevfl <romfs_root> <subfolder>
   ootrr bfevfl-dump <romfs_root> <relative_path>

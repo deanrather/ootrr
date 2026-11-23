@@ -18,12 +18,29 @@ fn gaps(v: &mut Vec<String>, tag: &str, k: usize, want: &[(usize, usize)], total
 pub fn audit(a: &Ainb) -> Vec<String> {
     let mut v: Vec<String> = Vec::new();
     for k in 0..6 {
-        let pr: Vec<(usize, usize)> = a.params.iter().map(|p| (p.pe[k][0] as usize, p.pe[k][1] as usize)).collect();
+        let mut pr: Vec<(usize, usize)> = a.params.iter().map(|p| (p.pe[k][0] as usize, p.pe[k][1] as usize)).collect();
+        pr.extend(a.atts.iter().map(|t| (t.pe[k][0] as usize, t.pe[k][1] as usize)));
         gaps(&mut v, "property array", k, &pr, a.props[k].len() / PSZ[k]);
         let ir: Vec<(usize, usize)> = a.params.iter().map(|p| (p.ioe[k][0] as usize, p.ioe[k][1] as usize)).collect();
         gaps(&mut v, "input array", k, &ir, a.ins[k].len() / INSZ[k]);
         let or: Vec<(usize, usize)> = a.params.iter().map(|p| (p.ioe[k][2] as usize, p.ioe[k][3] as usize)).collect();
         gaps(&mut v, "output array", k, &or, a.outs[k].len() / OUTSZ[k]);
+    }
+    for x in &a.att_ids {
+        if *x as usize >= a.atts.len() {
+            v.push(format!("attachment index {x} is out of range"));
+        }
+    }
+    for (j, t) in a.atts.iter().enumerate() {
+        if a.pool.get(t.name).is_none() {
+            v.push(format!("attachment {j} has a bad name offset"));
+        }
+    }
+    for i in 0..a.els.len() {
+        let (b, n): (usize, usize) = a.att_range(i);
+        if n > 0 && b + n > a.att_ids.len() {
+            v.push(format!("element {i} attachment range {b}+{n} is past the index list"));
+        }
     }
     for (i, p) in a.params.iter().enumerate() {
         let mut at: usize = 0;

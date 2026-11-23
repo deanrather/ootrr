@@ -211,15 +211,17 @@ impl Ainb {
         e[0x2c..0x3c].copy_from_slice(&guid(s.seed));
         let mut p: Param = Param { pe: [[0; 2]; 6], ioe: [[0; 4]; 6], pl: [[0; 2]; GROUPS], plugs: Vec::new() };
         for k in 0..6 {
-            p.pe[k][0] = (self.props[k].len() / PSZ[k]) as u32;
+            p.pe[k][0] = self.node_props_end(k) as u32;
             p.ioe[k][0] = (self.ins[k].len() / INSZ[k]) as u32;
             p.ioe[k][2] = (self.outs[k].len() / OUTSZ[k]) as u32;
         }
         for (k, name, v) in &s.props {
             let nm: u32 = self.pool.add(name);
-            self.props[*k].extend_from_slice(&nm.to_le_bytes());
-            self.props[*k].extend_from_slice(&0u32.to_le_bytes());
-            self.props[*k].extend_from_slice(v);
+            let mut r: Vec<u8> = Vec::with_capacity(PSZ[*k]);
+            r.extend_from_slice(&nm.to_le_bytes());
+            r.extend_from_slice(&0u32.to_le_bytes());
+            r.extend_from_slice(v);
+            self.put_props(*k, &r)?;
             p.pe[*k][1] += 1;
         }
         let mut links: Vec<Plug> = Vec::new();
@@ -303,7 +305,7 @@ impl Ainb {
 #[cfg(test)]
 mod tests {
     use super::super::tests::synth;
-    use super::super::audit;
+    use super::super::{audit, graft};
     use super::*;
 
     #[test]
@@ -337,6 +339,65 @@ mod tests {
         let shown: String = super::super::show::show(&c);
         assert!(shown.contains("out f32 Result flags 0x2"));
         assert!(shown.contains(&format!("plug 1 -> element {x} \"True\"")));
+    }
+
+    fn described(a: &Ainb, j: usize) -> Vec<String> {
+        let mut v: Vec<String> = vec![a.att_name(j).to_string()];
+        for k in 0..6 {
+            let (b, n): (usize, usize) = (a.atts[j].pe[k][0] as usize, a.atts[j].pe[k][1] as usize);
+            for g in b..b + n {
+                let r: &[u8] = &a.props[k][g * PSZ[k]..(g + 1) * PSZ[k]];
+                let val: String = if k == 3 { a.s(u32::from_le_bytes([r[8], r[9], r[10], r[11]])).to_string() } else { format!("{:?}", &r[8..]) };
+                v.push(format!("{k} {} {val}", a.prop_name(k, g).unwrap_or("?")));
+            }
+        }
+        v
+    }
+
+    fn of_nodes(a: &Ainb, upto: usize) -> Vec<Vec<Vec<String>>> {
+        (0..upto).map(|i| a.el_atts(i).into_iter().map(|j| described(a, j)).collect()).collect()
+    }
+
+    #[test]
+    fn nodes_added_to_a_game_graph_with_attachments_keep_every_attachment() {
+        let root: std::path::PathBuf = ootrr_game::test_romfs::path();
+        if !root.join("Pack").join("ZsDic.pack.zs").is_file() {
+            eprintln!("skipped: set OOTRR_ROMFS");
+            return;
+        }
+        let mut rf: crate::romfs::Romfs = crate::romfs::Romfs::open(&root).unwrap();
+        for (pack, name) in [("Pack/Actor/Enemy_Wolfos_White.pack.zs", "AI/Enemy_Wolfos_White.action.root.ainb"), ("Pack/AI.Global.Product.111.pack.zs", "AI/Enemy_Stalfos.action.root.ainb")] {
+            let es: Vec<crate::sarc::Entry> = crate::sarc::parse(&rf.read_zs(pack).unwrap()).unwrap();
+            let raw: &[u8] = &es.iter().find(|e| e.name == name).unwrap().data;
+            let src: Ainb = Ainb::parse(raw).unwrap();
+            assert!(!src.atts.is_empty() && audit(&src).is_empty(), "{name}");
+            let n: usize = src.els.len();
+            let held: usize = (0..n).find(|&i| !src.el_atts(i).is_empty() && graft(&mut src.clone(), &src, &[i], "probe").is_ok()).unwrap();
+            let before: Vec<Vec<Vec<String>>> = of_nodes(&src, n);
+            let all: Vec<Vec<String>> = (0..src.atts.len()).map(|j| described(&src, j)).collect();
+            let mut a: Ainb = src.clone();
+            let verb: Vec<u8> = a.pool.add("Ootrr_Test").to_le_bytes().to_vec();
+            let x: usize = a.add_node(&Spec::node("ExecuteBSASetActionVerb", "att#1").prop(1, "Loop", vec![0; 4]).prop(3, "ActionVerb", verb)).unwrap();
+            let s: usize = a.add_node(&Spec::composite(2, "att#2").kid(x, "")).unwrap();
+            let g: Vec<usize> = graft(&mut a, &src, &[held], "att#3").unwrap();
+            assert_eq!((x, s, g[0]), (n, n + 1, n + 2));
+            assert!(audit(&a).is_empty(), "{name}: {:?}", audit(&a));
+            let b: Vec<u8> = a.write().unwrap();
+            let c: Ainb = Ainb::parse(&b).unwrap();
+            assert_eq!((&c.atts, &c.att_ids, &c.params, &c.props, &c.pool), (&a.atts, &a.att_ids, &a.params, &a.props, &a.pool), "{name}");
+            assert_eq!(c.write().unwrap(), b, "{name}");
+            assert!(audit(&c).is_empty(), "{name}");
+            assert_eq!(of_nodes(&c, n), before, "{name}");
+            assert_eq!(c.el_atts(g[0]).into_iter().map(|j| described(&c, j)).collect::<Vec<_>>(), before[held], "{name}");
+            assert_eq!(c.el_atts(x), Vec::<usize>::new());
+            for (j, d) in all.iter().enumerate() {
+                assert_eq!(&described(&c, j), d, "{name} attachment {j}");
+            }
+            assert_eq!(c.prop_str(x, "ActionVerb"), Some("Ootrr_Test"));
+            assert_eq!(c.atts.len(), src.atts.len() + src.el_atts(held).len());
+            let shown: String = super::super::show::show(&c);
+            assert!(shown.contains(&format!("attachment 0 {}", src.att_name(0))), "{name}");
+        }
     }
 
     #[test]
