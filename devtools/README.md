@@ -123,10 +123,10 @@ build that reads a third column. The cache's `actor-labels.tsv` and `actor-label
 | Give / Take | Buttons that hand items (`data/buttons.json`; edit it) |
 | Go To | Teleport and warp to a place, then check you arrived (`data/places.json` has measured spots; the cache adds one per check) |
 | Notes, Recent | Notes with Link's position and a screenshot, short clips (needs ffmpeg), the session log |
-| Story Flags | Live saved-flag list and editor (names from `cache/flag-names.json`) |
+| Story Flags | Live saved-flag list and editor (names from `cache/flag-names.json`; without the `ootrr` binary that file isn't built and flags show as ids only) |
 | Enemy Placer | Mark enemy spawn points in the game, spawn and kill enemies, radar and display-model layers, counts against the game's own enemies per room |
 | Enemy-Gate Manager | Edit the difficulty mod's enemy gates (reads `randomizer/core/src/difficulty/gates.rs` in the checkout) |
-| Skulltula Manager | Custom Gold Skulltula spots. Needs `cache/gs-list.json`, which the Gold Skulltula work makes; without it the card says so |
+| Skulltula Manager | Custom Gold Skulltula spots. Needs `cache/gs-list.json`, which `build_cache.py` can't make yet (it comes with the custom Gold Skulltula feature, not in OOTRR main); until then the card stays empty and says so |
 | Timed Rupee Puzzle Manager | Timed silver-rupee rooms (reads `gems.rs` when that file exists in your checkout) |
 
 Cards can be dragged by the grip at the right of the header; the order is remembered in the browser. A card that fails to
