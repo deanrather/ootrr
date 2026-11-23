@@ -1,6 +1,6 @@
 # 29. Fireball storms
 
-Setting `fireball_storms` (number 140), toggle, default off. Difficulty page, new section "Hazards" (it is a danger of the place, not an enemy). Branch `feature/fireball-storms`, worktree `wt\fireballs`. Not played yet. Extended on `feature/fireball-storms-2` (see "Extension 2" at the end).
+Setting `fireball_storms` (number 140), toggle, default off. Difficulty page, section "Environment" (was "Hazards") (it is a danger of the place, not an enemy). Branch `feature/fireball-storms`, worktree `wt\fireballs`. Not played yet. Extended on `feature/fireball-storms-2` (see "Extension 2" at the end).
 
 ## What was asked (user, 20 Nov)
 

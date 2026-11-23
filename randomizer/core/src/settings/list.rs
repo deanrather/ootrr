@@ -239,10 +239,12 @@ fn difficulty() -> Vec<Setting> {
             .tip("Bosses bring a few Keese or Biri, and King Dodongo calls more Baby Dodongos. They appear when the fight starts (Bongo Bongo's are there from the start) and leave when the boss is beaten. Ganondorf and Ganon are unchanged. Played with Gohma and Phantom Ganon; the other bosses are untested."),
         Setting::toggle(d::GATES_NUM, d::GATES, "difficulty", "Enemies block the way", false)
             .tip("At ten narrow spots a barrier blocks the way until you beat its guards. It comes back when the area reloads. As a child they only appear once you have the Kokiri Sword. Off with shuffled entrances."),
-        Setting::toggle(d::CUCCO_NUM, d::CUCCO, "difficulty", "Cuccos take revenge at once", false)
+        Setting::toggle(d::CUCCO_NUM, d::CUCCO, "difficulty", "Short-Tempered Cuccos", false)
             .tip("Hit a Cucco once and the whole flock attacks, instead of after a few hits. Anju's Cuccos and the ones you have to find keep their usual temper."),
         Setting::toggle(d::BOWLING_NUM, d::BOWLING, "difficulty", "Unbreakable Bombchu Bowling grass", false)
             .tip("The grass in the Bombchu Bowling lanes can't be broken, so steer your Bombchus around it."),
+        Setting::toggle(d::TALON_NUM, d::TALON, "difficulty", "Harder cucco game at Lon Lon Ranch", false)
+            .tip("In Talon's game there are more cuccos to dig through, they don't stay put after they land, and you get 20 seconds instead of 30. Anju's cuccos are not changed."),
         Setting::toggle(d::FIREBALLS_NUM, d::FIREBALLS, "difficulty", "Fireball storms", false)
             .tip("Burning rocks rain down on quiet stretches of Hyrule Field, Desert Colossus, the Haunted Wasteland and the Castle garden, and on every visit to the Death Mountain Trail. Dodge them."),
         Setting::toggle(d::CHAINS_NUM, d::CHAINS, "difficulty", "Climbable drawbridge chains", false)
@@ -252,7 +254,7 @@ fn difficulty() -> Vec<Setting> {
         Setting::toggle(d::VOLVAGIA_NUM, d::VOLVAGIA, "difficulty", "Volvagia roams Hyrule Field (Functional WIP)", false)
             .tip("Functional WIP: when beaten in the field she freezes before her death animation; she should drop a red rupee and flee (planned). As an adult, a copy of Volvagia flies over the open middle of Hyrule Field, coming out of the ground and diving back in around one spot as in its own fight, and breathes fire at you. It is its own actor: it plays no intro or death scene, has no boss music, gives nothing when beaten and changes no story flag, and the Fire Temple fight is unchanged. It comes back when the field loads again. It never blocks a path and the logic ignores it. Experimental, untested in the game."),
         Setting::toggle(d::MEGA_LIKE_NUM, d::MEGA_LIKE, "difficulty", "Shield-eating mega Like Likes", false)
-            .tip("Three bigger, tougher Like Likes wait in the Deku Tree meadow of Kokiri Forest, as a child and as an adult. When one swallows you it takes one of your shields, any of them, the Mirror Shield first, then the Hylian Shield, then the Deku Shield. The shield stays gone until a mega Like Like is killed: any one of them gives back one shield you have owned and no longer have, the Mirror Shield first. Nothing is saved for this: the missing shield is the record. They come back every time the area loads. A shield that a normal Like Like swallowed, or a Deku Shield that burned, is also given back by a mega Like Like. If you build without this setting while a shield is missing, nothing gives it back. Experimental, untested in the game."),
+            .tip("Three big Like Likes wait in the Deku Tree meadow of Kokiri Forest. One that swallows you eats a shield, the Mirror Shield first, and keeps it until you beat it. A look for a shield-free run, not a harder game. Experimental, untested."),
         Setting::toggle(d::FUSES_NUM, d::FUSES, "difficulty", "Random fuses", false)
             .tip("Each bomb, Bombchu and lit Deku Stick gets a random fuse, from one second up to its usual time."),
         Setting::choice(d::timers::NUM, d::timers::SETTING, "difficulty", "Shorter timers", "off")
@@ -329,6 +331,10 @@ pub fn build() -> Schema {
         Setting::toggle(77, "early_beds", "world", "Beds before Zelda", false)
             .tip("Beds offer Sleep until morning and Sleep until night before the Zelda meeting.")
             .when_on("time_always_passes"),
+    );
+    s.push(
+        Setting::toggle(crate::slice::skull_day::NUM, crate::slice::skull_day::SETTING, "world", "Skulltulas by day", false)
+            .tip("The Gold Skulltulas that normally only come out at night are out at any hour, day or night. The logic no longer waits for night to reach them. Tested in the game in nearly every scene."),
     );
     s.push(
         Setting::choice(7, "gerudo_fortress", "world", "Gerudo Fortress", "normal")
@@ -449,7 +455,7 @@ pub fn build() -> Schema {
     );
     s.push(
         Setting::toggle(crate::first_pickups::NUM, crate::first_pickups::SETTING, "world", "Skip first pickup text", false)
-            .tip("No \"You got X!\" box the first time you pick up a rupee, a heart, a magic jar, arrows or Deku seeds. Chests and real items still show theirs."),
+            .tip("No \"You got X!\" box the first time you pick up a rupee, a heart, a magic jar, arrows, Deku seeds, a Deku Nut, a Deku Stick, a bomb or a bombchu. Chests and real items still show theirs."),
     );
     s.push(
         Setting::toggle(crate::area_intros::NUM, crate::area_intros::SETTING, "world", "Skip area intros", false)
@@ -640,6 +646,10 @@ pub fn build() -> Schema {
     s.push(
         Setting::toggle(141, crate::qol::blocks::SETTING, "world", "Faster sliding blocks", false)
             .tip("Pushable and pullable blocks slide twice as fast."),
+    );
+    s.push(
+        Setting::toggle(crate::qol::owl::NUM, crate::qol::owl::SETTING, "world", "More owl rides", false)
+            .tip("The owls on the Death Mountain Trail and at Lake Hylia stay all game and offer their flights every time, and a new owl in Kakariko Village flies you to Kokiri Forest. Child Link only."),
     );
     s.push(
         Setting::toggle(45, crate::chest_size::SETTING, "world", "Chest size matches contents", false)

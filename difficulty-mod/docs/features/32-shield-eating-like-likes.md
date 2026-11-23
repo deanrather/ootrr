@@ -5,7 +5,7 @@ Status: **seen by hand on 21 Nov (swallow, kill, the Mirror sparkle; step passed
 
 ## How it works (as built)
 
-- **Setting:** `mega_like_likes` (144), default off, in the Difficulty page under Enemies. Code: `difficulty/mega_like.rs`.
+- **Setting:** `mega_like_likes` (144), default off, in the Cosmetics page under Looks (moved from the Difficulty page: it is there for the no-shield look, not to make anything harder; number, name, default and settings strings are unchanged). Code: `difficulty/mega_like.rs`.
 - **The actor:** `Enemy_LikeLike_Mega`, a new actor class made like `Dm_` actors: an ActorParam whose parent is `Enemy_LikeLike`, rows in the actor tables and the tag table, size table entries. The clone pack is built from the staged `Enemy_LikeLike` pack, so `enemy_health` and `enemy_damage` still apply to it. Its own files: ActorParam, parameter table, life component and `MaxLife` times 3 (12 to 36), restraint parameters with the grip and mash-out frames times 1.5.
 - **Bigger:** each placement carries `Scale` 1.6. The model grows (it towers over Link in the game) and the grab still works at the usual distance. The collision shapes were not scaled; nothing odd was seen.
 - **Placement:** three per age in the Deku Tree meadow, no save flag, so they come back on every load. Child: (82, 113.1, -40), (85, 113.4, -28), (88, 113.6, -16). Adult: (70, 112, -35), (80, 113, -40), (88, 113.7, -16). All stood on the ground when played. The middle child spot is a point between the two checked ones.

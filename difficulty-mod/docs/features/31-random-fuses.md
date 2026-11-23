@@ -1,6 +1,6 @@
 # 31. Random fuses
 
-Setting `random_fuses` (number 151, was 142 before rc 19), toggle, default off. Difficulty page, new section "Hazards" (it exists on `test/handson2` with fireball storms; this branch is cut from `playtest/next`, which has no such section yet, so merging with the fireball branch needs the two section lines joined).
+Setting `random_fuses` (number 151, was 142 before rc 19), toggle, default off. Difficulty page, section "Player" (was "Hazards") (it exists on `test/handson2` with fireball storms; this branch is cut from `playtest/next`, which has no such section yet, so merging with the fireball branch needs the two section lines joined).
 
 ## What was requested
 

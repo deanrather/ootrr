@@ -1,6 +1,6 @@
 # Spawn enemies with L + R + D-pad
 
-Setting `enemy_spawn_combo` (number 132), checkbox on the Difficulty page under "Just for fun". Code: `randomizer/core/src/difficulty/spawn.rs`. Built on `feature/spawn-combo` (`ab226b0`); fixed on `feature/opus-fixes` (`4efaaaf`) and seen working in a scripted test (end of this file).
+Setting `enemy_spawn_combo` (number 132), checkbox on the Debug page under "Spawn enemies" (moved from the Difficulty page; number, name, default and settings strings unchanged). Code: `randomizer/core/src/difficulty/spawn.rs`. Built on `feature/spawn-combo` (`ab226b0`); fixed on `feature/opus-fixes` (`4efaaaf`) and seen working in a scripted test (end of this file).
 
 ## Request
 "can you make left bumper + right bumper + dpad down spawn random, and l+r+up spawn prev?" and then "the l+r+d-pad thing shouldn't need longshot update, right? so it'll work anywhere the ootrr does?"

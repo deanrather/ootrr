@@ -1,6 +1,6 @@
-# Cuccos take revenge at once
+# Short-Tempered Cuccos
 
-Setting `cucco_revenge` (number 131), checkbox, label "Cuccos take revenge at once", on the Difficulty page, default off. Code: `crates/core/src/difficulty/cucco.rs`. Built on `feature/surprises` (worktree `wt\surprises`, commit `f9b7c87`), code only, never played.
+Setting `cucco_revenge` (number 131), checkbox, label "Short-Tempered Cuccos" (was "Cuccos take revenge at once"; display name only), on the Difficulty page in the "Environment" section, default off. Code: `crates/core/src/difficulty/cucco.rs`. Built on `feature/surprises` (worktree `wt\surprises`, commit `f9b7c87`), code only, never played.
 
 ## Request
 "hurting a cuckoo even a tiny bit triggers the cuckoo revenge sequence"
