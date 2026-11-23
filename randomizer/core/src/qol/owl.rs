@@ -25,7 +25,12 @@ pub const PRESENCE: &str = "Presence";
 pub const SEED: &str = "ootrr owl warps";
 pub const PREFIX: &str = "OOTRROwl";
 pub const LABEL: &str = "OOTRR_Owl_";
-pub const NOTE: &str = "The owls on the Death Mountain Trail and at Lake Hylia stay for the whole game, so you can ride them again and again, and the Death Mountain Trail owl offers his ride to Kakariko Village every time, with or without Din's Fire. A new owl stands in Kakariko Village and carries you to Kokiri Forest. The rides are for a child Link, as in the original game.";
+pub const NOTE: &str = "The owls on the Death Mountain Trail and at Lake Hylia stay for the whole game, so you can ride them again and again, and the Death Mountain Trail owl offers his ride to Kakariko Village every time, with or without Din's Fire. A new owl stands in Kakariko Village and carries you to Kokiri Forest. A new owl stands at Zora's Fountain beside Jabu-Jabu and carries you to Lon Lon Ranch. The rides are for a child Link, as in the original game.";
+
+pub const FOUNTAIN_SPOT: [f32; 3] = [17.1, 105.2, 15.4];
+pub const FOUNTAIN_TURN: f32 = -3.0369;
+pub const RANCH_AT: [f32; 3] = [-97.3, 150.5, 198.4];
+pub const RANCH_YAW: f32 = 170.0;
 
 pub const KAKARIKO_SPOT: [f32; 3] = [-49.33, 118.84, 21.58];
 pub const KAKARIKO_TURN: f32 = 2.1206;
@@ -48,9 +53,10 @@ pub struct Ride {
     pub turn: f32,
     pub to: (&'static str, &'static str),
     pub ask: &'static str,
+    pub coords: Option<([f32; 3], f32)>,
 }
 
-pub const RIDES: [Ride; 1] = [Ride {
+pub const RIDES: [Ride; 2] = [Ride {
     name: "kakariko_to_kokiri_forest",
     dir: "KakarikoVillage",
     map: "KakarikoVillage_Child",
@@ -58,6 +64,17 @@ pub const RIDES: [Ride; 1] = [Ride {
     turn: KAKARIKO_TURN,
     to: HOME_CHILD,
     ask: "{3.0:0f0000}If you're heading for the forest, I can carry\nyou as far as Kokiri Forest. {5.0}What do you say?",
+    coords: None,
+}, Ride {
+    name: "zora_fountain_to_lon_lon_ranch",
+    dir: "ZoraFountain",
+    map: "ZoraFountain_Child",
+    at: FOUNTAIN_SPOT,
+    turn: FOUNTAIN_TURN,
+    to: ("HyruleField_Child", ""),
+    ask: "{3.0:0f0000}If you're heading for the ranch, I can carry
+you as far as Lon Lon Ranch. {5.0}What do you say?",
+    coords: Some((RANCH_AT, RANCH_YAW)),
 }];
 
 pub fn file(dir: &str, map: &str) -> String {
@@ -216,12 +233,16 @@ fn with_text(k: &Kind, text: &str, to: u16) -> Res<Kind> {
     Ok(k)
 }
 
-fn warp(banc: &str, start: &str) -> Cont {
+fn warp(banc: &str, start: &str, coords: Option<([f32; 3], f32)>) -> Cont {
+    let (pos, rot): (Vec<f32>, Vec<f32>) = match coords {
+        Some((p, y)) => (p.to_vec(), vec![0.0, y, 0.0]),
+        None => (vec![0.0, 0.0, 0.0], vec![0.0, 0.0, 0.0]),
+    };
     let items: Vec<(&str, Val)> = vec![
         ("FadePattern", Val::Int(1)),
         ("IsWaitEnd", Val::Bool(1)),
-        ("NextPosition", Val::Floats(vec![0.0, 0.0, 0.0])),
-        ("NextStartRot", Val::Floats(vec![0.0, 0.0, 0.0])),
+        ("NextPosition", Val::Floats(pos)),
+        ("NextStartRot", Val::Floats(rot)),
         ("BootEventName", Val::Str(String::new())),
         ("IsStartOnEvent", Val::Bool(0)),
         ("NextBanc", Val::Str(banc.to_string())),
@@ -252,7 +273,7 @@ pub fn patch_flow(b: &mut Bf) -> Res<usize> {
     let w: (u16, u16) = member(f, "GameSystemActor", "EventReserveBancChange", false)?;
     let mut tail: u16 = idx(offer)?;
     for (i, r) in RIDES.iter().enumerate().rev() {
-        let go: u16 = push(f, Kind::Action { next: NONE, actor: w.0, act: w.1, params: Some(warp(r.to.0, r.to.1)) })?;
+        let go: u16 = push(f, Kind::Action { next: NONE, actor: w.0, act: w.1, params: Some(warp(r.to.0, r.to.1, r.coords)) })?;
         let board: u16 = push(f, with_next(&f.events[boarding].kind.clone(), go)?)?;
         let sure: u16 = push(f, with_next(&f.events[yes].kind.clone(), board)?)?;
         let (actor, query, params): (u16, u16, Option<Cont>) = match &f.events[choice].kind {
@@ -399,7 +420,7 @@ mod tests {
         assert_eq!(RIDES[0].at, KAKARIKO_SPOT);
         assert_eq!(NUM, 153);
         assert!(files().contains(&FILE.to_string()));
-        assert_eq!(files().len(), 5);
+        assert_eq!(files().len(), 6);
     }
 
     #[test]
@@ -429,6 +450,9 @@ mod tests {
         let (said, to, asked) = walk(f, "DeathMountainTrail_Child", true).unwrap();
         assert!(asked && said[0].ends_with(":Talk_04") && said.last().unwrap().ends_with(":Talk_05"));
         assert_eq!(to.map(|t| t.0), Some("KakarikoVillage_Child".to_string()));
+        let (said, to, asked) = walk(f, "ZoraFountain_Child", true).unwrap();
+        assert!(asked && said[0].ends_with(&label(1)));
+        assert_eq!(to, Some(("HyruleField_Child".to_string(), String::new())));
         let (said, to, _) = walk(f, "DeathMountainTrail_Child", false).unwrap();
         assert!(to.is_none() && said.last().unwrap().ends_with(":Talk_06"));
     }
@@ -441,7 +465,7 @@ mod tests {
         };
         let mut rf: Romfs = Romfs::open(&root).unwrap();
         let outs: Vec<Out> = stage_maps(&mut rf, &none).unwrap();
-        assert_eq!(outs.len(), 3);
+        assert_eq!(outs.len(), 4);
         for o in &outs {
             let was: Byml = rf.read_byml(&o.path).unwrap();
             let now: Byml = Byml::parse(&rf.zs.decompress(&o.z).unwrap()).unwrap();
@@ -450,7 +474,7 @@ mod tests {
                 assert!(owls(&now, n).iter().all(|p| !p));
             }
             let extra: usize = owls(&now, OWL).len() - owls(&was, OWL).len();
-            assert_eq!(extra, if o.path.contains("KakarikoVillage") { 1 } else { 0 });
+            assert_eq!(extra, if o.path.contains("KakarikoVillage") || o.path.contains("ZoraFountain") { 1 } else { 0 });
             assert_eq!(now.root.get("Actors").and_then(|a| a.as_arr()).unwrap().len(), was.root.get("Actors").and_then(|a| a.as_arr()).unwrap().len() + extra);
         }
     }
@@ -488,7 +512,7 @@ mod tests {
             assert!(on.iter().any(|o| o.path == f), "{f} not staged");
         }
         let langs: usize = crate::hints::languages(&rf).unwrap().len();
-        assert_eq!(on.len() - off.len(), 1 + 1 + 3 + langs);
+        assert_eq!(on.len() - off.len(), 1 + 1 + 4 + langs);
         let both: Vec<Out> = crate::qol::stage(&mut rf, &Opts { owls: true, navi: crate::qol::navi_return::Mode::Everywhere, ..Opts::default() }, &none).unwrap();
         let mut paths: Vec<&String> = both.iter().map(|o| &o.path).collect();
         paths.sort();
