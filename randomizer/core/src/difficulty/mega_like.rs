@@ -24,9 +24,13 @@ pub const BASE: &str = "Enemy_LikeLike";
 pub const CLASS: &str = "Enemy_LikeLike_Mega";
 pub const SEED: &str = "ootrr mega like likes";
 pub const SHIELDS: [&str; 3] = ["Weapon_Shield_Mirror", "Weapon_Shield_Hylian", "Weapon_Shield_Deku"];
+pub const NEVER: f32 = 1.0e9;
 pub const LIFE_TIMES: i32 = 3;
 pub const GRIP_TIMES: f32 = 1.5;
 pub const SIZE: f32 = 1.6;
+pub const ATTACK: i32 = 0;
+pub const GRAB_DAMAGE: i32 = 0;
+pub const ATTACK_BASE: &str = "GameBalance/AttackParam/Enemy_LikeLike.game__gamebalance__AttackParam.bgyml";
 pub const HEAP_EXTRA: i32 = 0x4000;
 pub const EAT_GRAPH: &str = "AI/Enemy_LikeLike.action.BasicAttack.module.ainb";
 pub const DIE_GRAPH: &str = "AI/Enemy_LikeLike.action.die.module.ainb";
@@ -56,12 +60,12 @@ pub struct Spot {
 }
 
 pub const SPOTS: [Spot; 6] = [
-    Spot { map: "KokiriForest_Child", name: "child_meadow_south", at: [82.0, 113.1, -40.0], turn: 1.2 },
-    Spot { map: "KokiriForest_Child", name: "child_meadow_middle", at: [85.0, 113.4, -28.0], turn: 1.2 },
-    Spot { map: "KokiriForest_Child", name: "child_meadow_north", at: [88.0, 113.6, -16.0], turn: 1.2 },
-    Spot { map: "KokiriForest_Adult", name: "adult_meadow_west", at: [70.0, 112.0, -35.0], turn: 1.2 },
-    Spot { map: "KokiriForest_Adult", name: "adult_meadow_south", at: [80.0, 113.0, -40.0], turn: 1.2 },
-    Spot { map: "KokiriForest_Adult", name: "adult_meadow_north", at: [88.0, 113.7, -16.0], turn: 1.2 },
+    Spot { map: "KokiriForest_Child", name: "child_meadow_south", at: [69.61, 111.85, -13.94], turn: 1.2 },
+    Spot { map: "KokiriForest_Child", name: "child_meadow_middle", at: [78.38, 112.71, -5.66], turn: 1.2 },
+    Spot { map: "KokiriForest_Child", name: "child_meadow_north", at: [69.68, 111.57, -38.97], turn: 1.2 },
+    Spot { map: "KokiriForest_Adult", name: "adult_meadow_west", at: [69.61, 111.94, -13.94], turn: 1.2 },
+    Spot { map: "KokiriForest_Adult", name: "adult_meadow_south", at: [78.38, 112.56, -5.66], turn: 1.2 },
+    Spot { map: "KokiriForest_Adult", name: "adult_meadow_north", at: [69.68, 111.85, -38.97], turn: 1.2 },
 ];
 
 pub fn banc(map: &str) -> String {
@@ -102,8 +106,12 @@ pub fn grip_file(name: &str) -> String {
     format!("GameParameter/RestraintParam/{name}.game__enemy__RestraintParam.bgyml")
 }
 
-pub fn own() -> [String; 5] {
-    [actor_file(CLASS), table_file(CLASS), life_ref(CLASS), life_file(CLASS), grip_file(CLASS)]
+pub fn attack_file(name: &str) -> String {
+    format!("GameBalance/AttackParam/{name}.game__gamebalance__AttackParam.bgyml")
+}
+
+pub fn own() -> [String; 6] {
+    [actor_file(CLASS), table_file(CLASS), life_ref(CLASS), life_file(CLASS), grip_file(CLASS), attack_file(CLASS)]
 }
 
 fn work(p: &str) -> String {
@@ -146,6 +154,8 @@ pub fn table(base: &[u8]) -> Res<Vec<u8>> {
     let c: &mut Node = comps(&mut y)?;
     expect(c, "RestraintParam", &format!("?{}", grip_file(BASE)))?;
     c.set("RestraintParam", Node::Str(format!("?{}", grip_file(CLASS))));
+    expect(c, "gamebalance_AttackParam", &format!("?{}", ATTACK_BASE))?;
+    c.set("gamebalance_AttackParam", Node::Str(format!("?{}", attack_file(CLASS))));
     y.write()
 }
 
@@ -166,6 +176,24 @@ pub fn life(base: &[u8]) -> Res<Vec<u8>> {
     y.write()
 }
 
+pub fn attack(base: &[u8]) -> Res<Vec<u8>> {
+    let mut y: Byml = Byml::parse(base)?;
+    match y.root.get("BaseAttackPower") {
+        Some(Node::I32(_)) => {
+            y.root.set("BaseAttackPower", Node::I32(ATTACK));
+        }
+        _ => return Err(E::Format("mega like likes: the Like Like attack file has no BaseAttackPower, the game files differ")),
+    }
+    if let Some(list) = y.root.get_mut("AttackParams").and_then(|x| x.as_arr_mut()) {
+        for a in list.iter_mut() {
+            if matches!(a.get("DamageMultiplier"), Some(Node::F32(_))) {
+                a.set("DamageMultiplier", Node::F32(0.0));
+            }
+        }
+    }
+    y.write()
+}
+
 pub fn grip(base: &[u8]) -> Res<Vec<u8>> {
     let mut y: Byml = Byml::parse(base)?;
     for k in ["GachaInputFrame", "MaxRestraintFrame"] {
@@ -175,6 +203,7 @@ pub fn grip(base: &[u8]) -> Res<Vec<u8>> {
         };
         y.root.set(k, Node::F32(v * GRIP_TIMES));
     }
+    y.root.set(crate::difficulty::hurt::GRAB_KEY, Node::I32(GRAB_DAMAGE));
     y.write()
 }
 
@@ -345,6 +374,16 @@ fn has_predation(a: &Ainb, from: usize) -> bool {
     false
 }
 
+pub fn no_backup(a: &mut Ainb) -> Res<usize> {
+    let mut n: usize = 0;
+    for i in 0..a.els.len() {
+        if a.el_type(i) == 0 && a.el_name(i) == crate::difficulty::backup::TIMER && a.prop_f32(i, "CountFrames") == Some(crate::difficulty::backup::FRAMES) && a.prop_f32(i, "RandomAddCountFrames") == Some(crate::difficulty::backup::RANDOM_FRAMES) && a.set_prop_f32(i, "CountFrames", NEVER)? {
+            n += 1;
+        }
+    }
+    Ok(n)
+}
+
 pub fn quiet(raw: &[u8]) -> Res<Vec<u8>> {
     let mut a: Ainb = Ainb::parse(raw)?;
     let nodes: Vec<usize> = a.find_els(RIDER);
@@ -359,6 +398,7 @@ pub fn quiet(raw: &[u8]) -> Res<Vec<u8>> {
     }
     a.params[root].remove_plug(2, at + 1)?;
     a.params[root].remove_plug(2, at)?;
+    no_backup(&mut a)?;
     finish(a, "the utility graph")
 }
 
@@ -405,6 +445,7 @@ pub fn build(base: &[Entry]) -> Res<(Vec<Entry>, Vec<(String, usize, usize)>)> {
     out.push(Entry { name: life_ref(CLASS), data: life_component(&get(base, &life_ref(BASE))?.data)? });
     out.push(Entry { name: life_file(CLASS), data: life(&get(base, &life_file(BASE))?.data)? });
     out.push(Entry { name: grip_file(CLASS), data: grip(&get(base, &grip_file(BASE))?.data)? });
+    out.push(Entry { name: attack_file(CLASS), data: attack(&get(base, ATTACK_BASE)?.data)? });
     Ok((out, grown))
 }
 
@@ -571,10 +612,10 @@ mod tests {
     }
 
     #[test]
-    fn the_clone_adds_five_files_and_changes_three_graphs() {
+    fn the_clone_adds_six_files_and_changes_three_graphs() {
         let Some(b) = base() else { return };
         let (es, grown): (Vec<Entry>, Vec<(String, usize, usize)>) = build(&b).unwrap();
-        assert_eq!(es.len(), b.len() + 5);
+        assert_eq!(es.len(), b.len() + 6);
         assert_eq!(grown.len(), 3);
         for p in own() {
             assert!(sarc::get(&es, &p).is_some(), "{p}");
@@ -583,6 +624,19 @@ mod tests {
         let v: Byml = Byml::parse(&sarc::get(&b, &life_file(BASE)).unwrap().data).unwrap();
         let (Some(Node::I32(a)), Some(Node::I32(c))) = (y.root.get("MaxLife"), v.root.get("MaxLife")) else { panic!() };
         assert_eq!(*a, *c * LIFE_TIMES);
+        let at: Byml = Byml::parse(&sarc::get(&es, &attack_file(CLASS)).unwrap().data).unwrap();
+        assert_eq!(at.root.get("BaseAttackPower"), Some(&Node::I32(ATTACK)));
+        for a in at.root.get("AttackParams").unwrap().as_arr().unwrap() {
+            assert_eq!(a.get("DamageMultiplier"), Some(&Node::F32(0.0)));
+        }
+        let g: Byml = Byml::parse(&sarc::get(&es, &grip_file(CLASS)).unwrap().data).unwrap();
+        assert_eq!(g.root.get(crate::difficulty::hurt::GRAB_KEY), Some(&Node::I32(GRAB_DAMAGE)));
+        assert_eq!(crate::difficulty::hurt::grab(&sarc::get(&es, &grip_file(CLASS)).unwrap().data, crate::difficulty::hurt::Hurt::OneHit).unwrap(), None);
+        let plain_grip: Byml = Byml::parse(&sarc::get(&es, &grip_file(BASE)).unwrap().data).unwrap();
+        assert_eq!(plain_grip.root.get(crate::difficulty::hurt::GRAB_KEY), None);
+        let plain: Byml = Byml::parse(&sarc::get(&es, ATTACK_BASE).unwrap().data).unwrap();
+        assert_eq!(plain.root.get("BaseAttackPower"), Some(&Node::I32(2)));
+        assert_eq!(crate::difficulty::stats::attack(&sarc::get(&es, &attack_file(CLASS)).unwrap().data, 1000).unwrap(), None);
         let t: Byml = Byml::parse(&sarc::get(&es, &table_file(CLASS)).unwrap().data).unwrap();
         assert_eq!(t.root.get("Components").and_then(|c| c.get("RestraintParam")).and_then(|v| v.as_str()), Some(format!("?{}", grip_file(CLASS)).as_str()));
     }
@@ -630,5 +684,19 @@ mod tests {
         assert_eq!(acts.len(), 1);
         assert_eq!(acts[0].get("Gyaml").and_then(|v| v.as_str()), Some(CLASS));
         assert!(acts[0].get("Scale").is_some());
+    }
+
+    #[test]
+    fn every_spot_stands_on_the_navmesh() {
+        let Some(r) = root() else { return };
+        let mut rf: Romfs = Romfs::open(&r).unwrap();
+        for m in maps() {
+            let g: crate::difficulty::ground::Ground = crate::difficulty::ground::load(&mut rf, m).unwrap().unwrap();
+            for s in SPOTS.iter().filter(|s| s.map == m) {
+                let f: Option<(f32, u32)> = g.floor_near(s.at[0], s.at[1], s.at[2], 0.5, 0.5);
+                assert!(f.is_some(), "{} is not on the floor of {m}", s.name);
+                assert!(g.clear(s.at) > 0.5, "{} is inside a wall of {m}", s.name);
+            }
+        }
     }
 }

@@ -744,6 +744,36 @@ mod tests {
         let _ = std::fs::remove_dir_all(&load);
     }
 
+    #[test]
+    fn a_full_build_with_the_difficulty_settings_keeps_three_mega_like_likes_in_each_forest_map() {
+        let Some(root) = real() else {
+            return;
+        };
+        let d: Data = Data::load().unwrap();
+        let j = crate::json::parse(r#"{"mega_like_likes": true, "enemy_regen": true, "fairy_helps_enemies": true, "enemy_backup": true, "enemies_respawn_sooner": true, "more_enemies": 200, "enemy_gates": true, "enemy_spawn_combo": true, "enemy_randomizer": true, "enemy_sizes": "mild", "enemy_sizes_health": true, "boss_minibosses": true, "boss_minions": true, "volvagia_roams": true, "random_fuses": true, "fireball_storms": true}"#).unwrap();
+        let s: crate::settings::Settings = crate::settings::Settings::from_json(&j).unwrap().settings;
+        let g = crate::slice::generate::generate_data(&d, &s, "mega maps", &crate::slice::generate::GenOpts::default()).unwrap();
+        let load: PB = PB::from(env!("CARGO_MANIFEST_DIR")).join("../../target/mega_maps");
+        let _ = std::fs::remove_dir_all(&load);
+        let b: Built = build_for(&g.seed_file, &root, &load, "ootrr-mega", Host::Longshot).unwrap();
+        let mut rf: Romfs = Romfs::open(&root).unwrap();
+        for m in crate::difficulty::mega_like::maps() {
+            let z: Vec<u8> = std::fs::read(b.root.join("romfs").join(crate::difficulty::mega_like::banc(m))).unwrap();
+            let y: Byml = Byml::parse(&rf.zs.decompress(&z).unwrap()).unwrap();
+            let n: usize = y.root.get("Actors").and_then(|a| a.as_arr()).unwrap().iter().filter(|a| a.get("Gyaml").and_then(|v| v.as_str()) == Some(crate::difficulty::mega_like::CLASS)).count();
+            assert_eq!(n, 3, "{m}");
+        }
+        let mut timers = |class: &str| -> Vec<f32> {
+            let z: Vec<u8> = std::fs::read(b.root.join("romfs").join(crate::difficulty::mega_like::pack_of(class))).unwrap();
+            let es: Vec<crate::sarc::Entry> = crate::sarc::parse(&rf.zs.decompress(&z).unwrap()).unwrap();
+            let a: crate::ainb::Ainb = crate::ainb::Ainb::parse(&crate::sarc::get(&es, crate::difficulty::mega_like::UTILITY_GRAPH).unwrap().data).unwrap();
+            a.find_els(crate::difficulty::backup::TIMER).iter().filter_map(|&i| a.prop_f32(i, "RandomAddCountFrames").filter(|r| *r == crate::difficulty::backup::RANDOM_FRAMES).and_then(|_| a.prop_f32(i, "CountFrames"))).collect()
+        };
+        assert_eq!(timers(crate::difficulty::mega_like::BASE), vec![crate::difficulty::backup::FRAMES]);
+        assert_eq!(timers(crate::difficulty::mega_like::CLASS), vec![crate::difficulty::mega_like::NEVER]);
+        let _ = std::fs::remove_dir_all(&load);
+    }
+
     fn actor(hash: u64, drop: &str) -> Node {
         Node::Map(vec![
             (
