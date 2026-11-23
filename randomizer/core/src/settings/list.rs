@@ -198,9 +198,9 @@ fn difficulty() -> Vec<Setting> {
         Setting::number(d::HEALTH_NUM, d::HEALTH, "difficulty", "Enemy health", d::NORMAL, d::STAT_RANGE.0, d::STAT_RANGE.1)
             .multiplier(d::STAT_STEP, d::NORMAL)
             .tip("How much health enemies and bosses have, from 0.5x to 5x. Health tops out at 99."),
-        Setting::number(d::DAMAGE_NUM, d::DAMAGE, "difficulty", "Enemy damage", d::NORMAL, d::STAT_RANGE.0, d::STAT_RANGE.1)
+        Setting::number(d::DAMAGE_NUM, d::DAMAGE, "difficulty", "Enemy damage", d::NORMAL, d::DAMAGE_RANGE.0, d::DAMAGE_RANGE.1)
             .multiplier(d::STAT_STEP, d::NORMAL)
-            .tip("How hard enemies and their projectiles hit, from 0.5x to 5x. Traps, lava, falls and grabs do their usual damage."),
+            .tip("How hard enemies and their projectiles hit, from 0.5x to 10x. Traps, lava, falls and grabs do their usual damage."),
         Setting::choice(d::HURT_NUM, d::HURT, "difficulty", "Damage Link takes", "normal")
             .opt("normal", "Normal", "Enemies, traps and falls hurt as usual.")
             .opt("double", "Double", "Everything that hurts Link, enemy hits, grabs and falls, does twice the damage.")
