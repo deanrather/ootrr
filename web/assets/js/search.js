@@ -16,6 +16,7 @@ const ALIASES = {
   faster_chests: "fast chest animation",
   faster_blocks: "push pull slide block puzzle",
   owl_warps: "owl kaepora fly ride warp travel kakariko kokiri lake hylia death mountain",
+  kaepora_hint: "owl kaepora gaebora next item progression",
 };
 
 function hay(label, tip, choices, extra) {

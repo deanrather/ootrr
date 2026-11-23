@@ -26,11 +26,12 @@ pub struct Ctx<'a> {
 
 pub type Stage = fn(&mut Romfs, &Ctx, &mut Vec<Out>) -> Res<()>;
 
-pub const STAGES: [(&str, Stage); 26] = [
+pub const STAGES: [(&str, Stage); 27] = [
     ("boss heart chests", boss_hearts),
     ("songs", songs),
     ("song models", song_models),
     ("hints", hints),
+    ("kaepora hint", kaepora),
     ("dungeon item text", dungeon_text),
     ("scrub hint text", scrub_hints),
     ("fairy price text", fairy_text),
@@ -88,6 +89,10 @@ fn hints(rf: &mut Romfs, c: &Ctx, more: &mut Vec<Out>) -> Res<()> {
         more.extend(crate::hints::stage(rf, c.d, c.seed, c.p.hints, c.keys, &c.p.npc)?);
     }
     Ok(())
+}
+
+fn kaepora(rf: &mut Romfs, c: &Ctx, more: &mut Vec<Out>) -> Res<()> {
+    crate::kaepora::stage(rf, more, c.work, c.d, c.seed, c.p.kaepora)
 }
 
 fn dungeon_text(rf: &mut Romfs, c: &Ctx, more: &mut Vec<Out>) -> Res<()> {

@@ -32,6 +32,7 @@ All 19 are in rc 4 (`<builds>\rc-4\`).
 | 25 | [Spawn enemies](25-spawn-enemies-combo.md) | `enemy_spawn_combo` | Yes, by hand |
 | 27 | [Unbreakable Bombchu Bowling grass](27-unbreakable-bowling-grass.md) (idea by Sabriel) | `unbreakable_bowling_grass` | Yes, by hand |
 | 29 | [Fireball storms](29-fireball-storms.md) | `fireball_storms` | Yes, by hand (two of four spots) |
+| 36 | [Kaepora next-item hint](36-kaepora-next-item-hint.md) | `kaepora_hint` | Yes, by script (see the file) |
 | 49 | [Fall in pit penalty](49-fall-pit-penalty.md) | `fall_pit_penalty` | Partly (old on/off version, by hand) |
 | 52 | [Enemy feints](52-enemy-feints.md) (Stalfos, Lizalfos, Dinolfos, Iron Knuckles, Deku Babas; held wind-ups) | `enemy_feints` | round 4 by script (boomerang hold; user picked it from clips 23 Nov); not yet played by hand |
 

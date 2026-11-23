@@ -34,6 +34,7 @@ pub fn list(d: &Data) -> Vec<String> {
         out.extend(c.spots.iter().map(|s| s.file.clone()));
     }
     out.extend(crate::cow_clone::stage::sources());
+    out.extend(crate::kaepora_pack::sources());
     for s in [BIG_FLOW, SMALL_FLOW, SETTING_TABLE, ANALYZED_TABLE, TABLE_PATH, LIST_PATH, start::MODULE, songs::FLOW, hints::FLOW, LANGUAGE] {
         out.insert(s.to_string());
     }
