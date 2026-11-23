@@ -246,9 +246,21 @@
     return r;
   }
   window.actLabelsChange = function () { save(); if (labelsOn) actLabelsApply(); };
+  const spotKey = r => [r.x, r.y, r.z].map(v => Math.round(Number(v) / 0.5)).join(',');
+  const isNamed = r => !!best(lookup(r));
+  const dropOverprint = list => {
+    const at = {}, order = [];
+    list.forEach(r => {
+      const k = spotKey(r);
+      if (!(k in at)) { at[k] = r; order.push(k); }
+      else if (!isNamed(at[k]) && isNamed(r)) at[k] = r;
+    });
+    return order.map(k => at[k]);
+  };
+  window.actDropOverprint = dropOverprint;
   const labelText = r => { const e = lookup(r); return r.hash_id + ' ' + (best(e) || (r.name || '?')); };
   window.actLabelPlan = function () {
-    const picked = rows.filter(r => r.hash_id && wanted(r));
+    const picked = dropOverprint(rows.filter(r => r.hash_id && wanted(r)));
     const colour = $('act-colour').checked;
     const lines = picked.map(r => r.hash_id + '\t' + labelText(r).replace(/[\t\r\n]/g, ' ') + (colour ? '\t' + (PAL()[colourKind(r)] || '') : ''));
     if (!lines.length) lines.push('1\t-');
@@ -268,8 +280,14 @@
     const r = await labelsAsk(Object.assign({}, plan.args, { names: path }));
     if (!r.ok) { labelsOn = false; setBtn(); out.textContent = (r.error || 'error') + ': ' + (r.message || 'this build has no labels command (needs the ootrr-tools build)'); return; }
     lastSent = sig;
-    const l = r.labels || {};
-    out.textContent = plan.count + ' actors ticked' + (l.shown != null ? ' · ' + l.shown + ' labelled' : '') + (r.fell_back ? ' · this build has no decimal ids or name list: labels are hex and unfiltered' : '');
+    const note = (r.fell_back ? ' · this build has no decimal ids or name list: labels are hex and unfiltered' : '');
+    const say = async () => {
+      const g = await panel.bridge('labels', { op: 'get' });
+      const l = (g && g.ok && g.labels) || r.labels || {};
+      out.textContent = plan.count + ' actors ticked' + (l.shown != null ? ' · ' + l.shown + ' labelled' : '') + note;
+    };
+    out.textContent = plan.count + ' actors ticked' + note;
+    setTimeout(say, 800);
   };
   let toggling = false;
   async function labelsSync() {

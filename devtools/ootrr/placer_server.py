@@ -48,8 +48,15 @@ def last_json(text: str) -> dict:
 
 
 class Game:
-    def __init__(self, session: str) -> None:
+    def __init__(self, session: str, run: str | None = None, sock: str | None = None) -> None:
         self.session: str = session
+        self.run: str | None = run
+        self.sock: str | None = sock
+
+    def target(self) -> list[str]:
+        if self.sock:
+            return ["--sock", self.sock]
+        return ["--run", self.run or self.run_dir()]
 
     def run_dir(self) -> str:
         root: str = os.path.join(self.session, "runs")
@@ -59,7 +66,7 @@ class Game:
     def ctl(self, *args: str, timeout: int = 30, retries: int = 6) -> str:
         out: str = ""
         for _ in range(retries):
-            r = subprocess.run(CTL + ["--run", self.run_dir()] + list(args), capture_output=True, text=True, timeout=timeout)
+            r = subprocess.run(CTL + self.target() + list(args), capture_output=True, text=True, timeout=timeout)
             out = r.stdout + r.stderr
             if "not taken" not in out and "another edit is waiting" not in out:
                 break
@@ -739,13 +746,15 @@ def main() -> int:
     ap.add_argument("--lan", action="store_true")
     ap.add_argument("--key")
     ap.add_argument("--arrows", action="store_true", help="send placed markers' facing (Longshot radar API 41 and later)")
+    ap.add_argument("--run", help="one run folder to talk to (default: the newest under SESSION/runs)")
+    ap.add_argument("--sock", help="one bridge socket to talk to (instead of --run)")
     ap.add_argument("--fake", action="store_true", help="no game: answer from fake_game.py (render checks and screenshots)")
     a = ap.parse_args()
     if a.fake:
         import fake_game
         game = fake_game.FakeGame(a.session)
     else:
-        game = Game(a.session)
+        game = Game(a.session, a.run, a.sock)
     placer: Placer = Placer(a.session, game)
     placer.arrows = a.arrows
     print(f"enemy placer on http://127.0.0.1:{a.port}/placer  session {a.session}", flush=True)

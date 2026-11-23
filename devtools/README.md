@@ -20,7 +20,7 @@ help you look at the game while you build one.
 ## What you need
 
 1. **Python 3.10 or later.** Everything here uses only the standard library, except one step: `build_cache.py` needs
-   `pip install zstandard` to read the game's map files.
+   `python -m pip install zstandard` to read the game's map files.
 2. **Longshot, our fork, tools branch.** The tools use bridge commands that upstream Longshot does not have yet (the
    list is at the end). Clone `https://git.magicbean.dev/BeanSeller/Longshot.git`, check out the branch `feat/playtest-panel` (the open Longshot MR that adds the extra control-bridge capabilities), and build it from your
    own game dump by following that checkout's `docs/dev/reference/build.md`. devtools need two things from it: its
@@ -35,7 +35,7 @@ help you look at the game while you build one.
 ## Set up (once)
 
 ```
-pip install zstandard
+python -m pip install zstandard
 python devtools/build_cache.py --romfs <extracted game romfs>
 ```
 
@@ -63,9 +63,12 @@ devtools attach to a game that is already running with Longshot's control bridge
 python <Longshot checkout>/scripts/longshot_ctl.py launch <Longshot game folder> --root <session>/runs
 ```
 
-(`start.py` prints this line with your folders filled in, and `start.py --launch` runs it for you.) The panel finds the
-newest run in that folder by itself, so a game you start again is found without restarting devtools. To use a game you
-started another way, pass its bridge socket with `--sock` or its run folder with `--run`. Load a save before you use
+`--root <session>/runs` is the folder the game's run folders go in; `<session>` is `devtools/session` unless you gave
+`--session`. `start.py` prints this line with your folders filled in, and `start.py --launch` runs it for you, so you
+never type the folder yourself. Both servers (the Mod UI on 8765 and the managers' server on 8766) find the newest run in
+that folder by themselves, so a game you start again is found without restarting devtools. To use a game you started
+somewhere else, pass its run folder with `start.py --run <run folder>` or its bridge socket with `start.py --sock <socket>`;
+`start.py` hands that to both servers. Load a save before you use
 the cards; the Mod UI's Go To card and Give card help.
 
 ## Start devtools
@@ -74,7 +77,8 @@ the cards; the Mod UI's Go To card and Give card help.
 python devtools/start.py --game <Longshot game folder> --romfs <extracted game romfs> --longshot-scripts <Longshot checkout>/scripts
 ```
 
-then open <http://127.0.0.1:8765/>. It starts the Mod UI on port 8765 and the managers' server on port 8766 (the four
+then open <http://127.0.0.1:8765/> (start.py prints the address; if you changed the managers' port with
+`--placer-port`, it adds `?placer=<port>` so the page knows where the four manager cards live; leave it in the address). It starts the Mod UI on port 8765 and the managers' server on port 8766 (the four
 manager cards are pages from it, shown inside the Mod UI). It launches no game unless you add `--launch`. Useful options:
 
 - `--lan` also listens on your network, with an access key in the address it prints, so a phone or tablet beside the
@@ -83,8 +87,9 @@ manager cards are pages from it, shown inside the Mod UI). It launches no game u
   the Mod UI server (`python devtools/panel/server.py --help`).
 - `--demo` runs the manager cards against a fake game so you can look at the pages with no Longshot at all.
 
-On Windows a small note box (`docs/TBOX.md`) also starts: press T with the game in front and type a note that is
-appended to the session's notes with Link's position. `--no-tbox` leaves it out.
+On Windows a small note box (`docs/TBOX.md`) also starts by default: press T with the game in front and type a note that
+is appended to the session's notes with Link's position. Turn it off with `--no-tbox`, change the key with `--tbox-key`,
+or make it work only while the game window is in front with `--tbox-ingame-only`.
 
 ## Location naming: the workflow
 
@@ -99,7 +104,7 @@ appended to the session's notes with Link's position. `--no-tbox` leaves it out.
    `data/locations.json` and `data/tracker_targets.json`, the distance, a **check** column that says when the two OOTRR
    tables differ or an id is repeated, a **link / copy** column and the position and state.
 5. In **link / copy**: `objmap` opens the same actor on the object map in its own scene, map and floor; `copy id` copies
-   the decimal id; `copy line` copies one markdown line, `[id](objmap link) >> name`, ready to paste into your notes.
+   the decimal id; `copy line` copies one markdown line, `[id](objmap link) ">>" name` (the `">>"` is literal, in quotes, as the modders' notes write it), ready to paste into your notes.
    **Copy rows** copies the whole table as tab-separated text.
 6. Name what is missing in your notes with those lines, then add the names to OOTRR's data the way its own docs say
    (`data/locations.json` is the randomizer's, so open a pull request there). Run `build_cache.py --only names` and the
@@ -129,13 +134,16 @@ load does not hide the others.
 
 ## What still depends on Longshot
 
-devtools talk to the game only through the control bridge (`longshot_bridge.py`, `longshot_ctl.py`). The tools build of
-Longshot has these commands, and the cards need them: `status`, `teleport`, `warp`, `press`, `shot`, `give` (and `take`),
-`edit` (`flagset`, `flagget`, `foehurt`), `flags`, `subscribe`, `caption`, `spawn`, `enemies`, `actors` (with the
-placement hash in hex and decimal), `labels` (`on`, `off`, `names`, `format`, `colors`, `named_only`, `range`, `max`),
-`radar` (`set`, `clear`, `options`, `fit`), `placeholders` (`set`, `on`, `off`, `clear`), `aim` (`marker`, `events`, place and
-remove), `debug` and `damage`. If a command is missing from your build the card that uses it reports the bridge error; the
-others keep working. The Actor Viewer list and names work with `actors` alone; the in-game overlay needs `labels`.
+devtools talk to the game only through the control bridge (`longshot_bridge.py`, `longshot_ctl.py`). The Longshot MR
+build (branch `feat/playtest-panel`) has what they use. Through `longshot_ctl.py` the cards call: `status`, `teleport`, `warp`,
+`press`, `shot`, `give` and `take`, `caption`, `spawn`, `enemies`, `actors`, `labels`, `radar`, `placeholders`, `aim`,
+`debug`, `damage` (and `actorkill`) and `raw` (a bridge request sent as JSON, used for `radar`, `placeholders` and `debug`). The Mod UI server
+talks to the bridge directly for `edit` (`flagset`, `flagget`: the Story Flags card) and `wait`. `edit` and `subscribe`
+are bridge requests, not `longshot_ctl.py` subcommands; the control-bridge reference of the Longshot checkout
+(`docs/dev/reference/control-bridge.md`) lists them. `damage`, `kill` and `enemyhp` are `longshot_ctl.py` commands that send the bridge's
+`edit` verbs `foehurt`, `foehp` and `actorkill`. The Actor Viewer list and names work with `actors` alone; the in-game
+overlay needs `labels` (`on`, `off`, `get`, `names`, `format`, `colors`, `named_only`, `range`, `max`). If a command is missing
+from your build the card that uses it reports the bridge error; the others keep working.
 
 ## Tests
 

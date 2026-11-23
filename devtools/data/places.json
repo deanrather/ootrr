@@ -1,5 +1,41 @@
 [
     {
+        "label": "Temple of Time, empty hall (child)",
+        "group": "Quiet places",
+        "map": "Market_Child",
+        "warps": [
+            [
+                99.5,
+                105.2,
+                -34
+            ]
+        ]
+    },
+    {
+        "label": "Kokiri Forest (child)",
+        "group": "Quiet places",
+        "map": "KokiriForest_Child",
+        "warps": []
+    },
+    {
+        "label": "Market, Bombchu Bowling (child)",
+        "group": "Quiet places",
+        "map": "Market_Child",
+        "warps": []
+    },
+    {
+        "label": "Kakariko, inside the gate (map only)",
+        "group": "Quiet places",
+        "map": "KakarikoVillage_Child",
+        "warps": []
+    },
+    {
+        "label": "Zora Fountain (child)",
+        "group": "Quiet places",
+        "map": "ZoraFountain_Child",
+        "warps": []
+    },
+    {
         "label": "Volvagia, adult field (roams)",
         "group": "Unique enemies",
         "map": "HyruleField_Adult",
@@ -420,20 +456,8 @@
         ]
     },
     {
-        "label": "Kokiri Forest (child)",
-        "group": "Helpers",
-        "map": "KokiriForest_Child",
-        "warps": []
-    },
-    {
-        "label": "Market, Bombchu Bowling (child)",
-        "group": "Helpers",
-        "map": "Market_Child",
-        "warps": []
-    },
-    {
         "label": "Hyrule Field, open middle",
-        "group": "Helpers",
+        "group": "Other",
         "map": "HyruleField_Child",
         "warps": [
             [
@@ -442,18 +466,6 @@
                 159.04
             ]
         ]
-    },
-    {
-        "label": "Kakariko, inside the gate (map only)",
-        "group": "Helpers",
-        "map": "KakarikoVillage_Child",
-        "warps": []
-    },
-    {
-        "label": "Zora Fountain (child)",
-        "group": "Helpers",
-        "map": "ZoraFountain_Child",
-        "warps": []
     },
     {
         "label": "Forest Temple boss key chest",

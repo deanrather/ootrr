@@ -131,6 +131,7 @@ def main(argv: list[str]) -> int:
                                        "--game-dir", game or ""]))
     if not no_placer:
         pc: list[str] = [sys.executable, "-I", os.path.join(HERE, "ootrr", "placer_server.py"), session, "--arrows", "--port", pport]
+        pc += ["--run", run] if run else ["--sock", sock] if sock else []
         if demo:
             pc.append("--fake")
         if lan:

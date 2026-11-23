@@ -406,6 +406,19 @@ class PlacerFlow(unittest.TestCase):
         again = S.Placer(self.dir, self.g)
         self.assertTrue(again.view()["models"])
 
+    def test_the_game_target_follows_run_and_sock(self):
+        import placer_server as S
+        self.assertEqual(S.Game(self.dir, run="R1").target(), ["--run", "R1"])
+        self.assertEqual(S.Game(self.dir, sock="S1").target(), ["--sock", "S1"])
+        self.assertEqual(S.Game(self.dir, run="R1", sock="S1").target(), ["--sock", "S1"])
+        os.makedirs(os.path.join(self.dir, "runs", "r9"), exist_ok=True)
+        self.assertEqual(S.Game(self.dir).target(), ["--run", os.path.join(self.dir, "runs", "r9")])
+
+    def test_start_passes_run_and_sock_to_the_placer(self):
+        with open(os.path.join(_paths.ROOT, "start.py"), encoding="utf-8") as f:
+            src: str = f.read()
+        self.assertIn('pc += ["--run", run] if run else ["--sock", sock] if sock else []', src)
+
     def test_the_client_path_follows_longshot_ctl(self):
         import importlib
         import placer_server as S

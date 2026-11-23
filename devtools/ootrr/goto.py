@@ -4,7 +4,10 @@ twice on 23 Nov). "arrived" is printed only from a fresh status: game state play
 Link within ARRIVED units of the target in x and z. The status snapshot can hold the old map and position during a load,
 so the load state counts, not the position alone.
 
-    python -I goto.py RUN MAP X Y Z [--health HEARTS]   (hearts, e.g. 20; caps at full)
+    python -I goto.py RUN MAP X Y Z [--health HEARTS] [--longshot-scripts DIR] [--sock PATH]   (hearts, e.g. 20; caps at full)
+
+RUN is the run folder (or "-" with --sock). The bridge script is DIR/longshot_ctl.py, DIR from --longshot-scripts, then
+$LONGSHOT_SCRIPTS, then longshot_scripts in devtools/config.json (see paths.py); $LONGSHOT_CTL names the script itself.
 
 Exit codes: 0 arrived; 1 Link never reached the map (timeout); 2 in the map but not at the target; 3 the game is not
 answering; 4 the load seems hung (the game stayed in loading for more than HUNG seconds, 60).
@@ -23,7 +26,7 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import paths as PATHS  # noqa: E402
 
-CTL = PATHS.longshot_ctl()
+SOCK: str = ""
 WAIT: float = 60.0
 ARRIVED: float = 4.0
 HUNG: float = 60.0
@@ -35,7 +38,11 @@ def playing(s: dict) -> bool:
 
 
 def ctl(run: str, *a: str) -> str:
-    r = subprocess.run([sys.executable, "-I", CTL, "--run", run] + list(a), capture_output=True, text=True, timeout=40)
+    c: str = PATHS.longshot_ctl()
+    if not c or not os.path.isfile(c):
+        sys.exit("goto: no longshot_ctl.py found: give --longshot-scripts <Longshot checkout>/scripts or set LONGSHOT_SCRIPTS")
+    target: list[str] = ["--sock", SOCK] if SOCK else ["--run", run]
+    r = subprocess.run([sys.executable, "-I", c] + target + list(a), capture_output=True, text=True, timeout=40)
     return (r.stdout + r.stderr).strip()
 
 
@@ -121,7 +128,13 @@ def main() -> None:
     p.add_argument("y", type=float)
     p.add_argument("z", type=float)
     p.add_argument("--health", type=int)
+    p.add_argument("--longshot-scripts", dest="scripts")
+    p.add_argument("--sock")
     a = p.parse_args()
+    global SOCK
+    SOCK = a.sock or ""
+    if a.scripts:
+        os.environ["LONGSHOT_SCRIPTS"] = a.scripts
     ok, msg = go(lambda: status(a.run), lambda *c: ctl(a.run, *c), a.map, [a.x, a.y, a.z], say=lambda m: print(m, flush=True))
     if a.health is not None:
         ctl(a.run, "health", str(a.health))

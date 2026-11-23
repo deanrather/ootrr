@@ -104,5 +104,35 @@ class Viewer(unittest.TestCase):
         self.assertEqual(sorted(self.game.hit_names), ["Animal_Kokiri_Insect_A", "Tree_Kokiri_BillboardTree_A_01"])
 
 
+
+class Overprint(unittest.TestCase):
+    def html(self) -> str:
+        with open(os.path.join(_paths.ROOT, "cards", "actors.html"), encoding="utf-8") as f:
+            return f.read()
+
+    def test_count_comes_from_labels_get(self):
+        h: str = self.html()
+        self.assertIn("panel.bridge('labels', { op: 'get' })", h)
+        self.assertIn("setTimeout(say, 800)", h)
+
+    def test_same_spot_keeps_the_named_actor(self):
+        import shutil
+        import subprocess
+        node: str | None = shutil.which("node")
+        if not node:
+            self.skipTest("node is not installed")
+        h: str = self.html()
+        i: int = h.index("const spotKey")
+        j: int = h.index("window.actDropOverprint")
+        pre: list[str] = ["const names = { ids: { '2': { l: [['Deku Tree Grass 18']], t: [] } } };",
+                          "const lookup = r => names.ids[r.hash_id] || { l: [], t: [] };",
+                          "const best = e => e.l.length ? e.l[0][0] : '';", h[i:j],
+                          "const rows = [{hash_id:'1',x:1,y:2,z:3},{hash_id:'2',x:1.1,y:2,z:3},{hash_id:'3',x:50,y:2,z:3},{hash_id:'4',x:50,y:2,z:3}];",
+                          "console.log(JSON.stringify(dropOverprint(rows).map(r => r.hash_id)));"]
+        js: str = " ".join(pre)
+        r = subprocess.run([node, "-e", js], capture_output=True, text=True)
+        self.assertEqual(r.stdout.strip(), '["2","3"]', r.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()
