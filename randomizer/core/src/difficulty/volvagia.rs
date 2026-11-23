@@ -5,18 +5,19 @@ use crate::byml::{Byml, Node};
 use crate::cow_clone::rows::heap;
 use crate::difficulty::ambush::{actor, fresh, vec3};
 use crate::difficulty::respawn;
+use crate::difficulty::volvagia_die::{self as die_graph, Mode, DIE_MODULE, HEAP_ROOM, HOLDER_CLONE, HOLDER_KEY, HOLDER_OWN};
 use crate::error::{Error as E, Res};
 use crate::flow_locations::dict_id;
 use crate::modpack::Pack;
 use crate::pickup_pack::rows::{self, ACTOR_INFO, GAME_ACTOR_INFO, HEAP, ROW_ID};
-use crate::pickup_pack::sizes::{file_size, pack_size};
+use crate::pickup_pack::sizes::{file_size, pack_size, FILE_MARGIN};
 use crate::pickup_pack::tag::{Table, TAG};
 use crate::pickup_pack::PACK_DICT;
 use crate::placement::hash_of;
 use crate::romfs::Romfs;
 use crate::rsizetable::{self, Rst};
 use crate::sarc::{self, Entry};
-use crate::staging::{grow_out, Out, BANC_DICT};
+use crate::staging::{grow_out, Out, BANC_DICT, MARGIN};
 use crate::zs;
 
 pub const BASE: &str = "Enemy_DungeonBoss_Volvagia";
@@ -47,9 +48,26 @@ pub const DEATH_CLONE: &str = "Component/DeathParam/Enemy_Volvagia_Roam.game__co
 pub const DEATH_TABLE_BASE: &str = "DungeonBossVolvagia";
 pub const DESTROY: &str = "IsRequestDestruction";
 pub const PROCEDURES: &str = "DeathProcedures";
+pub const WAIT: &str = "IsWaitForSignal";
+pub const DROP: &str = "IsDropItem";
+pub const CELL_COST: u64 = 256;
+pub const ENABLED: [&str; 7] = ["AI", "AncientWeapon", "Crushed", "Frozen", "LifeDepleted", "SideCrushed", "UpperCrushed"];
+pub const FROM: &str = "Enemy_Floormaster";
+pub const DROP_KEY: &str = "DropRef";
+pub const DROP_DEFAULT: &str = "Component/DropParam/Default.game__component__DropParam.bgyml";
+pub const DROP_PLAIN: &str = "Component/DropParam/Drop_Default.game__component__DropParam.bgyml";
+pub const DROP_BOARD: &str = "Component/Blackboard/BlackboardParamTable/Drop.engine__component__BlackboardParamTable.bgyml";
+pub const DROP_TABLE_NONE: &str = "Drop/DropTable/DropTable_None.game__drop__DropTable.bgyml";
+pub const DROP_SUB_NONE: &str = "Drop/DropSubTable/DropTable_None.game__drop__DropSubTable.bgyml";
+pub const DROP_PARAM_CLONE: &str = "Component/DropParam/Enemy_Volvagia_Roam.game__component__DropParam.bgyml";
+pub const DROP_TABLE_CLONE: &str = "Drop/DropTable/Enemy_Volvagia_Roam.game__drop__DropTable.bgyml";
+pub const DROP_SUB_CLONE: &str = "Drop/DropSubTable/Enemy_Volvagia_Roam.game__drop__DropSubTable.bgyml";
+pub const RUPEE: &str = "Obj_Rupee_Blue";
+pub const RUPEE_COUNT: u32 = 10;
+pub const RUPEE_TYPE: u32 = 995_674_644;
 pub const BEATEN: &str = "HavePlayedEvent.Dm_FireTemple_BossOut";
 pub const PRESENCE: &str = "Presence";
-pub const NOTE: &str = "Volvagia roams Hyrule Field: as an adult, a copy of Volvagia under its own actor name flies over the open middle of Hyrule Field, coming out of the ground and diving back in at eight spots around one point, and breathes fire at you. It has no boss music, no intro scene and no death scene: beating it gives nothing and changes no story flag, a beaten one is never written down, so it is back the next time the field loads, and it stops appearing once you have beaten the real Volvagia in the Fire Temple (the flag that the Fire Temple victory scene has played). The Fire Temple fight is unchanged. Functional WIP: when beaten in the field she freezes before her death animation; she should drop a red rupee and flee (planned).";
+pub const NOTE: &str = "Volvagia roams Hyrule Field: as an adult, a copy of Volvagia under its own actor name flies over the open middle of Hyrule Field, coming out of the ground and diving back in at eight spots around one point, and breathes fire at you. It has no boss music, no intro scene and no death scene: beating it leaves a purple rupee (50 rupees) and changes no story flag, a beaten one is never written down, so it is back the next time the field loads, and it stops appearing once you have beaten the real Volvagia in the Fire Temple (the flag that the Fire Temple victory scene has played). The Fire Temple fight is unchanged. Functional WIP: when beaten in the field she vanishes at once and leaves a purple rupee (50 rupees) on the ground; she does not heal over time and does not flee.";
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Arena {
@@ -97,8 +115,16 @@ pub fn volvagia_file(name: &str) -> String {
     format!("GameParameter/DungeonBossVolvagiaParam/{name}.game__enemy__DungeonBossVolvagiaParam.bgyml")
 }
 
-pub fn own() -> [String; 5] {
-    [actor_file(CLASS), table_file(CLASS), boss_file(CLASS), volvagia_file(CLASS), DEATH_CLONE.to_string()]
+pub fn own() -> [String; 8] {
+    [actor_file(CLASS), table_file(CLASS), boss_file(CLASS), volvagia_file(CLASS), DEATH_CLONE.to_string(), DROP_PARAM_CLONE.to_string(), DROP_TABLE_CLONE.to_string(), DROP_SUB_CLONE.to_string()]
+}
+
+pub fn owned(m: Mode) -> Vec<String> {
+    let mut v: Vec<String> = own().to_vec();
+    if m.holds() {
+        v.push(HOLDER_CLONE.to_string());
+    }
+    v
 }
 
 pub fn death_table() -> String {
@@ -128,12 +154,17 @@ fn expect(n: &Node, k: &str, want: &str) -> Res<()> {
     Ok(())
 }
 
-pub fn actor_param(base: &[u8]) -> Res<Vec<u8>> {
+pub fn actor_param(base: &[u8], m: Mode) -> Res<Vec<u8>> {
     let mut y: Byml = Byml::parse(base)?;
     let c: &mut Node = comps(&mut y)?;
     expect(c, "GameParameterTableRef", &format!("?{}", table_file(BASE)))?;
     expect(c, DEATH_KEY, &format!("?{DEATH_OWN}"))?;
+    expect(c, HOLDER_KEY, &format!("?{HOLDER_OWN}"))?;
     let mut inner: Node = Node::Map(Vec::new());
+    if m.holds() {
+        inner.set(HOLDER_KEY, Node::Str(format!("?{HOLDER_CLONE}")));
+    }
+    inner.set(DROP_KEY, Node::Str(format!("?{DROP_PARAM_CLONE}")));
     inner.set("BattlePresentationRef", Node::Str(BOSS_SHOW.to_string()));
     inner.set(DEATH_KEY, Node::Str(format!("?{DEATH_CLONE}")));
     inner.set("GameParameterTableRef", Node::Str(format!("?{}", table_file(CLASS))));
@@ -154,14 +185,43 @@ pub fn death(base: &[u8]) -> Res<Vec<u8>> {
     y.write()
 }
 
+pub fn cells(raw: &[u8]) -> Res<usize> {
+    match Byml::parse(raw)?.root.get(respawn::CELLS) {
+        Some(Node::Map(c)) => Ok(c.len()),
+        _ => Err(E::Format("volvagia roams: a death table has no cell list")),
+    }
+}
+
+pub fn table_size(rst: &Rst, peer: &str, peer_raw: &[u8], out: &[u8]) -> Res<u32> {
+    let have: u64 = rst.get(peer).ok_or_else(|| E::Msg(format!("volvagia roams: {peer} has no size table entry")))? as u64;
+    let more: u64 = cells(out)?.saturating_sub(cells(peer_raw)?) as u64;
+    let grow: u64 = rsizetable::align(out.len().saturating_sub(peer_raw.len()) as u64) + CELL_COST * more;
+    u32::try_from(have + grow + FILE_MARGIN).map_err(|_| E::Format("volvagia roams: the death table size does not fit in 32 bits"))
+}
+
 pub fn procedures(raw: &[u8]) -> Res<Vec<u8>> {
     let mut y: Byml = Byml::parse(&respawn::always(raw)?)?;
     let c: &mut Node = y.root.get_mut(respawn::CELLS).and_then(|c| c.get_mut(respawn::CELL)).ok_or(E::Format("volvagia roams: the Volvagia death table has no cell for a beaten enemy"))?;
     if c.get(DESTROY) != Some(&Node::Bool(false)) {
         return Err(E::Msg(format!("volvagia roams: the Volvagia death table does not keep the body ({DESTROY}), the game files differ")));
     }
-    if !c.set(DESTROY, Node::Bool(true)) {
-        return Err(E::Format("volvagia roams: the cell for a beaten Volvagia is not a map"));
+    if c.get(WAIT) != Some(&Node::Bool(true)) {
+        return Err(E::Msg(format!("volvagia roams: the Volvagia death table does not wait for the death scene ({WAIT}), the game files differ")));
+    }
+    let cells: &mut Node = y.root.get_mut(respawn::CELLS).ok_or(E::Format("volvagia roams: the Volvagia death table has no cell list"))?;
+    for r in ENABLED {
+        let k: String = format!("{r}___Data");
+        if cells.get(&k).is_none() {
+            let m: Node = Node::Map(vec![("$type".to_string(), Node::Str(respawn::CELL_TYPE.to_string())), ("ColumnKey".to_string(), Node::Str("Data".to_string())), ("RowKey".to_string(), Node::Str(r.to_string()))]);
+            if !cells.set(&k, m) {
+                return Err(E::Format("volvagia roams: the cell list of the Volvagia death table is not a map"));
+            }
+        }
+        let c: &mut Node = cells.get_mut(&k).ok_or(E::Format("volvagia roams: a cell of the Volvagia death table is missing"))?;
+        let ok: bool = c.set(DESTROY, Node::Bool(true)) && c.set(WAIT, Node::Bool(false)) && c.set(DROP, Node::Bool(true)) && c.set(respawn::KEPT, Node::Bool(false)) && c.set(respawn::SAVED, Node::Bool(false));
+        if !ok {
+            return Err(E::Format("volvagia roams: a cell of the Volvagia death table is not a map"));
+        }
     }
     y.write()
 }
@@ -213,12 +273,57 @@ pub fn widen(base: &[u8], scale: f32) -> Res<Vec<u8>> {
     y.write()
 }
 
-pub fn build(base: &[Entry], scale: f32) -> Res<Vec<Entry>> {
+pub fn rupee_item() -> Node {
+    Node::Map(vec![
+        ("BadLuckValueRate".to_string(), Node::F32(1.0)),
+        ("DropActorName".to_string(), Node::Str(format!("Work/Actor/{RUPEE}.engine__actor__ActorParam.gyml"))),
+        ("DropCreateCount".to_string(), Node::U32(RUPEE_COUNT)),
+        ("DropProbability".to_string(), Node::I32(100)),
+        ("IsReplace".to_string(), Node::Bool(true)),
+        ("MostDepletedResource".to_string(), Node::Arr(Vec::new())),
+        ("Type".to_string(), Node::U32(RUPEE_TYPE)),
+    ])
+}
+
+fn retarget(raw: &[u8], list: &str, to: &str, name: bool) -> Res<Vec<u8>> {
+    let mut y: Byml = Byml::parse(raw)?;
+    if !matches!(y.root.get(list), Some(Node::Arr(_))) {
+        return Err(E::Msg(format!("volvagia roams: a drop file has no {list}, the game files differ")));
+    }
+    y.root.set(list, Node::Arr(vec![Node::Str(work(to))]));
+    if !name {
+        y.root.remove("DropTableName");
+    }
+    y.write()
+}
+
+pub fn drop_files(donor: &[Entry]) -> Res<Vec<Entry>> {
+    let take = |n: &str| -> Res<Entry> { donor.iter().find(|e| e.name == n).cloned().ok_or_else(|| E::Msg(format!("volvagia roams: the {FROM} pack has no {n}, the game files differ"))) };
+    let mut out: Vec<Entry> = vec![take(DROP_DEFAULT)?, take(DROP_BOARD)?];
+    out.push(Entry { name: DROP_PARAM_CLONE.to_string(), data: retarget(&take(DROP_PLAIN)?.data, "DropTableResourceList", DROP_TABLE_CLONE, true)? });
+    out.push(Entry { name: DROP_TABLE_CLONE.to_string(), data: retarget(&take(DROP_TABLE_NONE)?.data, "SubTableList", DROP_SUB_CLONE, false)? });
+    let mut sub: Byml = Byml::parse(&take(DROP_SUB_NONE)?.data)?;
+    sub.root.set("Items", Node::Arr(vec![rupee_item()]));
+    out.push(Entry { name: DROP_SUB_CLONE.to_string(), data: sub.write()? });
+    Ok(out)
+}
+
+pub fn build(base: &[Entry], scale: f32, donor: &[Entry], m: Mode) -> Res<Vec<Entry>> {
     if base.iter().any(|e| e.name.contains(CLASS)) {
         return Err(E::Msg(format!("volvagia roams: the {BASE} pack already holds files named {CLASS}")));
     }
     let mut out: Vec<Entry> = base.to_vec();
-    out.push(Entry { name: actor_file(CLASS), data: actor_param(&get(base, &actor_file(BASE))?.data)? });
+    for e in drop_files(donor)? {
+        if !out.iter().any(|x| x.name == e.name) {
+            out.push(e);
+        }
+    }
+    let d: Vec<u8> = die_graph::die(&get(base, DIE_MODULE)?.data, m)?;
+    out.iter_mut().find(|e| e.name == DIE_MODULE).ok_or_else(|| E::Msg(format!("volvagia roams: the {BASE} pack has no {DIE_MODULE}, the game files differ")))?.data = d;
+    if m.holds() {
+        out.push(Entry { name: HOLDER_CLONE.to_string(), data: die_graph::holder(&get(base, HOLDER_OWN)?.data)? });
+    }
+    out.push(Entry { name: actor_file(CLASS), data: actor_param(&get(base, &actor_file(BASE))?.data, m)? });
     out.push(Entry { name: table_file(CLASS), data: table(&get(base, &table_file(BASE))?.data)? });
     out.push(Entry { name: boss_file(CLASS), data: boss(&get(base, &boss_file(BASE))?.data)? });
     out.push(Entry { name: volvagia_file(CLASS), data: widen(&get(base, &volvagia_file(BASE))?.data, scale)? });
@@ -227,9 +332,10 @@ pub fn build(base: &[Entry], scale: f32) -> Res<Vec<Entry>> {
     Ok(out)
 }
 
-pub fn rows(info: &mut Byml, game: &mut Byml, base_len: usize, len: usize) -> Res<usize> {
+pub fn rows(info: &mut Byml, game: &mut Byml, base_len: usize, len: usize, extra: i32) -> Res<usize> {
     let mut a: Node = rows::need(info, BASE, ACTOR_INFO)?.clone();
-    let h: i32 = heap(rows::own_heap(info, BASE)?, base_len, len)?;
+    let own: i32 = rows::own_heap(info, BASE)?.checked_add(extra).ok_or(E::Format("volvagia roams: the heap size does not fit"))?;
+    let h: i32 = heap(own, base_len, len)?;
     let v: Node = match a.get(HEAP) {
         Some(Node::U32(_)) => Node::U32(h.max(0) as u32),
         _ => Node::I32(h),
@@ -369,6 +475,7 @@ pub fn place(y: &mut Byml, r: &Ring, s: &Shape, raws: &[&[u8]]) -> Res<Vec<u64>>
 pub struct Made {
     pub outs: Vec<Out>,
     pub sizes: Vec<(String, u32)>,
+    pub grown: Vec<(String, usize, usize)>,
     pub lines: Vec<String>,
 }
 
@@ -381,7 +488,7 @@ fn current(rf: &mut Romfs, have: &dyn Fn(&str) -> Option<Vec<u8>>, p: &str) -> R
     Ok((rf.zs.decompress(&z)?, id))
 }
 
-pub fn stage(rf: &mut Romfs, have: &dyn Fn(&str) -> Option<Vec<u8>>, rst: &Rst, s: &Shape) -> Res<Made> {
+pub fn stage(rf: &mut Romfs, have: &dyn Fn(&str) -> Option<Vec<u8>>, rst: &Rst, s: &Shape, dm: Mode) -> Res<Made> {
     let mut m: Made = Made::default();
     if rf.root.join(pack_of(CLASS)).is_file() {
         return Err(E::Msg(format!("volvagia roams: the game already ships {CLASS}")));
@@ -393,12 +500,21 @@ pub fn stage(rf: &mut Romfs, have: &dyn Fn(&str) -> Option<Vec<u8>>, rst: &Rst, 
     let braw: Vec<u8> = rf.zs.decompress(&bz)?;
     let base: Vec<Entry> = sarc::parse(&braw)?;
     let pid: u32 = dict_id(&bz).unwrap_or(PACK_DICT);
-    let es: Vec<Entry> = build(&base, s.scale)?;
+    let dz: Vec<u8> = rf.read(&pack_of(FROM))?;
+    let donor: Vec<Entry> = sarc::parse(&rf.zs.decompress(&dz)?)?.into_iter().filter(|e| e.name.contains("Drop")).collect();
+    let es: Vec<Entry> = build(&base, s.scale, &donor, dm)?;
     let raw: Vec<u8> = sarc::write(&es)?;
-    let near: Vec<(String, usize)> = base.iter().map(|e| (e.name.clone(), e.data.len())).collect();
-    for p in own() {
+    for e in &es {
+        if let Some(b) = base.iter().find(|b| b.name == e.name).filter(|b| e.data.len() > b.data.len()) {
+            m.grown.push((e.name.clone(), b.data.len(), e.data.len()));
+        }
+    }
+    let near: Vec<(String, usize)> = base.iter().chain(donor.iter()).map(|e| (e.name.clone(), e.data.len())).collect();
+    for p in owned(dm) {
         let len: usize = get(&es, &p)?.data.len();
-        m.sizes.push((p.clone(), file_size(rst, &near, &p, len)?));
+        let learned: u32 = file_size(rst, &near, &p, len)?;
+        let floor: u32 = rst.get(&parent_of(&p)).map_or(0, |n| n.saturating_add(rsizetable::align(len as u64) as u32));
+        m.sizes.push((p.clone(), learned.max(floor)));
     }
     m.sizes.push((pack_of(CLASS), pack_size(raw.len())?));
     m.outs.push(Out { path: pack_of(CLASS), z: zs::compress_raw(&raw, Some(pid))?, old: 0, new: raw.len() });
@@ -406,7 +522,7 @@ pub fn stage(rf: &mut Romfs, have: &dyn Fn(&str) -> Option<Vec<u8>>, rst: &Rst, 
     let (graw, gid): (Vec<u8>, u32) = current(rf, have, GAME_ACTOR_INFO)?;
     let mut info: Byml = Byml::parse(&iraw)?;
     let mut game: Byml = Byml::parse(&graw)?;
-    rows(&mut info, &mut game, braw.len(), raw.len())?;
+    rows(&mut info, &mut game, braw.len(), raw.len(), if dm.holds() { HEAP_ROOM } else { 0 })?;
     for (p, y, old, id) in [(ACTOR_INFO, &info, iraw.len(), iid), (GAME_ACTOR_INFO, &game, graw.len(), gid)] {
         let out: Vec<u8> = y.write()?;
         m.outs.push(Out { path: p.to_string(), z: zs::compress_raw(&out, Some(id))?, old, new: out.len() });
@@ -422,8 +538,7 @@ pub fn stage(rf: &mut Romfs, have: &dyn Fn(&str) -> Option<Vec<u8>>, rst: &Rst, 
         None => rf.read(&tp)?,
     };
     let dt: Vec<u8> = procedures(&traw2)?;
-    let peers: Vec<(String, usize)> = vec![(tp.clone(), traw2.len()), (respawn::file("DungeonBossCommon"), rf.read(&respawn::file("DungeonBossCommon"))?.len())];
-    m.sizes.push((death_table(), file_size(rst, &peers, &death_table(), dt.len())?));
+    m.sizes.push((death_table(), table_size(rst, &tp, &rf.read(&tp)?, &dt)?));
     m.outs.push(Out { path: death_table(), old: 0, new: dt.len(), z: dt });
     let r: Ring = ring(&rf.read_byml(STAGE)?)?;
     let (mraw, mid): (Vec<u8>, u32) = current(rf, have, s.arena.file)?;
@@ -433,7 +548,7 @@ pub fn stage(rf: &mut Romfs, have: &dyn Fn(&str) -> Option<Vec<u8>>, rst: &Rst, 
     let placed: Vec<u64> = place(&mut y, &r, s, &[&mraw, &land])?;
     let mout: Vec<u8> = y.write()?;
     m.outs.push(Out { path: s.arena.file.to_string(), z: zs::compress_raw(&mout, Some(mid))?, old: mraw.len(), new: mout.len() });
-    m.lines.push(format!("{CLASS}: new actor class, pack {} bytes with {} files ({} of its own) and its own death table; it is not placed once {BEATEN} is set", raw.len(), es.len(), own().len()));
+    m.lines.push(format!("{CLASS}: new actor class, pack {} bytes with {} files ({} of its own, {} grown) and its own death table, death {dm:?}; it is not placed once {BEATEN} is set", raw.len(), es.len(), owned(dm).len(), m.grown.len()));
     m.lines.push(format!("{}: {CLASS} and {} anchors placed around {:?}, lift {}, scale {} (actor {})", s.arena.file, placed.len() - 1, s.arena.at, s.lift, s.scale, placed.first().map(|h| h.to_string()).unwrap_or_default()));
     Ok(m)
 }
@@ -444,14 +559,29 @@ pub fn sized(rf: &mut Romfs, t: &mut Rst, m: &Made) -> Res<usize> {
         t.set_size(p, *sz)?;
         n += 1;
     }
+    for (p, old, new) in &m.grown {
+        if t.grow(p, *old as u64, *new as u64, MARGIN)?.is_none() {
+            return Err(E::Msg(format!("volvagia roams: {p} has no size table entry to grow")));
+        }
+        n += 1;
+    }
     for o in m.outs.iter().filter(|o| !m.sizes.iter().any(|s| s.0 == o.path)) {
         n += grow_out(rf, t, o)?;
     }
     Ok(n)
 }
 
+pub fn parent_of(p: &str) -> String {
+    match p {
+        DROP_PARAM_CLONE => DROP_PLAIN.to_string(),
+        DROP_TABLE_CLONE => DROP_TABLE_NONE.to_string(),
+        DROP_SUB_CLONE => DROP_SUB_NONE.to_string(),
+        _ => p.replace(CLASS, BASE),
+    }
+}
+
 pub fn sources(s: &Shape) -> Vec<String> {
-    vec![pack_of(BASE), ACTOR_INFO.to_string(), GAME_ACTOR_INFO.to_string(), TAG.to_string(), respawn::file(DEATH_TABLE_BASE), STAGE.to_string(), s.arena.file.to_string()]
+    vec![pack_of(BASE), pack_of(FROM), ACTOR_INFO.to_string(), GAME_ACTOR_INFO.to_string(), TAG.to_string(), respawn::file(DEATH_TABLE_BASE), STAGE.to_string(), s.arena.file.to_string()]
 }
 
 pub fn write(rf: &mut Romfs, pk: &Pack, rst: &mut Option<Rst>) -> Res<(usize, Vec<String>)> {
@@ -462,7 +592,7 @@ pub fn write(rf: &mut Romfs, pk: &Pack, rst: &mut Option<Rst>) -> Res<(usize, Ve
     let t: &mut Rst = rst.as_mut().ok_or(E::Format("volvagia roams: no size table"))?;
     let have = |p: &str| -> Option<Vec<u8>> { fs::read(p.split('/').fold(root.clone(), |a, s| a.join(s))).ok() };
     let s: Shape = shape();
-    let m: Made = stage(rf, &have, t, &s)?;
+    let m: Made = stage(rf, &have, t, &s, die_graph::mode())?;
     for o in &m.outs {
         pk.write_romfs(&o.path, &o.z)?;
     }
@@ -483,6 +613,10 @@ mod tests {
         Byml::parse(&sarc::get(es, p).unwrap().data).unwrap()
     }
 
+    fn donor(rf: &mut Romfs) -> Vec<Entry> {
+        sarc::parse(&rf.read_zs(&pack_of(FROM)).unwrap()).unwrap().into_iter().filter(|e| e.name.contains("Drop")).collect()
+    }
+
     fn s(n: &Node, path: &[&str]) -> String {
         let mut c: &Node = n;
         for k in path {
@@ -495,7 +629,7 @@ mod tests {
     fn the_shape_reads_its_switches_and_ignores_bad_values() {
         assert_eq!(num("OOTRR_VOLVAGIA_TEST_UNSET_VAR", LIFT_RANGE, 3.0), 3.0);
         assert_eq!(work("Actor/X.engine__actor__ActorParam.bgyml"), "Work/Actor/X.engine__actor__ActorParam.gyml");
-        assert_eq!(own().len(), 5);
+        assert_eq!(own().len(), 8);
         assert!(death_table().ends_with("_game__death__DeathReasonProcedures.pp__CombinationDataTableData.bgyml") && death_table().contains(CLASS));
         assert!(own().iter().all(|p| p.contains(CLASS)));
         assert!(CLASS.len() <= BASE.len() && !CLASS.starts_with(BASE));
@@ -503,17 +637,19 @@ mod tests {
     }
 
     #[test]
-    fn the_clone_pack_is_the_volvagia_pack_plus_five_files_of_its_own() {
+    fn the_clone_pack_is_the_volvagia_pack_plus_eight_files_of_its_own_and_the_two_shared_drop_files() {
         let Some(r) = root() else { return };
         let mut rf: Romfs = Romfs::open(&r).unwrap();
         assert!(!r.join(pack_of(CLASS)).is_file());
         let base: Vec<Entry> = sarc::parse(&rf.read_zs(&pack_of(BASE)).unwrap()).unwrap();
-        let es: Vec<Entry> = build(&base, 2.0).unwrap();
-        assert_eq!(es.len(), base.len() + 5);
+        let dn: Vec<Entry> = donor(&mut rf);
+        let es: Vec<Entry> = build(&base, 2.0, &dn, Mode::Spawn).unwrap();
+        assert_eq!(es.len(), base.len() + 11);
         let back: Vec<Entry> = sarc::parse(&sarc::write(&es).unwrap()).unwrap();
-        for e in &base {
+        for e in base.iter().filter(|e| e.name != DIE_MODULE) {
             assert_eq!(sarc::get(&back, &e.name).map(|x| &x.data), Some(&e.data), "{}", e.name);
         }
+        assert_eq!(sarc::get(&back, DIE_MODULE).map(|x| x.data.clone()), Some(die_graph::die(&sarc::get(&base, DIE_MODULE).unwrap().data, Mode::Spawn).unwrap()));
         let a: Byml = y(&back, &actor_file(CLASS));
         assert_eq!(s(&a.root, &["$parent"]), "Work/Actor/Enemy_DungeonBoss_Volvagia.engine__actor__ActorParam.gyml");
         assert_eq!(s(&a.root, &["Components", "GameParameterTableRef"]), format!("?{}", table_file(CLASS)));
@@ -524,7 +660,15 @@ mod tests {
         assert!(!format!("{:?}", d.root).contains(BASE));
         assert_eq!(s(&d.root, &[PROCEDURES]), work(&death_table()));
         assert_eq!(s(&d.root, &["$parent"]), s(&y(&base, DEATH_OWN).root, &["$parent"]));
-        assert_eq!(a.root.get("Components").and_then(|c| if let Node::Map(m) = c { Some(m.len()) } else { None }), Some(3));
+        assert_eq!(a.root.get("Components").and_then(|c| if let Node::Map(m) = c { Some(m.len()) } else { None }), Some(5));
+        assert_eq!(s(&a.root, &["Components", HOLDER_KEY]), format!("?{HOLDER_CLONE}"));
+        assert_eq!(sarc::get(&back, HOLDER_OWN).map(|x| &x.data), sarc::get(&base, HOLDER_OWN).map(|x| &x.data));
+        assert_eq!(sarc::get(&back, HOLDER_CLONE).map(|x| x.data.clone()), Some(die_graph::holder(&sarc::get(&base, HOLDER_OWN).unwrap().data).unwrap()));
+        let pay: Vec<Entry> = build(&base, 2.0, &dn, Mode::Pay).unwrap();
+        assert_eq!(pay.len(), base.len() + 10);
+        assert!(sarc::get(&pay, HOLDER_CLONE).is_none());
+        assert!(y(&pay, &actor_file(CLASS)).root.get("Components").and_then(|c| c.get(HOLDER_KEY)).is_none());
+        assert_eq!(s(&a.root, &["Components", DROP_KEY]), format!("?{DROP_PARAM_CLONE}"));
         let t: Byml = y(&back, &table_file(CLASS));
         assert_eq!(s(&t.root, &["Components", "DungeonBossCommonParam"]), format!("?{}", boss_file(CLASS)));
         assert_eq!(s(&t.root, &["Components", "DungeonBossVolvagiaParam"]), format!("?{}", volvagia_file(CLASS)));
@@ -548,7 +692,7 @@ mod tests {
             }
         }
         assert_eq!(format!("{:?}", w.root.get("AirDiveHeight")), format!("{:?}", wo.root.get("AirDiveHeight")));
-        assert!(build(&es, 1.0).is_err());
+        assert!(build(&es, 1.0, &dn, Mode::Spawn).is_err());
     }
 
     #[test]
@@ -578,7 +722,7 @@ mod tests {
         let mut info: Byml = rf.read_byml(ACTOR_INFO).unwrap();
         let mut game: Byml = rf.read_byml(GAME_ACTOR_INFO).unwrap();
         let n: usize = info.root.as_arr().unwrap().len();
-        rows(&mut info, &mut game, 1000, 1800).unwrap();
+        rows(&mut info, &mut game, 1000, 1800, 0).unwrap();
         assert_eq!(info.root.as_arr().unwrap().len(), n + 1);
         assert!(rows::sorted(&info).unwrap() && rows::sorted(&game).unwrap());
         let a: &Node = rows::find(&info, CLASS).unwrap();
@@ -586,7 +730,7 @@ mod tests {
         assert_eq!(s(a, &["ModelProjectName"]), BASE);
         assert!(rows::own_heap(&info, CLASS).unwrap() >= rows::own_heap(&info, BASE).unwrap() + 800);
         assert_eq!(rows::find(&game, CLASS).and_then(|g| g.get("MaxLife")).map(|v| format!("{v:?}")), rows::find(&game, BASE).and_then(|g| g.get("MaxLife")).map(|v| format!("{v:?}")));
-        assert!(rows(&mut info, &mut game, 1000, 1800).is_err());
+        assert!(rows(&mut info, &mut game, 1000, 1800, 0).is_err());
         let mut t: Table = Table::parse(&rf.read_zs(TAG).unwrap()).unwrap();
         tags(&mut t).unwrap();
         assert_eq!(t.tags_of(CLASS), t.tags_of(BASE));
@@ -602,10 +746,10 @@ mod tests {
             let mut rf: Romfs = Romfs::open(&r).unwrap();
             let t: Rst = rsizetable::load(&mut rf).unwrap();
             let sh: Shape = Shape { arena, lift, scale };
-            let m: Made = stage(&mut rf, &none, &t, &sh).unwrap();
+            let m: Made = stage(&mut rf, &none, &t, &sh, Mode::Spawn).unwrap();
             let paths: Vec<&str> = m.outs.iter().map(|o| o.path.as_str()).collect();
             assert_eq!(paths, vec![pack_of(CLASS).as_str(), ACTOR_INFO, GAME_ACTOR_INFO, TAG, death_table().as_str(), arena.file]);
-            assert_eq!(m.sizes.len(), 7);
+            assert_eq!(m.sizes.len(), 11);
             for (p, sz) in &m.sizes {
                 assert!(*sz > 0 && t.get(p).is_none(), "{p}");
             }
@@ -701,7 +845,7 @@ mod tests {
         let staged: Out = outs.into_iter().find(|x| x.path == pack_of(BASE)).unwrap();
         let t: Rst = rsizetable::load(&mut rf).unwrap();
         let have = |p: &str| -> Option<Vec<u8>> { if p == pack_of(BASE) { Some(staged.z.clone()) } else { None } };
-        let m: Made = stage(&mut rf, &have, &t, &Shape { arena: FIELD, lift: 0.0, scale: 1.0 }).unwrap();
+        let m: Made = stage(&mut rf, &have, &t, &Shape { arena: FIELD, lift: 0.0, scale: 1.0 }, Mode::Spawn).unwrap();
         let clone: Vec<Entry> = sarc::parse(&rf.zs.decompress(&m.outs[0].z).unwrap()).unwrap();
         let plain: Vec<Entry> = sarc::parse(&rf.read_zs(&pack_of(BASE)).unwrap()).unwrap();
         let life: String = format!("{}Enemy_DungeonBoss_Volvagia{}", crate::difficulty::stats::LIFE_DIR, crate::difficulty::stats::LIFE_EXT);
@@ -720,21 +864,30 @@ mod tests {
         let cell: &Node = made.root.get(respawn::CELLS).and_then(|c| c.get(respawn::CELL)).unwrap();
         assert_eq!(cell.get(respawn::KEPT), Some(&Node::Bool(false)));
         assert_eq!(cell.get(respawn::SAVED), Some(&Node::Bool(false)));
-        assert_eq!(cell.get(DESTROY), Some(&Node::Bool(true)));
         let game: Byml = Byml::parse(&plain_table).unwrap();
         assert_eq!(s(&made.root, &["$parent"]), s(&game.root, &["$parent"]));
         let (Some(Node::Map(want)), Some(Node::Map(got))) = (game.root.get(respawn::CELLS), made.root.get(respawn::CELLS)) else { panic!() };
-        assert_eq!(want.len(), got.len());
-        for (k, v) in want {
-            let mine: &Node = made.root.get(respawn::CELLS).and_then(|c| c.get(k)).unwrap();
-            if k == respawn::CELL {
-                let (Node::Map(a), Node::Map(b)) = (v, mine) else { panic!() };
-                let rest: Vec<&(String, Node)> = b.iter().filter(|(n, _)| n != DESTROY && n != respawn::KEPT && n != respawn::SAVED).collect();
-                assert_eq!(rest, a.iter().filter(|(n, _)| n != DESTROY && n != respawn::KEPT && n != respawn::SAVED).collect::<Vec<_>>());
-            } else {
-                assert_eq!(mine, v, "{k}");
-            }
+        let mine_keys: Vec<String> = ENABLED.iter().map(|r| format!("{r}___Data")).collect();
+        for k in &mine_keys {
+            let c: &Node = made.root.get(respawn::CELLS).and_then(|c| c.get(k)).unwrap();
+            assert_eq!(c.get(DROP), Some(&Node::Bool(true)), "{k}");
+            assert_eq!(c.get(WAIT), Some(&Node::Bool(false)), "{k}");
+            assert_eq!(c.get(DESTROY), Some(&Node::Bool(true)), "{k}");
+            assert_eq!(c.get(respawn::KEPT), Some(&Node::Bool(false)), "{k}");
+            assert_eq!(c.get(respawn::SAVED), Some(&Node::Bool(false)), "{k}");
+            assert_eq!(c.get("IsIgnoreThisDeathReason"), want.iter().find(|(n, _)| n == k).and_then(|(_, v)| v.get("IsIgnoreThisDeathReason")), "{k}");
+            assert_eq!(c.get("$type").and_then(|t| t.as_str()), Some(respawn::CELL_TYPE), "{k}");
         }
+        for (k, v) in want {
+            if mine_keys.contains(k) {
+                continue;
+            }
+            assert_eq!(made.root.get(respawn::CELLS).and_then(|c| c.get(k)).unwrap(), v, "{k}");
+        }
+        assert_eq!(got.len(), want.len() + mine_keys.iter().filter(|k| !want.iter().any(|(n, _)| n == *k)).count());
+        let c: &Node = made.root.get(respawn::CELLS).and_then(|c| c.get("UpperCrushed___Data")).unwrap();
+        assert_eq!(c.get("RowKey").and_then(|t| t.as_str()), Some("UpperCrushed"));
+        assert_eq!(c.get("ColumnKey").and_then(|t| t.as_str()), Some("Data"));
         for k in ["AI___Data", "Burned___Data", "LifeCondition___Data", "PhysicsKinematicCollision___Data"] {
             assert!(made.root.get(respawn::CELLS).and_then(|c| c.get(k)).is_some(), "{k}");
         }
@@ -759,14 +912,15 @@ mod tests {
         let changed: Vec<&str> = plain.iter().filter(|e| sarc::get(&st, &e.name).map(|x| &x.data) != Some(&e.data)).map(|e| e.name.as_str()).collect();
         assert!(changed.iter().all(|n| n.starts_with("Life/") || n.contains("Attack") || n.contains("Speed") || n.contains("Move")), "{changed:?}");
         assert!(!changed.iter().any(|n| n.contains("Damage") || n.contains("Guard") || n.contains("Weak") || n.contains("Death") || n.contains("Reaction")), "{changed:?}");
-        let es: Vec<Entry> = build(&st, 1.0).unwrap();
-        for e in &st {
+        let dn: Vec<Entry> = donor(&mut rf);
+        let es: Vec<Entry> = build(&st, 1.0, &dn, Mode::Spawn).unwrap();
+        for e in st.iter().filter(|e| e.name != DIE_MODULE) {
             assert_eq!(sarc::get(&es, &e.name).map(|x| &x.data), Some(&e.data), "{}", e.name);
         }
         let a: Byml = y(&es, &actor_file(CLASS));
         let Some(Node::Map(c)) = a.root.get("Components") else { panic!() };
         let keys: Vec<&str> = c.iter().map(|(k, _)| k.as_str()).collect();
-        assert_eq!(keys, vec!["BattlePresentationRef", DEATH_KEY, "GameParameterTableRef"]);
+        assert_eq!(keys, vec![HOLDER_KEY, "BattlePresentationRef", DEATH_KEY, DROP_KEY, "GameParameterTableRef"]);
         let own: Byml = y(&es, DEATH_CLONE);
         let game: Byml = y(&st, DEATH_OWN);
         assert_eq!(s(&own.root, &["$parent"]), s(&game.root, &["$parent"]));
@@ -802,6 +956,107 @@ mod tests {
     }
 
     #[test]
+    fn every_enabled_death_reason_after_inheritance_is_on_the_list() {
+        let Some(r) = root() else { return };
+        let rf: Romfs = Romfs::open(&r).unwrap();
+        let mut merged: Vec<(String, bool)> = Vec::new();
+        for t in ["Default", "EnemyCommon", "DungeonBossCommon", DEATH_TABLE_BASE] {
+            let y: Byml = Byml::parse(&rf.read(&respawn::file(t)).unwrap()).unwrap();
+            let Some(Node::Map(c)) = y.root.get(respawn::CELLS) else { panic!() };
+            for (k, v) in c {
+                if let Some(Node::Bool(b)) = v.get("IsIgnoreThisDeathReason") {
+                    match merged.iter_mut().find(|(n, _)| n == k) {
+                        Some(e) => e.1 = *b,
+                        None => merged.push((k.clone(), *b)),
+                    }
+                } else if !merged.iter().any(|(n, _)| n == k) {
+                    merged.push((k.clone(), false));
+                }
+            }
+        }
+        let mut on: Vec<String> = merged.into_iter().filter(|(_, i)| !*i).map(|(k, _)| k.trim_end_matches("___Data").to_string()).collect();
+        on.sort();
+        let mut want: Vec<String> = ENABLED.iter().map(|r| r.to_string()).collect();
+        want.sort();
+        assert_eq!(on, want);
+    }
+
+    fn game_tables(r: &PB) -> Vec<(String, Vec<u8>)> {
+        let mut out: Vec<(String, Vec<u8>)> = Vec::new();
+        for e in fs::read_dir(r.join(respawn::DIR)).unwrap() {
+            let n: String = e.unwrap().file_name().to_string_lossy().to_string();
+            if n.ends_with(respawn::EXT) {
+                let p: String = format!("{}{n}", respawn::DIR);
+                out.push((p.clone(), fs::read(r.join(&p)).unwrap()));
+            }
+        }
+        out.sort();
+        out
+    }
+
+    #[test]
+    fn the_death_table_size_covers_what_every_game_table_of_its_length_and_cells_needs() {
+        let Some(r) = root() else { return };
+        let mut rf: Romfs = Romfs::open(&r).unwrap();
+        let t: Rst = rsizetable::load(&mut rf).unwrap();
+        let tp: String = respawn::file(DEATH_TABLE_BASE);
+        let peer: Vec<u8> = rf.read(&tp).unwrap();
+        let all: Vec<(String, Vec<u8>)> = game_tables(&r);
+        assert!(all.len() > 100);
+        let mut n: usize = 0;
+        for (p, b) in &all {
+            let Some(want) = t.get(p) else { continue };
+            let got: u32 = table_size(&t, &tp, &peer, b).unwrap() - FILE_MARGIN as u32;
+            assert!(got >= want, "{p}: {got} < {want}");
+            let per: i64 = want as i64 - b.len() as i64 - 240 * cells(b).unwrap() as i64;
+            assert!((5040..5400).contains(&per), "{p}: {per}");
+            n += 1;
+        }
+        assert!(n > 100);
+        let made: Vec<u8> = procedures(&peer).unwrap();
+        let need: u64 = made.len() as u64 + 5400 + 240 * cells(&made).unwrap() as u64;
+        assert!(table_size(&t, &tp, &peer, &made).unwrap() as u64 >= need + 512);
+    }
+
+    #[test]
+    fn the_new_death_table_round_trips_and_its_cells_use_only_fields_and_kinds_the_game_tables_use() {
+        let Some(r) = root() else { return };
+        let mut fields: Vec<(String, std::mem::Discriminant<Node>)> = Vec::new();
+        for (_, b) in game_tables(&r) {
+            let y: Byml = Byml::parse(&b).unwrap();
+            let Some(Node::Map(c)) = y.root.get(respawn::CELLS) else { continue };
+            for (_, v) in c {
+                let Node::Map(m) = v else { panic!() };
+                for (k, x) in m {
+                    if !fields.iter().any(|(n, _)| n == k) {
+                        fields.push((k.clone(), std::mem::discriminant(x)));
+                    }
+                }
+            }
+        }
+        let peer: Vec<u8> = fs::read(r.join(respawn::file(DEATH_TABLE_BASE))).unwrap();
+        let made: Vec<u8> = procedures(&peer).unwrap();
+        let y: Byml = Byml::parse(&made).unwrap();
+        assert_eq!(y.write().unwrap(), made);
+        let game: Byml = Byml::parse(&peer).unwrap();
+        let top = |y: &Byml| -> Vec<String> { if let Node::Map(m) = &y.root { m.iter().map(|(k, _)| k.clone()).collect() } else { panic!() } };
+        assert_eq!(top(&y), top(&game));
+        let Some(Node::Map(c)) = y.root.get(respawn::CELLS) else { panic!() };
+        for (k, v) in c {
+            let Node::Map(m) = v else { panic!("{k}") };
+            let names: Vec<&str> = m.iter().map(|(n, _)| n.as_str()).collect();
+            let mut sorted: Vec<&str> = names.clone();
+            sorted.sort();
+            assert_eq!(names, sorted, "{k}");
+            assert_eq!(v.get("$type").and_then(|t| t.as_str()), Some(respawn::CELL_TYPE), "{k}");
+            for (n, x) in m {
+                let kind: Option<&std::mem::Discriminant<Node>> = fields.iter().find(|(f, _)| f == n).map(|(_, d)| d);
+                assert_eq!(kind, Some(&std::mem::discriminant(x)), "{k} {n}");
+            }
+        }
+    }
+
+    #[test]
     fn the_field_one_goes_once_the_fire_temple_victory_scene_has_played() {
         let rows: &str = include_str!("../../../../data/flags.json");
         let row: &str = rows.lines().find(|l| l.contains(&format!("\"name\":\"{BEATEN}\""))).unwrap();
@@ -811,7 +1066,7 @@ mod tests {
         let mut rf: Romfs = Romfs::open(&r).unwrap();
         let none = |_: &str| -> Option<Vec<u8>> { None };
         let t: Rst = rsizetable::load(&mut rf).unwrap();
-        let m: Made = stage(&mut rf, &none, &t, &Shape { arena: FIELD, lift: 0.0, scale: 1.0 }).unwrap();
+        let m: Made = stage(&mut rf, &none, &t, &Shape { arena: FIELD, lift: 0.0, scale: 1.0 }, Mode::Spawn).unwrap();
         assert!(rf.read(&death_table()).is_err());
         let o: &Out = m.outs.iter().find(|o| o.path == death_table()).unwrap();
         assert!(t.get(&o.path).is_none());
@@ -827,5 +1082,95 @@ mod tests {
         assert!(!format!("{:?}", real.root).contains(CLASS));
         let again: Vec<u8> = respawn::always(&o.z).unwrap();
         assert_eq!(again, o.z);
+    }
+
+    #[test]
+    fn the_clone_drops_ten_blue_rupees_from_its_own_table_and_nothing_else_of_the_floormaster_is_copied() {
+        let Some(r) = root() else { return };
+        let mut rf: Romfs = Romfs::open(&r).unwrap();
+        let dn: Vec<Entry> = donor(&mut rf);
+        let es: Vec<Entry> = drop_files(&dn).unwrap();
+        let names: Vec<&str> = es.iter().map(|e| e.name.as_str()).collect();
+        assert_eq!(names, vec![DROP_DEFAULT, DROP_BOARD, DROP_PARAM_CLONE, DROP_TABLE_CLONE, DROP_SUB_CLONE]);
+        for e in es.iter().take(2) {
+            assert_eq!(Some(&e.data), sarc::get(&dn, &e.name).map(|x| &x.data));
+        }
+        let sub: Byml = y(&es, DROP_SUB_CLONE);
+        let items: &[Node] = sub.root.get("Items").and_then(|i| i.as_arr()).unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0], rupee_item());
+        assert_eq!(items[0].get("Type"), Some(&Node::U32(RUPEE_TYPE)));
+        assert_eq!(items[0].get("DropProbability"), Some(&Node::I32(100)));
+        assert_eq!(items[0].get("DropCreateCount"), Some(&Node::U32(10)));
+        assert_eq!(s(&items[0], &["DropActorName"]), "Work/Actor/Obj_Rupee_Blue.engine__actor__ActorParam.gyml");
+        let table: Byml = y(&es, DROP_TABLE_CLONE);
+        assert_eq!(table.root.get("SubTableList"), Some(&Node::Arr(vec![Node::Str(work(DROP_SUB_CLONE))])));
+        assert!(table.root.get("DropTableName").is_none());
+        let param: Byml = y(&es, DROP_PARAM_CLONE);
+        assert_eq!(param.root.get("DropTableResourceList"), Some(&Node::Arr(vec![Node::Str(work(DROP_TABLE_CLONE))])));
+        assert!(dn.iter().any(|e| e.name == DROP_SUB_NONE) && !format!("{:?}", y(&dn, DROP_SUB_NONE).root).contains("Rupee"));
+        let pack: Vec<Entry> = sarc::parse(&rf.read_zs(&pack_of(RUPEE)).unwrap()).unwrap();
+        assert!(pack.iter().any(|e| e.name == actor_file(RUPEE)));
+        let kid: Vec<Entry> = sarc::parse(&rf.read_zs(&pack_of("Enemy_SkullKid")).unwrap()).unwrap();
+        let gold: Byml = y(&kid, "Drop/DropSubTable/Enemy_SkullKid.game__drop__DropSubTable.bgyml");
+        let shipped: &Node = &gold.root.get("Items").and_then(|i| i.as_arr()).unwrap()[0];
+        assert_eq!(shipped.get("Type"), Some(&Node::U32(RUPEE_TYPE)));
+        assert!(s(shipped, &["DropActorName"]).contains("Obj_Rupee_Gold"));
+    }
+
+    #[test]
+    fn the_grown_die_module_gets_a_bigger_size_entry_in_both_modes() {
+        let Some(r) = root() else { return };
+        for dm in [Mode::Spawn, Mode::Drop, Mode::Pay] {
+            let mut rf: Romfs = Romfs::open(&r).unwrap();
+            let none = |_: &str| -> Option<Vec<u8>> { None };
+            let t: Rst = rsizetable::load(&mut rf).unwrap();
+            let m: Made = stage(&mut rf, &none, &t, &Shape { arena: FIELD, lift: 0.0, scale: 1.0 }, dm).unwrap();
+            assert_eq!(m.grown.iter().map(|g| g.0.as_str()).collect::<Vec<_>>(), vec![DIE_MODULE]);
+            let (_, old, new): &(String, usize, usize) = &m.grown[0];
+            assert!(new > old);
+            let pk: Vec<Entry> = sarc::parse(&rf.zs.decompress(&m.outs[0].z).unwrap()).unwrap();
+            let g: crate::ainb::Ainb = crate::ainb::Ainb::parse(&sarc::get(&pk, DIE_MODULE).unwrap().data).unwrap();
+            let plain: Vec<Entry> = sarc::parse(&rf.read_zs(&pack_of(BASE)).unwrap()).unwrap();
+            let p: crate::ainb::Ainb = crate::ainb::Ainb::parse(&sarc::get(&plain, DIE_MODULE).unwrap().data).unwrap();
+            assert_eq!(g.els.len(), p.els.len() + dm.added());
+            let before: u32 = t.get(DIE_MODULE).unwrap();
+            let mut rst: Rst = rsizetable::load(&mut rf).unwrap();
+            sized(&mut rf, &mut rst, &m).unwrap();
+            let after: u32 = rst.get(DIE_MODULE).unwrap();
+            assert!(after as u64 >= before as u64 + rsizetable::align((new - old) as u64), "{dm:?} {before} {after}");
+            assert!(m.lines[0].contains(&format!("{dm:?}")));
+            let io: &Out = m.outs.iter().find(|o| o.path == ACTOR_INFO).unwrap();
+            let info: Byml = Byml::parse(&rf.zs.decompress(&io.z).unwrap()).unwrap();
+            let plain_info: Byml = rf.read_byml(ACTOR_INFO).unwrap();
+            let room: i32 = if dm.holds() { HEAP_ROOM } else { 0 };
+            assert!(rows::own_heap(&info, CLASS).unwrap() >= rows::own_heap(&plain_info, BASE).unwrap() + room, "{dm:?}");
+            assert_eq!(m.sizes.iter().any(|(p, _)| p == HOLDER_CLONE), dm.holds());
+            if let Some((_, z)) = m.sizes.iter().find(|(p, _)| p == HOLDER_CLONE) {
+                let len: usize = sarc::get(&pk, HOLDER_CLONE).unwrap().data.len();
+                assert!(*z >= t.get(HOLDER_OWN).unwrap() + rsizetable::align(len as u64) as u32, "{z}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_drop_less_donor_is_refused_and_the_drop_files_cover_their_parents_size() {
+        assert!(drop_files(&[]).is_err());
+        assert_eq!(parent_of(DROP_PARAM_CLONE), DROP_PLAIN);
+        assert_eq!(parent_of(DROP_TABLE_CLONE), DROP_TABLE_NONE);
+        assert_eq!(parent_of(DROP_SUB_CLONE), DROP_SUB_NONE);
+        assert_eq!(parent_of(&actor_file(CLASS)), actor_file(BASE));
+        let Some(r) = root() else { return };
+        let mut rf: Romfs = Romfs::open(&r).unwrap();
+        let none = |_: &str| -> Option<Vec<u8>> { None };
+        let t: Rst = rsizetable::load(&mut rf).unwrap();
+        let m: Made = stage(&mut rf, &none, &t, &Shape { arena: FIELD, lift: 0.0, scale: 1.0 }, Mode::Spawn).unwrap();
+        let pk: Vec<Entry> = sarc::parse(&rf.zs.decompress(&m.outs[0].z).unwrap()).unwrap();
+        for p in owned(Mode::Spawn) {
+            let len: usize = sarc::get(&pk, &p).unwrap().data.len();
+            let have: u32 = m.sizes.iter().find(|(n, _)| *n == p).map(|(_, z)| *z).unwrap();
+            let parent: u32 = t.get(&parent_of(&p)).unwrap();
+            assert!(have as usize >= len && have >= parent, "{p} {have} {len} {parent}");
+        }
     }
 }
