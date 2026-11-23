@@ -22,7 +22,7 @@ help you look at the game while you build one.
 1. **Python 3.10 or later.** Everything here uses only the standard library, except one step: `build_cache.py` needs
    `pip install zstandard` to read the game's map files.
 2. **Longshot, our fork, tools branch.** The tools use bridge commands that upstream Longshot does not have yet (the
-   list is at the end). Clone `https://github.com/deanrather/longshot`, check out the branch `ootrr-tools`, and build it from your
+   list is at the end). Clone `https://git.magicbean.dev/BeanSeller/Longshot.git`, check out the branch `feat/playtest-panel` (the open Longshot MR that adds the extra control-bridge capabilities), and build it from your
    own game dump by following that checkout's `docs/dev/reference/build.md`. devtools need two things from it: its
    `scripts` folder (`longshot_bridge.py`, `longshot_ctl.py`) and the game folder you launch (the one holding
    `longshot.exe`). Longshot is a separate project; devtools never copy anything from it except through that folder.
