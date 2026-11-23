@@ -222,6 +222,8 @@ fn difficulty() -> Vec<Setting> {
             .tip("Enemies, pots and grass never drop arrows, seeds, bombs, nuts or sticks, except where a boss fight stocks them: Gohma's larvae and eggs, the pots before the boss doors, the final battle rubble and Poe Meg. Shops and chests still have them, and the logic does not plan for this. Not played in the game yet."),
         Setting::toggle(d::LOSE_HEART_NUM, d::LOSE_HEART, "difficulty", "Lose heart on death", false)
             .tip("Each game over costs a heart container, down to three. Being saved by a bottled fairy does not count. Quitting to the title screen gives the hearts back."),
+        Setting::number(d::PIT_NUM, d::PIT, "difficulty", "Fall in pit penalty", d::falls::VANILLA, d::falls::RANGE.0, d::falls::RANGE.1)
+            .tip("What falling into a pit or quicksand costs. 0: nothing. 1: the usual loss. 2: leaves you on 1 heart. 3: takes every heart. A bottled fairy still saves you. From half a heart or less a fall still kills, as in the base game."),
         Setting::toggle(d::NO_BOTTLES_NUM, d::NO_BOTTLES, "difficulty", "No bottles during combat", false)
             .tip("You can't use a bottle while the battle music plays or in a boss fight. A bottled fairy still revives you."),
         Setting::toggle(d::NO_TARGET_NUM, d::NO_TARGET, "difficulty", "No Z-targeting", false)

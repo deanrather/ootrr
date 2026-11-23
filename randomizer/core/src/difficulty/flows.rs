@@ -164,7 +164,7 @@ fn is_retry(f: &Flow, e: &Event) -> bool {
     named && c.get("EventResult") == Some(&Val::Str(RETRY_RESULT.to_string()))
 }
 
-fn redirect(f: &mut Flow, upto: usize, from: u16, to: u16) {
+pub(super) fn redirect(f: &mut Flow, upto: usize, from: u16, to: u16) {
     let swap = |n: &mut u16| {
         if *n == from {
             *n = to;
