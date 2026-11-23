@@ -43,6 +43,27 @@ class Viewer(unittest.TestCase):
         self.assertIn("Die|Dead|Death|Dying|Vanish", html)
         self.assertIn("trackGone", html)
 
+    def test_gone_rows_follow_the_actor_id_not_the_position(self):
+        import shutil
+        import subprocess
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("node not installed")
+        html = get(self.port, "/extras/actors.html").decode()
+        src = html[html.index("const GONE_MS"):html.index("const PAL = ")]
+        js = (
+            "const window = {}; const rows = []; const isDead = () => false;\n" + src
+            + "\nconst a = {name: 'Enemy_Stalfos', id: '0x10', x: 0, y: 0, z: 0};"
+            + "\nconst a2 = Object.assign({}, a, {x: 3000});"
+            + "\nconst b = {name: 'Enemy_Keese', id: '0x11', x: 5, y: 0, z: 0};"
+            + "\nconst g1 = trackGone([a, b], [a2, b], [], 1000);"
+            + "\nconst g2 = trackGone([a2, b], [a2], g1, 2000);"
+            + "\nconsole.log(JSON.stringify([g1.length, g2.length, g2[0].name, g2[0].gone === true]));\n"
+        )
+        out = subprocess.run([node, "-e", js], capture_output=True, text=True, timeout=30)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertEqual(json.loads(out.stdout), [0, 1, "Enemy_Keese", True])
+
     def test_card_and_names_are_served(self):
         st = json.loads(get(self.port, "/state"))
         a = [e for e in st["extras"] if e["name"] == "actors"]

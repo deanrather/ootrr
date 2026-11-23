@@ -82,13 +82,28 @@
   const isDead = r => (r.hp != null && r.hp <= 0) || r.live === false || (r.state != null && r.state >= 7 && r.state <= 11) || (typeof r.anim === 'string' && DEADANIM.test(r.anim));
   const GONE_MS = 6000;
   let gone = [], lastMap = '';
-  const rowKey = r => (r.hash_id ? r.hash_id : r.name + '@' + [r.x, r.y, r.z].map(v => Math.round(Number(v))).join(',')) + '|' + (r.name || '');
-  const trackGone = (prev, next) => {
-    const now = Date.now(), have = new Set(next.map(rowKey));
+  const rowKey = r => {
+    const n = r.name || '';
+    if (r.id != null && r.id !== '') return 'id:' + r.id + '|' + n;
+    if (r.hash_id) return 'h:' + r.hash_id + '|' + n;
+    return 'p:' + n + '@' + [r.x, r.y, r.z].map(v => Math.round(Number(v))).join(',');
+  };
+  const trackGone = (prev, next, g0, now) => {
+    const have = new Set(next.map(rowKey));
     const lost = prev.filter(r => !have.has(rowKey(r)) && !r.gone);
-    if (lost.length > 30 && lost.length > prev.length / 2) { gone = []; return; }
-    gone = gone.filter(g => now - g.goneAt < GONE_MS && !have.has(rowKey(g)));
-    lost.forEach(r => { if (!gone.some(g => rowKey(g) === rowKey(r))) gone.push(Object.assign({}, r, { gone: true, goneAt: now })); });
+    if (lost.length > 30 && lost.length > prev.length / 2) return [];
+    const out = g0.filter(g => now - g.goneAt < GONE_MS && !have.has(rowKey(g)));
+    lost.forEach(r => { if (!out.some(g => rowKey(g) === rowKey(r))) out.push(Object.assign({}, r, { gone: true, goneAt: now })); });
+    return out;
+  };
+  window.actTrackGone = (prev, next, g0, now) => trackGone(prev, next, g0, now);
+  let fastUntil = 0, fastTimer = null, deadSeen = new Set();
+  const fastPoll = () => {
+    const now = Date.now();
+    const fresh = rows.filter(r => !r.gone && isDead(r) && !deadSeen.has(rowKey(r)));
+    fresh.forEach(r => deadSeen.add(rowKey(r)));
+    if (fresh.length) fastUntil = now + 4000;
+    if (!fastTimer && now < fastUntil) fastTimer = setTimeout(async () => { fastTimer = null; await window.actRead(true); }, 500);
   };
   const PAL = () => (names && names.palette) || {};
   const COLKEY = { chests: 'chest', pots: 'pot', hearts: 'heart', rupees: 'item', enemies: 'enemy', npcs: 'npc', other: 'object' };
@@ -237,10 +252,12 @@
     const nextRows = r.actors || [];
     const mapNow = (panel.status() || {}).map || '';
     if (mapNow !== lastMap) gone = [];
-    else trackGone(rows, nextRows);
+    else gone = trackGone(rows, nextRows, gone, Date.now());
     lastMap = mapNow;
     rows = nextRows;
+    deadSeen = new Set([...deadSeen].filter(k => rows.some(r => rowKey(r) === k)));
     actDraw();
+    fastPoll();
     if (r.walk_us != null) $('act-info').textContent += ' · walk ' + (r.walk_us / 1000).toFixed(1) + ' ms';
     if (noSync !== true) await labelsSync();
     if (labelsOn) actLabelsApply();
