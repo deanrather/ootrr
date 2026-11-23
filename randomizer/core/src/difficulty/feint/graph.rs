@@ -10,6 +10,7 @@ pub const PLAY: &str = "ExecuteASPlay";
 pub const COUNTER: &str = "ExecuteGenericCounter";
 pub const RATE: &str = "ExecuteSetASRate";
 pub const BUSY: &str = "ExecuteGenericSetResultBusy";
+pub const IDLE: &str = "ExecuteGenericDummyAction";
 pub const COMMAND: &str = "ASCommand";
 pub const PAUSE_FRAMES: f32 = 39.0;
 pub const PAUSE_EXTRA: f32 = 39.0;
@@ -59,7 +60,12 @@ impl Shape {
     }
 
     pub fn chance(&self, p: f32) -> f32 {
-        if self.gap.is_some() || self.holds.len() > 1 { p / 2.0 } else { p }
+        if self.gap.is_some() { 1.0 - (1.0 - p).max(0.0).sqrt() } else { p }
+    }
+
+    pub fn per_attack(&self, p: f32) -> f32 {
+        let q: f32 = self.chance(p);
+        if self.gap.is_some() { 1.0 - (1.0 - q) * (1.0 - q) } else { q }
     }
 }
 
@@ -166,7 +172,7 @@ fn held(a: &mut Ainb, seed: &str, run: usize, at: f32, how: Hold) -> Res<usize> 
     let timer: usize = a.add_node(&counter(&format!("{seed} hold timer"), PAUSE_FRAMES, PAUSE_EXTRA))?;
     let still: usize = pose(a, seed, how)?;
     let hold: usize = a.add_node(&timed(&format!("{seed} hold"), &[timer, still]))?;
-    let after: usize = a.add_node(&Spec::node(BUSY, &format!("{seed} then play on")))?;
+    let after: usize = a.add_node(&Spec::node(IDLE, &format!("{seed} then play on")))?;
     let side: usize = a.add_node(&sequence(&format!("{seed} timing"), &[wind, hold, after]))?;
     a.add_node(&timed(&format!("{seed} attack with hold"), &[run, side]))
 }
@@ -206,7 +212,7 @@ pub fn build(a: &mut Ainb, sh: &Shape, p: f32, how: Hold, label: &str) -> Res<us
         [first, second] => chance(a, &format!("{tag} which"), 0.5, *first, *second)?,
         _ => return Err(Error::Msg(format!("{label}: one or two hold points are supported"))),
     };
-    let top: usize = chance(a, &tag, if hs.len() > 1 { p } else { q }, branch, sh.body)?;
+    let top: usize = chance(a, &tag, q, branch, sh.body)?;
     for j in at {
         a.params[sh.state].plugs[j].a = top as u32;
     }
@@ -283,6 +289,29 @@ mod tests {
         a.params[i].group(2).iter().map(|g| g.a as usize).collect()
     }
 
+    fn tail_idle(a: &Ainb) -> Option<usize> {
+        (0..a.els.len()).filter(|i| a.el_type(*i) == SEQUENCE && el_text(a, *i).contains("IsLoop = false")).find_map(|i| {
+            let ks: Vec<usize> = kids(a, i);
+            let last: usize = *ks.last()?;
+            (ks.len() == 2 && a.el_type(ks[0]) == PARALLEL && a.el_name(last) == IDLE).then_some(last)
+        })
+    }
+
+    fn reach(a: &Ainb, from: usize, pick: &dyn Fn(usize) -> Option<&'static str>) -> std::collections::BTreeSet<usize> {
+        let mut seen: std::collections::BTreeSet<usize> = std::collections::BTreeSet::new();
+        let mut todo: Vec<usize> = vec![from];
+        while let Some(i) = todo.pop() {
+            if !seen.insert(i) {
+                continue;
+            }
+            match pick(i) {
+                Some(b) => todo.push(branch(a, i, b)),
+                None => todo.extend(kids(a, i)),
+            }
+        }
+        seen
+    }
+
     fn branch(a: &Ainb, sw: usize, name: &str) -> usize {
         a.params[sw].group(2).iter().find(|g| a.s(g.b) == name).unwrap().a as usize
     }
@@ -312,7 +341,7 @@ mod tests {
         assert_eq!(a.el_name(side[0]), COUNTER);
         assert_eq!(a.el_type(side[1]), PARALLEL);
         assert!(el_text(a, side[1]).contains("prop s32 ResultPolicy = 1"), "the hold timer decides when the hold ends");
-        assert_eq!(a.el_name(side[2]), BUSY, "after the hold the timing branch idles, so the attack plays on");
+        assert_eq!(a.el_name(side[2]), IDLE, "after the hold the timing branch idles without a busy result, so the attack's own end decides");
         let hold: Vec<usize> = kids(a, side[1]);
         assert_eq!(a.el_name(hold[0]), COUNTER);
         assert!(el_text(a, side[0]).contains(&format!("prop f32 BaseFrameTime = {at}\n  prop f32 RandomTimeMax = 0\n")), "hold point {at}");
@@ -411,7 +440,7 @@ mod tests {
         assert_eq!(shown.matches("Blackboard").count(), show(&old).matches("Blackboard").count(), "{}: the feint reads and writes no key", t.kind);
         assert!(patch(&out, sh, 0.25, how, t.kind).is_err(), "{}: a patched module is not patched twice", t.kind);
         let all: Ainb = Ainb::parse(&patch(raw, sh, 1.0, how, t.kind).unwrap()).unwrap();
-        let sure: usize = if sh.holds.len() > 1 { 1 } else if sh.gap.is_some() { 0 } else { 1 };
+        let sure: usize = if sh.gap.is_some() { 2 } else { 1 };
         assert_eq!(show(&all).matches("in f32 FalseProbability = 0 flags 0x800000").count(), sure, "{}", t.kind);
     }
 
@@ -487,6 +516,8 @@ mod tests {
         let sw: usize = (0..stalfos.els.len()).find(|i| stalfos.el_type(*i) == SWITCH).unwrap();
         let red: Ainb = Ainb::parse(&sarc::get(&es, "AI/Redead.MinimumPerceptionSetTarget.module.ainb").unwrap().data).unwrap();
         let lp: usize = (0..red.els.len()).find(|i| red.el_type(*i) == SEQUENCE && el_text(&red, *i).contains("prop bool IsLoop = true\n  prop bool IsUpdateNextInFrame = true")).unwrap();
+        let liz: Ainb = Ainb::parse(&found.iter().find(|c| c.1 == TARGETS[3].graph).unwrap().2).unwrap();
+        let liz_idle: usize = tail_idle(&liz).expect("the Lizalfos swing idles at the end of a timed step beside its attack");
         let freeze: Vec<usize> = para.find_els(RATE);
         assert_eq!(freeze.len(), 1, "the paralysed Stalfos freezes its pose with one play-rate node");
         assert!(show(&para).contains(&format!("element {} type 0 {RATE}\n  prop bool IsUndoOnLeave = true\n  in s32 ASSlot = 0 flags 0x1800000\n  in f32 ASRate = 0 flags 0x800000", freeze[0])));
@@ -503,7 +534,7 @@ mod tests {
                     (0, COUNTER) => shape(&m, m.find_els(COUNTER)[0]),
                     (0, DRAW) => shape(&dark, dark.find_els(DRAW)[0]),
                     (0, RATE) => shape(&para, freeze[0]),
-                    (0, BUSY) => shape(&para, para.find_els(BUSY)[0]),
+                    (0, IDLE) => shape(&liz, liz_idle),
                     (SEQUENCE, _) if el_text(&a, i).contains("IsLoop = true") => shape(&red, lp),
                     (SEQUENCE, _) => shape(&m, seq),
                     (PARALLEL, _) => shape(&m, tm),
@@ -514,6 +545,57 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn every_edited_attack_keeps_its_own_end_path() {
+        let Some(dir) = dump() else {
+            eprintln!("skipped: set OOTRR_ROMFS");
+            return;
+        };
+        let mut rf: Romfs = Romfs::open(&dir).unwrap();
+        let found: Vec<(String, String, Vec<u8>)> = copies(&mut rf);
+        for t in &TARGETS {
+            let raw: &[u8] = &found.iter().find(|c| c.1 == t.graph).unwrap().2;
+            let old: Ainb = Ainb::parse(raw).unwrap();
+            let n: usize = old.els.len();
+            let at: Vec<usize> = entry(&old, &t.shape, t.kind).unwrap();
+            let vanilla: std::collections::BTreeSet<usize> = reach(&old, t.shape.body, &|_| None);
+            assert!(vanilla.iter().any(|i| old.el_name(*i) == PLAY), "{}: the vanilla attack plays its animation", t.kind);
+            for how in [Hold::Sway, Hold::Freeze] {
+                let a: Ainb = Ainb::parse(&patch(raw, &t.shape, 0.75, how, t.kind).unwrap()).unwrap();
+                assert!(a.find_els(BUSY).iter().all(|i| *i < n), "{}: no new node holds a busy result", t.kind);
+                let gates: Vec<usize> = (n..a.els.len()).filter(|i| a.el_type(*i) == SWITCH).collect();
+                let top: usize = a.params[t.shape.state].plugs[at[0]].a as usize;
+                for bits in 0..(1u32 << gates.len()) {
+                    let pick = |i: usize| -> Option<&'static str> { gates.iter().position(|g| *g == i).map(|j| if bits & (1 << j) != 0 { "True" } else { "False" }) };
+                    let got: std::collections::BTreeSet<usize> = reach(&a, top, &pick);
+                    for v in &vanilla {
+                        assert!(got.contains(v), "{} ({how:?}, draws {bits:b}): vanilla element {v} ({}) is still run", t.kind, old.el_name(*v));
+                    }
+                    for i in got.iter().filter(|i| **i >= n) {
+                        let ks: Vec<usize> = kids(&a, *i);
+                        match a.el_type(*i) {
+                            PARALLEL => assert!(ks[0] < n || a.el_name(ks[0]) == COUNTER, "{}: new parallel {i} ends with the attack or a timer", t.kind),
+                            SEQUENCE if el_text(&a, *i).contains("IsLoop = false") => assert_eq!(a.el_name(*ks.last().unwrap()), IDLE, "{}: the timing branch ends idle", t.kind),
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn each_attack_is_held_at_the_chosen_level() {
+        for t in &TARGETS {
+            for p in [0.25f32, 0.5, 0.75, 1.0] {
+                let q: f32 = t.shape.chance(p);
+                assert!((0.0..=1.0).contains(&q), "{}", t.kind);
+                assert!((t.shape.per_attack(p) - p).abs() < 1e-5, "{} at {p}: {}", t.kind, t.shape.per_attack(p));
+            }
+        }
+        assert_eq!(TARGETS[6].shape.chance(0.75), 0.5, "the Iron Knuckle double: two draws of a half give three in four");
     }
 
     #[test]
