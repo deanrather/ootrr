@@ -1,11 +1,12 @@
 <!--{"title": "Enemy Placer", "order": 50, "open": true}-->
 <iframe id="placer-frame" title="Enemy Placer" style="width:100%;height:900px;border:0;display:block;background:transparent"></iframe>
-<div id="placer-missing" style="display:none;font-size:12px;color:var(--mute);margin-top:6px">The placer is not answering: <code>placer_server.py</code> runs on port 8766.</div>
+<div id="placer-missing" style="display:none;font-size:12px;color:var(--mute);margin-top:6px">The placer is not answering: <code>placer_server.py</code> runs on port 8766 unless started with --placer-port.</div>
 <script>
 (() => {
   const k = new URLSearchParams(location.search).get('key') || '';
   const f = document.getElementById('placer-frame');
-  f.src = location.protocol + '//' + location.hostname + ':' + (new URLSearchParams(location.search).get('placer') || 8766) + '/placer' + '?panel=' + location.port + (k ? '&key=' + encodeURIComponent(k) : '');
+  const withPort = fn => { const p = new URLSearchParams(location.search).get('placer'); if (p) return fn(p); if (window.OOTRR_PLACER_PORT) return fn(window.OOTRR_PLACER_PORT); window.__ppq = window.__ppq || new Promise(ok => { const s = document.createElement('script'); s.src = '/extras/placer-link.js' + (k ? '?key=' + encodeURIComponent(k) : ''); s.onload = () => ok(); s.onerror = () => ok(); document.head.appendChild(s); }); window.__ppq.then(() => fn(window.OOTRR_PLACER_PORT || 8766)); };
+  withPort(pp => { f.src = location.protocol + '//' + location.hostname + ':' + pp + '/placer' + '?panel=' + location.port + (k ? '&key=' + encodeURIComponent(k) : ''); });
   const ping = () => { try { f.contentWindow.postMessage('heightPing', '*'); } catch (e) {} };
   f.addEventListener('load', () => { ping(); setTimeout(ping, 800); });
   if (window.IntersectionObserver) new IntersectionObserver(es => { if (es.some(x => x.isIntersecting)) ping(); }).observe(f);

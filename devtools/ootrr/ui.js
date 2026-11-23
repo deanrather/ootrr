@@ -22,7 +22,7 @@
     busy = false; document.body.classList.remove('busy');
     return r;
   }
-  const ARM_MS = 3000;
+  const ARM_MS = 6000;
   function label(b, main, sub, key) {
     if (b._armed && b._armKey !== key) disarm(b);
     b._key = key;
@@ -31,7 +31,7 @@
     if (sub) b.appendChild(el('small', null, sub));
   }
   function disarm(b) {
-    clearTimeout(b._armT); b._armed = false; b.classList.remove('armed');
+    clearTimeout(b._armT); clearInterval(b._armI); b._armed = false; b.classList.remove('armed');
     if (b._main != null) label(b, b._main, b._sub, b._key);
   }
   function confirmTap(b, what, fn) {
@@ -40,7 +40,10 @@
       if (b._armed) { disarm(b); fn(); return; }
       b._main = b.firstChild ? b.firstChild.textContent : ''; b._sub = b.querySelector('small') ? b.querySelector('small').textContent : '';
       b._armed = true; b._armKey = b._key; b.classList.add('armed');
-      b.textContent = 'Tap again'; b.appendChild(el('small', null, typeof what === 'function' ? what() : what));
+      const t0 = Date.now(), w = typeof what === 'function' ? what() : what;
+      const draw = () => { const left = Math.max(0, Math.ceil((ARM_MS - (Date.now() - t0)) / 1000)); b.textContent = 'Tap again to confirm (' + left + ')'; b.appendChild(el('small', null, w)); };
+      draw();
+      b._armI = setInterval(draw, 250);
       b._armT = setTimeout(() => disarm(b), ARM_MS);
     });
   }

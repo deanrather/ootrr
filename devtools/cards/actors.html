@@ -78,7 +78,18 @@
     for (const [id, rx] of kindRx) if (rx.test(n)) return id;
     return 'other';
   };
-  const isDead = r => (r.hp != null && r.hp <= 0) || r.live === false || (r.state != null && r.state >= 7 && r.state <= 11);
+  const DEADANIM = /^(Die|Dead|Death|Dying|Vanish|Down(Die|Dead|Death))/;
+  const isDead = r => (r.hp != null && r.hp <= 0) || r.live === false || (r.state != null && r.state >= 7 && r.state <= 11) || (typeof r.anim === 'string' && DEADANIM.test(r.anim));
+  const GONE_MS = 6000;
+  let gone = [], lastMap = '';
+  const rowKey = r => (r.hash_id ? r.hash_id : r.name + '@' + [r.x, r.y, r.z].map(v => Math.round(Number(v))).join(',')) + '|' + (r.name || '');
+  const trackGone = (prev, next) => {
+    const now = Date.now(), have = new Set(next.map(rowKey));
+    const lost = prev.filter(r => !have.has(rowKey(r)) && !r.gone);
+    if (lost.length > 30 && lost.length > prev.length / 2) { gone = []; return; }
+    gone = gone.filter(g => now - g.goneAt < GONE_MS && !have.has(rowKey(g)));
+    lost.forEach(r => { if (!gone.some(g => rowKey(g) === rowKey(r))) gone.push(Object.assign({}, r, { gone: true, goneAt: now })); });
+  };
   const PAL = () => (names && names.palette) || {};
   const COLKEY = { chests: 'chest', pots: 'pot', hearts: 'heart', rupees: 'item', enemies: 'enemy', npcs: 'npc', other: 'object' };
   const colourKind = r => {
@@ -139,9 +150,9 @@
     }
   };
   const radius = () => Math.max(1, Math.min(200, parseFloat($('act-radius').value) || 20));
-  const shown = () => {
+  const shown = src => {
     const q = $('act-q').value.trim().toLowerCase(), rad = radius();
-    return rows.filter(r => {
+    return (src || rows).filter(r => {
       if (!wanted(r)) return false;
       const d = dist(r); if (d != null && d > rad) return false;
       if (!q) return true;
@@ -176,12 +187,13 @@
      ['m', 'metres from Link'], ['locations.json', 'the randomizer name(s) for this id'], ['tracker', 'tracker_targets.json: its own name, and the randomizer name (OOTR)'],
      ['check', 'differences and repeats'], ['link / copy', ''], ['x y z / state', '']].forEach(([h, tip]) => { const th = document.createElement('th'); th.textContent = h; th.title = tip; head.appendChild(th); });
     const tb = t.createTBody();
-    const vis = shown().map(r => [r, dist(r)]).sort((a, b) => (a[1] ?? 1e9) - (b[1] ?? 1e9));
+    const vis = shown().concat(shown(gone)).map(r => [r, dist(r)]).sort((a, b) => (a[1] ?? 1e9) - (b[1] ?? 1e9));
     vis.forEach(([r, d]) => {
       const e = lookup(r), tr = tb.insertRow();
-      const cn = td(tr, 'name', 't-name'), ck = colourKind(r), dead = isDead(r), dot = txt(cn, dead ? '○ ' : '● ', 'cdot');
-      dot.style.color = dead ? '#9a9893' : PAL()[ck]; dot.title = dead ? kindOf(r) + ' (dead or going)' : kindOf(r);
+      const cn = td(tr, 'name', 't-name'), ck = colourKind(r), dead = r.gone || isDead(r), dot = txt(cn, dead ? '○ ' : '● ', 'cdot');
+      dot.style.color = dead ? '#9a9893' : PAL()[ck]; dot.title = r.gone ? kindOf(r) + ' (gone: it was here a moment ago)' : dead ? kindOf(r) + ' (dead or going)' : kindOf(r);
       txt(cn, r.name || '?');
+      if (r.gone) { tr.style.opacity = '0.55'; txt(cn, ' gone', 'badge'); } else if (dead && typeof r.anim === 'string' && DEADANIM.test(r.anim)) txt(cn, ' ' + r.anim, 'badge');
       txt(td(tr, 'hash (hex, game/objmap)', 'num'), r.hash_id ? r.hash : '—', r.hash_id ? '' : 'none');
       txt(td(tr, 'id (decimal, OOTRR)', 'num'), r.hash_id || '—', r.hash_id ? '' : 'none');
       txt(td(tr, 'm'), d == null ? '' : d.toFixed(1));
@@ -222,12 +234,18 @@
   window.actRead = async function (noSync) {
     const r = await panel.bridge('actors', { limit: 800, all: $('act-dead').checked });
     if (!r.ok) { $('act-info').textContent = (r.error || 'error') + ': ' + (r.message || ''); return; }
-    rows = r.actors || [];
+    const nextRows = r.actors || [];
+    const mapNow = (panel.status() || {}).map || '';
+    if (mapNow !== lastMap) gone = [];
+    else trackGone(rows, nextRows);
+    lastMap = mapNow;
+    rows = nextRows;
     actDraw();
     if (r.walk_us != null) $('act-info').textContent += ' · walk ' + (r.walk_us / 1000).toFixed(1) + ' ms';
     if (noSync !== true) await labelsSync();
     if (labelsOn) actLabelsApply();
   };
+  setInterval(() => { if (gone.length && gone.some(g => Date.now() - g.goneAt >= GONE_MS)) { gone = gone.filter(g => Date.now() - g.goneAt < GONE_MS); actDraw(); } }, 1000);
   window.actAuto = function () { save(); clearInterval(timer); timer = $('act-auto').checked ? setInterval(actRead, 3000) : null; };
   window.actSetAll = function (on) { allKinds().forEach(k => { chosen[k.id] = on; }); save(); actDraw(); actLabelsChange(); };
   window.actSetDefaults = function () { chosen = {}; save(); actDraw(); actLabelsChange(); };

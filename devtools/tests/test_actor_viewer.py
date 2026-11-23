@@ -37,6 +37,12 @@ class Viewer(unittest.TestCase):
         cls.srv.shutdown()
         cls.tmp.cleanup()
 
+    def test_dying_rows_are_dead_and_vanished_rows_stay_as_gone(self):
+        html = get(self.port, "/extras/actors.html").decode()
+        self.assertIn("DEADANIM", html)
+        self.assertIn("Die|Dead|Death|Dying|Vanish", html)
+        self.assertIn("trackGone", html)
+
     def test_card_and_names_are_served(self):
         st = json.loads(get(self.port, "/state"))
         a = [e for e in st["extras"] if e["name"] == "actors"]

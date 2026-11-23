@@ -88,11 +88,11 @@ class Skulls:
                        "appearance": rec.get("appearance", []), "marked": bool(m), "skip": str(rec["hash"]) in self.state["skipped"],
                        "moved": round(S.dist(m["to"], S.at_on(rec, map_name)), 1) if m else None,
                        "both_ages": len(rec.get("files", [])) > 1}
-            marks: list[dict] = sorted(({"n": m["n"], "name": S.short(m["name"]), "surface": m["surface"], "dist": round(S.dist(m["pos"], pos), 1),
+            marks: list[dict] = sorted(({"n": m["n"], "name": S.short(m["name"]), "surface": m["surface"], "dist": round(S.dist(m["to"], pos), 1),
                                          "near": near is not None and m["n"] == near["n"]} for m in S.marks_on(self.state, map_name)), key=lambda r: r["dist"])
             return dict(common, connected=True, map=map_name, place=L.place_name(getattr(self.placer, "places", {}) or {}, map_name), pos=pos,
                         facing=facing, target=tgt, here=here, marks=marks,
-                        nearest={"n": near["n"], "name": S.short(near["name"]), "dist": round(S.dist(near["pos"], pos), 1)} if near else None,
+                        nearest={"n": near["n"], "name": S.short(near["name"]), "dist": round(S.dist(near["to"], pos), 1)} if near else None,
                         preview={s: S.spot(pos, facing, s) for s in S.SURFACES})
 
     def mark(self, surface: str) -> dict:

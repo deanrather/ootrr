@@ -160,7 +160,7 @@ def marks_on(state: dict, map_name: str) -> list[dict]:
 
 def nearest_mark(state: dict, map_name: str, pos: list[float]) -> dict | None:
     here: list[dict] = marks_on(state, map_name)
-    return min(here, key=lambda m: dist(m["pos"], pos)) if here else None
+    return min(here, key=lambda m: dist(m["to"], pos)) if here else None
 
 
 def remove_mark(state: dict, n: int) -> dict | None:

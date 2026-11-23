@@ -63,6 +63,10 @@ class Logic(unittest.TestCase):
         with self.assertRaises(ValueError):
             S.mark(s, r, KF, [0.0, 0.0, 0.0], 0.0, "ceiling")
         self.assertEqual(S.nearest_mark(s, KF, [0.0, 0.0, 0.0])["n"], 2)
+        s2: dict = S.empty()
+        S.mark(s2, r, KF, [-80.0, 117.0, -17.0], 0.0, "ground", to=[-70.0, 117.0, -17.0], via="aim")
+        self.assertEqual(S.nearest_mark(s2, KF, [-80.0, 117.0, -17.0])["n"], 1)
+        self.assertAlmostEqual(S.dist(S.nearest_mark(s2, KF, [-80.0, 117.0, -17.0])["to"], [-80.0, 117.0, -17.0]), 10.0)
         self.assertTrue(S.toggle_skip(s, r["hash"]))
         self.assertEqual((s["marks"], s["skipped"]), ([], [r["hash"]]))
         S.mark(s, r, KF, [-80.0, 117.0, -17.0], 90.0, "wall")

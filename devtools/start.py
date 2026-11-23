@@ -21,6 +21,7 @@ Settings can also come from the environment or devtools/config.json (config.exam
 import atexit
 import os
 import secrets
+import shutil
 import subprocess
 import sys
 import time
@@ -63,6 +64,8 @@ def main(argv: list[str]) -> int:
     port: str = pop_value(args, "--port", "8765") or "8765"
     pport: str = pop_value(args, "--placer-port", "8766") or "8766"
     steps: str | None = pop_value(args, "--steps")
+    if not pport.isdigit():
+        sys.exit("--placer-port needs a number")
     launch: bool = pop_flag(args, "--launch")
     no_placer: bool = pop_flag(args, "--no-placer")
     demo: bool = pop_flag(args, "--demo")
@@ -87,12 +90,14 @@ def main(argv: list[str]) -> int:
     os.environ["PANEL_SESSION"] = session
 
     if not os.path.isdir(PATHS.EXTRAS) or not os.path.isfile(os.path.join(PATHS.EXTRAS, "actors.js")):
-        import shutil
-        os.makedirs(PATHS.EXTRAS, exist_ok=True)
-        for f in os.listdir(os.path.join(HERE, "cards")):
-            shutil.copyfile(os.path.join(HERE, "cards", f), os.path.join(PATHS.EXTRAS, f))
         print("note: no cache yet, so the Actor Viewer has no names and the placer has no vanilla counts.\n"
               "      run: python devtools/build_cache.py --romfs <your extracted game romfs>", file=sys.stderr)
+
+    os.makedirs(PATHS.EXTRAS, exist_ok=True)
+    for f in os.listdir(os.path.join(HERE, "cards")):
+        shutil.copyfile(os.path.join(HERE, "cards", f), os.path.join(PATHS.EXTRAS, f))
+    with open(os.path.join(PATHS.EXTRAS, "placer-link.js"), "w") as pf:
+        pf.write("window.OOTRR_PLACER_PORT=%s;\n" % pport)
 
     procs: list[subprocess.Popen] = []
 
