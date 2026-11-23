@@ -18,7 +18,7 @@ A copy of her under its own actor name, `Enemy_Gerudo_Fighter`, with the same bo
 
 ## What was built (`randomizer/core/src/difficulty/gerudo.rs`)
 
-Setting `gerudo_fighters`, number 167, "Gerudo fighters (experimental)", Difficulty page, Enemies section (last), default off. Number 163 is taken by `club_moblin_all_round` on its branch and 165 and 166 by timed gems and enemy feints; 167 was free on every open branch on 23 Nov (renumber at merge if that changed). It is a setting of its own and not folded into More enemies because the clone has never run in the game: a shipped slider should not start adding an untested miniboss. With the setting off nothing is staged, so the default output is the same as main by construction (the horde and sizes edits are inert without it).
+(Superseded 23 Nov, see Update below: the setting was removed.) Setting `gerudo_fighters`, number 167, "Gerudo fighters (experimental)", Difficulty page, Enemies section (last), default off. Number 163 is taken by `club_moblin_all_round` on its branch and 165 and 166 by timed gems and enemy feints; 167 was free on every open branch on 23 Nov (renumber at merge if that changed). It is a setting of its own and not folded into More enemies because the clone has never run in the game: a shipped slider should not start adding an untested miniboss. With the setting off nothing is staged, so the default output is the same as main by construction (the horde and sizes edits are inert without it).
 
 With it on, the build adds:
 
@@ -59,9 +59,13 @@ Unit and game-file tests (`OOTRR_ROMFS` set; `cargo test -p ootrr-core difficult
 
 Not run in the game. The test plan is `playtest\gerudo-fighter\PLAN.md` (working folder).
 
+## Update, 23 Nov: part of More enemies
+
+Hands-on 16 verdict (user): "gerudo fighter is great"; beating her and being beaten both "worked perfect". Decision (user): "she's part of more enemies". The separate `gerudo_fighters` setting (number 167), its menu entry and its settings text are gone. When More enemies is on (above 2x, where the horde is staged) the clone is staged and joins the pool as a Mini kind with the same placement rules as before: BIG list spacing, never in the skip maps (Gerudo Fortress included), not in child Kokiri Forest or the Water Temple, never resized. `Opts.gerudo` is now derived from the More enemies value in `difficulty::read`. With More enemies off nothing is staged, so the default output is the same as main. The More enemies tooltip mentions her; the build report line says she is part of More enemies. Tests: the horde test (fighter only as a miniboss, never in skip maps) and the Opts round trip were updated (the note count is 30 with More enemies at 150).
+
 ## How to test it in the game
 
-Use the time savers (`skip_intro`, `skip_cutscenes` all, `faster_chests`, `starting_hearts` 20) and the arsenal save. Child Temple of Time (`teleport Market_Child`, `warp 99.5 105.2 -34`). Build with `gerudo_fighters` on and `OOTRR_GERUDO_STAGE=1`, or spawn `Enemy_Gerudo_Fighter` with the bridge. Pass: she is visible and attacks with her swords; a spin hit takes hearts and sends Link nowhere and starts no dialog; killed with the sword she plays her death, vanishes, leaves a red rupee and the game keeps running; she is back when the map reloads (nothing is recorded). Control: the same build with the setting off has no such actor. Then load the adult Gerudo Fortress with the setting on and check the vanilla thieves still fight, talk and jail as before.
+Use the time savers (`skip_intro`, `skip_cutscenes` all, `faster_chests`, `starting_hearts` 20) and the arsenal save. Child Temple of Time (`teleport Market_Child`, `warp 99.5 105.2 -34`). Build with More enemies at 500 % or more (or, for the first run, the old `gerudo_fighters` on) and `OOTRR_GERUDO_STAGE=1`, or spawn `Enemy_Gerudo_Fighter` with the bridge. Pass: she is visible and attacks with her swords; a spin hit takes hearts and sends Link nowhere and starts no dialog; killed with the sword she plays her death, vanishes, leaves a red rupee and the game keeps running; she is back when the map reloads (nothing is recorded). Control: the same build with the setting off has no such actor. Then load the adult Gerudo Fortress with the setting on and check the vanilla thieves still fight, talk and jail as before.
 
 ## Notes for the next feature
 
@@ -76,6 +80,15 @@ Use the time savers (`skip_intro`, `skip_cutscenes` all, `faster_chests`, `start
 **Title:** New Difficulty > Enemies Feature: Gerudo fighters, a fortress thief that fights like any enemy
 
 A new experimental toggle, "Gerudo fighters" (`gerudo_fighters`, number 167, default off, Difficulty page, Enemies section) adds a copy of the Gerudo Fortress thief that can be placed or spawned like any enemy: no dialog, no defeat scene, no jail (a spin hit only hurts), ordinary enemy music, her own drop (a red rupee). With More enemies at 500 % or more she joins the minibosses. The fortress thieves are unchanged. Untested in the game: see the test plan in the doc. Check the setting number (167) against other open PRs at merge.
+
+For details about implementation and testing, see difficulty-mod/docs/features/54-gerudo-fighter.md.
+
+
+### 2nd MR Draft
+
+**Title:** Improved Difficulty > More enemies Feature: Gerudo fighters join the enemy pool
+
+The Gerudo fighter (a copy of the fortress thief that fights like any enemy: no dialog, no defeat scene, no jail, a red rupee drop) is now part of More enemies instead of a setting of its own. The `gerudo_fighters` setting is removed. She appears as a miniboss in the pool, with the usual spacing, never in the fortress or the peaceful places. Played by hand in the Temple of Time: beating her and being beaten both worked.
 
 For details about implementation and testing, see difficulty-mod/docs/features/54-gerudo-fighter.md.
 

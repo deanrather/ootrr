@@ -57,7 +57,7 @@ pub const NO_RECORD: &str = "IsSetBoolGameDataRecordingDeath";
 pub const SEED: &str = "ootrr gerudo fighter";
 pub const TEST_FILE: &str = "Banc/Market/Market_Child_Static.bcett.byml.zs";
 pub const TEST_AT: [f32; 3] = [92.0, 104.1, -34.0];
-pub const NOTE: &str = "Gerudo fighters: a copy of the Gerudo Thief miniboss of the fortress under its own actor name (Enemy_Gerudo_Fighter) can be placed anywhere: it has no talk or defeat scene, a spin hit that would have sent you to the fortress jail only hurts, it plays the ordinary enemy music, and it dies like an ordinary enemy and drops a red rupee. With More enemies at 500 % or more it joins the minibosses; it is never placed in the fortress, where the real thieves stay as they are. A beaten one is not written down. Experimental, untested in the game.";
+pub const NOTE: &str = "Gerudo fighters (part of More enemies): a copy of the Gerudo Thief miniboss of the fortress under its own actor name (Enemy_Gerudo_Fighter) can be placed almost anywhere: it has no talk or defeat scene, a spin hit that would have sent you to the fortress jail only hurts, it plays the ordinary enemy music, and it dies like an ordinary enemy and drops a red rupee. With More enemies at 500 % or more it joins the minibosses; it is never placed in the fortress, where the real thieves stay as they are. A beaten one is not written down.";
 
 pub fn pack_of(name: &str) -> String {
     format!("Pack/Actor/{name}.pack.zs")

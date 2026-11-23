@@ -79,7 +79,6 @@ pub const BOWLING: &str = "unbreakable_bowling_grass";
 pub const TALON: &str = "harder_talon_cuccos";
 pub const FIREBALLS: &str = "fireball_storms";
 pub const VOLVAGIA: &str = "volvagia_roams";
-pub const GERUDO: &str = "gerudo_fighters";
 pub const MEGA_LIKE: &str = "mega_like_likes";
 pub const FUSES: &str = "random_fuses";
 pub const RANDOMIZER: &str = "enemy_randomizer";
@@ -114,7 +113,6 @@ pub const BOWLING_NUM: u16 = 139;
 pub const TALON_NUM: u16 = 155;
 pub const FIREBALLS_NUM: u16 = 140;
 pub const VOLVAGIA_NUM: u16 = 143;
-pub const GERUDO_NUM: u16 = 167;
 pub const MEGA_LIKE_NUM: u16 = 144;
 pub const FUSES_NUM: u16 = 151;
 pub const RANDOMIZER_NUM: u16 = 150;
@@ -366,7 +364,7 @@ pub fn read(s: &Settings, bad: &mut Vec<String>) -> Opts {
             false
         })
     };
-    let o: Opts = Opts { health, damage, hurt, speed, no_hearts: flag(NO_HEARTS), no_fairies: flag(NO_FAIRIES), no_ammo: flag(NO_AMMO), lose_heart: flag(LOSE_HEART), no_bottles: flag(NO_BOTTLES), no_target: flag(NO_TARGET), no_dupes: flag(NO_DUPES), extra: 0, respawn: flag(RESPAWN), minibosses: flag(MINIBOSSES), regen: flag(REGEN), minions: flag(MINIONS), fairy_helps: flag(FAIRY_HELPS), backup: flag(BACKUP), gates: flag(GATES), encounters: false, cucco: flag(CUCCO), bowling: flag(BOWLING), talon: flag(TALON), fireballs: flag(FIREBALLS), spawn_combo: flag(SPAWN_COMBO), randomizer: flag(RANDOMIZER), sizes: sizes::Range::Off, sized_health: flag(SIZES_HEALTH), fuses: flag(FUSES), mega_like: flag(MEGA_LIKE), volvagia: flag(VOLVAGIA), gerudo: flag(GERUDO), forest_open: false, shops: false, mido_gone: false, entrances: gates::Shuffle::Off, timers: NORMAL };
+    let o: Opts = Opts { health, damage, hurt, speed, no_hearts: flag(NO_HEARTS), no_fairies: flag(NO_FAIRIES), no_ammo: flag(NO_AMMO), lose_heart: flag(LOSE_HEART), no_bottles: flag(NO_BOTTLES), no_target: flag(NO_TARGET), no_dupes: flag(NO_DUPES), extra: 0, respawn: flag(RESPAWN), minibosses: flag(MINIBOSSES), regen: flag(REGEN), minions: flag(MINIONS), fairy_helps: flag(FAIRY_HELPS), backup: flag(BACKUP), gates: flag(GATES), encounters: false, cucco: flag(CUCCO), bowling: flag(BOWLING), talon: flag(TALON), fireballs: flag(FIREBALLS), spawn_combo: flag(SPAWN_COMBO), randomizer: flag(RANDOMIZER), sizes: sizes::Range::Off, sized_health: flag(SIZES_HEALTH), fuses: flag(FUSES), mega_like: flag(MEGA_LIKE), volvagia: flag(VOLVAGIA), gerudo: extra > horde::FROM, forest_open: false, shops: false, mido_gone: false, entrances: gates::Shuffle::Off, timers: NORMAL };
     let forest_open: bool = chosen(s.text(FOREST), bad).map(|t| t == "open").unwrap_or(true);
     let entrances: gates::Shuffle = chosen(s.text(ENTRANCES), bad).map(|t| gates::Shuffle::from_setting(t)).unwrap_or(gates::Shuffle::Wide);
     let shops: bool = chosen(s.text(crate::shops::plan::SETTING), bad).map(|t| t != "off").unwrap_or(false);
@@ -714,7 +712,7 @@ mod tests {
         s.set(HEALTH, Value::Int(250)).unwrap();
         s.set(DAMAGE, Value::Int(50)).unwrap();
         s.set(SPEED, Value::Int(200)).unwrap();
-        for id in [NO_HEARTS, NO_FAIRIES, NO_AMMO, LOSE_HEART, NO_BOTTLES, NO_TARGET, NO_DUPES, RESPAWN, MINIBOSSES, REGEN, MINIONS, FAIRY_HELPS, BACKUP, GATES, CUCCO, SPAWN_COMBO, FIREBALLS, BOWLING, TALON, MEGA_LIKE, FUSES, RANDOMIZER, VOLVAGIA, GERUDO] {
+        for id in [NO_HEARTS, NO_FAIRIES, NO_AMMO, LOSE_HEART, NO_BOTTLES, NO_TARGET, NO_DUPES, RESPAWN, MINIBOSSES, REGEN, MINIONS, FAIRY_HELPS, BACKUP, GATES, CUCCO, SPAWN_COMBO, FIREBALLS, BOWLING, TALON, MEGA_LIKE, FUSES, RANDOMIZER, VOLVAGIA] {
             s.set(id, Value::Bool(true)).unwrap();
         }
         s.set(MORE, Value::Int(150)).unwrap();
@@ -722,9 +720,9 @@ mod tests {
         let mut bad: Vec<String> = Vec::new();
         let o: Opts = read(&back, &mut bad);
         assert!(bad.is_empty());
-        assert_eq!(o, Opts { health: 250, damage: 50, speed: 200, no_hearts: true, no_fairies: true, no_ammo: true, lose_heart: true, no_bottles: true, no_target: true, no_dupes: true, extra: 50, respawn: true, minibosses: true, regen: true, minions: true, fairy_helps: true, backup: true, gates: true, encounters: true, cucco: true, bowling: true, talon: true, fireballs: true, spawn_combo: true, randomizer: true, fuses: true, mega_like: true, volvagia: true, gerudo: true, ..Opts::default() });
+        assert_eq!(o, Opts { health: 250, damage: 50, speed: 200, no_hearts: true, no_fairies: true, no_ammo: true, lose_heart: true, no_bottles: true, no_target: true, no_dupes: true, extra: 50, respawn: true, minibosses: true, regen: true, minions: true, fairy_helps: true, backup: true, gates: true, encounters: true, cucco: true, bowling: true, talon: true, fireballs: true, spawn_combo: true, randomizer: true, fuses: true, mega_like: true, volvagia: true, ..Opts::default() });
         assert!(o.any() && o.packs());
-        assert_eq!(o.notes().len(), 31);
+        assert_eq!(o.notes().len(), 30);
         assert_eq!(o.notes().iter().collect::<std::collections::BTreeSet<&String>>().len(), o.notes().len());
         assert!(o.notes().iter().any(|n| n.contains("About 50 in 100")));
         assert!(Opts { extra: 100, ..Opts::default() }.any() && !Opts { extra: 100, ..Opts::default() }.packs());
