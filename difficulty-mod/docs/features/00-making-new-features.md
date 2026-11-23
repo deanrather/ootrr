@@ -48,7 +48,7 @@ Every new setting must default to off, and the default settings string must not 
 ## Research tools
 
 - **Flows:** `ootrr bfevfl-dump <romfs> Event/EventFlow/<Name>.bfevfl.zs` prints every event with its parameters.
-- **Loose AI graphs:** `ootrr ainb-dump <romfs> <path>`.
+- **AI graphs:** `ootrr ainb-dump <romfs> <path>` for a loose graph, `ootrr ainb-dump <romfs> <pack> <member>` for one inside a pack (attachments included, see `55-ainb-attachments.md`).
 - **Node list:** the AI and event node names with their inputs are in `AI/NodeDefinition/Node.Product.111.aidefn.byml.zs`. Searching the names is the fastest way to learn what the engine can do.
 - **Vanilla precedent:** before inventing a mechanism, find where the game already does the same thing and copy its shape. Almost every feature here works that way.
 - **Object map:** https://objmap-oot.zeldamods.org shows every placed object and the real collision geometry.

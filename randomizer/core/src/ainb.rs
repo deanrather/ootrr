@@ -1,3 +1,4 @@
+pub mod attach;
 mod audit;
 pub mod build;
 pub mod graft;
@@ -15,8 +16,10 @@ use std::vec::IntoIter;
 
 use crate::error::{Error, Res};
 use rd::Rd;
+use attach::{BLOCK, ENTRY};
 use tab::{INSZ, OUTSZ, PSZ};
 
+pub use attach::Att;
 pub use param::{Param, Plug};
 pub use audit::audit;
 pub use graft::{graft, root, set_root};
@@ -33,6 +36,8 @@ pub struct Ainb {
     pub cmds: Vec<u8>,
     pub els: Vec<[u8; EL]>,
     pub params: Vec<Param>,
+    pub atts: Vec<Att>,
+    pub att_ids: Vec<u32>,
     pub bb: Vec<u8>,
     pub props: [Vec<u8>; 6],
     pub ins: [Vec<u8>; 6],
@@ -73,9 +78,6 @@ impl Ainb {
         if r.u32(4)? != VERSION {
             return Err(Error::Format("ainb: unsupported version"));
         }
-        if r.u32(0x18)? != 0 {
-            return Err(Error::Format("ainb: attachments are not supported"));
-        }
         let hdr: [u8; HDR] = arr(r.bytes(0, HDR)?)?;
         let nc: usize = r.ptr(0xc)?;
         let ne: usize = r.ptr(0x10)?;
@@ -94,13 +96,24 @@ impl Ainb {
         }
         let prop: usize = r.ptr(0x2c)?;
         let io: usize = r.ptr(0x34)?;
-        if r.ptr(0x3c)? != prop || r.ptr(0x40)? != prop {
+        let na: usize = r.ptr(0x18)?;
+        let ap: usize = r.ptr(0x40)?;
+        let ae: usize = r.ptr(0x3c)?;
+        if ae < ap || (ae - ap) % 4 != 0 || ae.checked_add((ENTRY + BLOCK) * na) != Some(prop) {
             return Err(Error::Format("ainb: unexpected attachment table position"));
         }
-        let bb: Vec<u8> = r.span(bbp, pp.first().copied().unwrap_or(prop))?.to_vec();
+        let mut att_ids: Vec<u32> = Vec::new();
+        for o in (ap..ae).step_by(4) {
+            att_ids.push(r.u32(o)?);
+        }
+        let mut atts: Vec<Att> = Vec::new();
+        for j in 0..na {
+            atts.push(Att::parse(&r, ae + ENTRY * j, ae + ENTRY * na + BLOCK * j)?);
+        }
+        let bb: Vec<u8> = r.span(bbp, pp.first().copied().unwrap_or(ap))?.to_vec();
         let mut params: Vec<Param> = Vec::new();
         for i in 0..ne {
-            params.push(Param::parse(&r, pp[i], pp.get(i + 1).copied().unwrap_or(prop))?);
+            params.push(Param::parse(&r, pp[i], pp.get(i + 1).copied().unwrap_or(ap))?);
         }
         let mut pt: [usize; 6] = [0; 6];
         for k in 0..6 {
@@ -183,6 +196,8 @@ impl Ainb {
             cmds,
             els,
             params,
+            atts,
+            att_ids,
             bb,
             props,
             ins,
@@ -215,7 +230,10 @@ impl Ainb {
             pps.push(pos);
             pos += p.size();
         }
-        let prop: usize = pos;
+        let ap: usize = pos;
+        let ae: usize = ap + 4 * self.att_ids.len();
+        let ab: usize = ae + ENTRY * self.atts.len();
+        let prop: usize = ab + BLOCK * self.atts.len();
         let io: usize = prop + 0x18 + self.props.iter().map(|v| v.len()).sum::<usize>();
         let ios: usize = self.ins.iter().map(|v| v.len()).sum::<usize>() + self.outs.iter().map(|v| v.len()).sum::<usize>();
         let after: usize = io + 0x30 + ios;
@@ -237,6 +255,7 @@ impl Ainb {
         let w: usize = if has_exb { 5 } else { 4 };
         let mut h: [u8; HDR] = self.hdr;
         put(&mut h, 0x10, self.els.len());
+        put(&mut h, 0x18, self.atts.len());
         put(&mut h, 0x14, self.els.iter().filter(|e| e[build::ROLE] & build::QUERY != 0).count());
         put(&mut h, 0x20, bbp);
         put(&mut h, 0x24, at[w + 6]);
@@ -245,8 +264,8 @@ impl Ainb {
         put(&mut h, 0x30, if self.jump_first { at[0] } else { at[1] });
         put(&mut h, 0x34, io);
         put(&mut h, 0x38, if self.jump_first { at[1] } else { at[0] });
-        put(&mut h, 0x3c, prop);
-        put(&mut h, 0x40, prop);
+        put(&mut h, 0x3c, ae);
+        put(&mut h, 0x40, ap);
         put(&mut h, 0x44, if has_exb { at[4] } else { 0 });
         put(&mut h, 0x48, at[w + 3]);
         put(&mut h, 0x4c, at[3]);
@@ -266,6 +285,18 @@ impl Ainb {
         out.extend_from_slice(&self.bb);
         for p in &self.params {
             p.write(&mut out);
+        }
+        for x in &self.att_ids {
+            out.extend_from_slice(&x.to_le_bytes());
+        }
+        for (j, t) in self.atts.iter().enumerate() {
+            t.entry(ab + BLOCK * j, &mut out);
+        }
+        for (j, t) in self.atts.iter().enumerate() {
+            t.block(ab + BLOCK * j, &mut out);
+        }
+        if out.len() != prop {
+            return Err(Error::Format("ainb: layout mismatch"));
         }
         let mut q2: usize = prop + 0x18;
         for k in 0..6 {
@@ -353,6 +384,8 @@ pub(crate) mod tests {
             cmds: vec![0; 0x18],
             els: Vec::new(),
             params: Vec::new(),
+            atts: Vec::new(),
+            att_ids: Vec::new(),
             bb: vec![0; 0x38],
             props: std::array::from_fn(|_| Vec::new()),
             ins: std::array::from_fn(|_| Vec::new()),
@@ -428,6 +461,80 @@ pub(crate) mod tests {
         let c: Vec<u8> = a.write().unwrap();
         assert_eq!(Ainb::parse(&c).unwrap().write().unwrap(), c);
     }
+
+    const PARTS: usize = 8;
+
+    fn every_graph(part: usize) {
+        let root: std::path::PathBuf = ootrr_game::test_romfs::path();
+        if !root.join("Pack").join("ZsDic.pack.zs").is_file() {
+            eprintln!("skipped: set OOTRR_ROMFS");
+            return;
+        }
+        let mut rf: crate::romfs::Romfs = crate::romfs::Romfs::open(&root).unwrap();
+        let mut files: Vec<String> = Vec::new();
+        for d in std::fs::read_dir(&root).unwrap() {
+            let d: std::fs::DirEntry = d.unwrap();
+            if d.file_type().unwrap().is_dir() {
+                files.extend(rf.list(&d.file_name().to_string_lossy()).unwrap().into_iter().filter(|f| f.contains(".ainb") || f.ends_with(".pack.zs") || f.ends_with(".sarc.zs")));
+            }
+        }
+        let (mut n, mut with, mut bad): (usize, usize, Vec<String>) = (0, 0, Vec::new());
+        for (i, f) in files.iter().enumerate() {
+            if i % PARTS != part {
+                continue;
+            }
+            let raw: Vec<u8> = if f.ends_with(".zs") { rf.read_zs(f).unwrap() } else { rf.read(f).unwrap() };
+            let graphs: Vec<(String, Vec<u8>)> = if f.contains(".ainb") {
+                vec![(f.clone(), raw)]
+            } else {
+                let Ok(es) = crate::sarc::parse(&raw) else { continue };
+                es.into_iter().filter(|e| e.name.ends_with(".ainb")).map(|e| (format!("{f} {}", e.name), e.data)).collect()
+            };
+            for (name, b) in graphs {
+                n += 1;
+                let a: Ainb = match Ainb::parse(&b) {
+                    Ok(a) => a,
+                    Err(e) => {
+                        bad.push(format!("{name}: {e}"));
+                        continue;
+                    }
+                };
+                if !a.atts.is_empty() {
+                    with += 1;
+                    if !audit(&a).is_empty() {
+                        bad.push(format!("{name}: {:?}", audit(&a)));
+                    }
+                    for (j, t) in a.atts.iter().enumerate() {
+                        if crate::murmur::murmur3_32(a.att_name(j).as_bytes(), 0) != t.hash {
+                            bad.push(format!("{name}: attachment {j} hash"));
+                        }
+                    }
+                } else if (0..a.els.len()).any(|i| a.att_range(i).1 != 0) {
+                    bad.push(format!("{name}: attachment count without attachments"));
+                }
+                match a.write() {
+                    Ok(o) if o == b => {}
+                    Ok(_) => bad.push(format!("{name}: rewrite differs")),
+                    Err(e) => bad.push(format!("{name}: write: {e}")),
+                }
+            }
+        }
+        eprintln!("part {part}: {n} graphs, {with} with attachments, {} problems", bad.len());
+        assert!(bad.is_empty(), "{} of {n}: {:?}", bad.len(), &bad[..bad.len().min(20)]);
+        assert!(n > 0);
+    }
+
+    parts!(
+        every_graph,
+        every_game_graph_parses_and_rewrites_byte_identically_part_1 = 1,
+        every_game_graph_parses_and_rewrites_byte_identically_part_2 = 2,
+        every_game_graph_parses_and_rewrites_byte_identically_part_3 = 3,
+        every_game_graph_parses_and_rewrites_byte_identically_part_4 = 4,
+        every_game_graph_parses_and_rewrites_byte_identically_part_5 = 5,
+        every_game_graph_parses_and_rewrites_byte_identically_part_6 = 6,
+        every_game_graph_parses_and_rewrites_byte_identically_part_7 = 7,
+        every_game_graph_parses_and_rewrites_byte_identically_part_8 = 0,
+    );
 
     #[test]
     fn pool_dedupes_and_appends() {

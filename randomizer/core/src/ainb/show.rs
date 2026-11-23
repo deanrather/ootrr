@@ -17,18 +17,26 @@ fn val(a: &Ainb, k: usize, v: &[u8]) -> String {
     }
 }
 
+fn props(a: &Ainb, out: &mut String, pe: &[[u32; 2]; 6]) {
+    for k in 0..6 {
+        let (b, n): (usize, usize) = (pe[k][0] as usize, pe[k][1] as usize);
+        for g in b..b + n {
+            if let Some(e) = a.props[k].get(g * PSZ[k]..(g + 1) * PSZ[k]) {
+                let _ = writeln!(out, "  prop {} {} = {}", NAMES[k], a.prop_name(k, g).unwrap_or("?"), val(a, k, &e[8..]));
+            }
+        }
+    }
+}
+
 pub fn show(a: &Ainb) -> String {
     let mut out: String = String::new();
-    let _ = writeln!(out, "ainb elements {} commands {} pool {} bytes", a.els.len(), a.cmds.len() / 0x18, a.pool.b.len());
+    let _ = writeln!(out, "ainb elements {} commands {} attachments {} pool {} bytes", a.els.len(), a.cmds.len() / 0x18, a.atts.len(), a.pool.b.len());
     for i in 0..a.els.len() {
         let _ = writeln!(out, "element {} type {} {}", i, a.el_type(i), a.el_name(i));
         let p = &a.params[i];
-        for k in 0..6 {
-            let (b, n): (usize, usize) = (p.pe[k][0] as usize, p.pe[k][1] as usize);
-            for g in b..b + n {
-                let e: &[u8] = &a.props[k][g * PSZ[k]..(g + 1) * PSZ[k]];
-                let _ = writeln!(out, "  prop {} {} = {}", NAMES[k], a.prop_name(k, g).unwrap_or("?"), val(a, k, &e[8..]));
-            }
+        props(a, &mut out, &p.pe);
+        for j in a.el_atts(i) {
+            let _ = writeln!(out, "  attachment {} {}", j, a.att_name(j));
         }
         for k in 0..6 {
             for g in a.input_ids(i, k) {
@@ -54,6 +62,10 @@ pub fn show(a: &Ainb) -> String {
         }
         let gs: Vec<String> = p.pl.iter().map(|g| format!("{}@{}", g[0], g[1])).collect();
         let _ = writeln!(out, "  plug groups {}", gs.join(" "));
+    }
+    for (j, t) in a.atts.iter().enumerate() {
+        let _ = writeln!(out, "attachment {} {} flags {:#x} expressions {} {}", j, a.att_name(j), t.flags, t.exb[0], t.exb[1]);
+        props(a, &mut out, &t.pe);
     }
     out
 }
