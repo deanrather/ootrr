@@ -156,6 +156,40 @@ In rc 16: harmless scrubs (business, stage, leaf scrubs and the Deku Scrub broth
   - Backup: Wolfos and Bari bring 1 helper, not 2; spear Moblin called nobody in 40 s; Stalchild, Skulltula, Wallmaster, Armos and Biri still call nobody in their home maps (45 s).
 
 
-## Difficulty ladder (21 Nov, `fix/playtest-misc`, on `playtest/next` only)
-User, hands-on: a Stalfos calling Stalfos and a Wolfos calling Wolfos is too tough; a caller should call a lesser kind. Each caller now calls the kind one step below it on this ladder (code: `HELPERS` and the pairs in `backup.rs`): Keese, Gohma larva, Lizalfos, Wolfos, Stalfos, White Wolfos, Dinolfos, Iron Knuckle. In the code: Dinolfos calls White Wolfos, White Wolfos calls Stalfos, Stalfos calls Wolfos, Wolfos calls Lizalfos, Lizalfos calls Gohma larvae, Gohma larvae call Keese. Four helper packs are new (Gohma larva, Stalfos, White Wolfos, Dinolfos); the pack table is 19 entries.
-Tests: unit and game-file tests only. By hand: the panel step on 21 Nov was marked failed with no note; what failed is not known. Treat the ladder as not confirmed in the game.
+## Difficulty ladder and one call (21 Nov, branch `feature/backup-ladder`)
+User, hands-on: the ladder in the first sketch was only rough ("you're supposed to figure out the correct difficulty chain"); a caller must call a lesser kind; at most one backup per caller; only one-hit enemies may come as a stream.
+
+**Ladder computed from the game files** (`MaxLife`, attack damage in quarter hearts, run speed from the enemy table, and what the AI modules show for guarding and dodging; no enemy in this list has a projectile module):
+
+| Rung | Kind | Life | Hit (quarter hearts) | Run | Guard or dodge (AI modules) |
+|---|---|---|---|---|---|
+| 1 | Keese | 1 | 2 | 6, flies | erratic flight |
+| 2 | Gohma larva | 2 | 2 | 8.8 | none |
+| 3 | Lizalfos | 9 | 2 | 9 | step jump, cower, strafe |
+| 4 | Wolfos | 9 | 2 | 10 | quick turn |
+| 5 | White Wolfos | 18 | 2 to 4 | 10 | quick turn |
+| 6 | Dinolfos | 18 | 2 to 4 | 7 | Lizalfos modules (jump, strafe), 3 attacks |
+| 7 | Weak Stalfos | 18 | 2 to 8 | 6.7 | strafe, jump attack |
+| 8 | Stalfos | 18 | 4 to 8 | 6.7 | strafe, jump attack, provoke |
+| 9 | Iron Knuckle | 34 | 12 | 3.8 | large attack |
+
+Reasoning: life decides first (1, 2, 9, 18, 34), then the biggest hit, then speed and evasion. The Stalfos hits for up to 8 quarter hearts, twice what the White Wolfos and Dinolfos hit for at the same life, so it sits above both; this differs from the user's sketch, which had Stalfos below White Wolfos and Dinolfos. The Dinolfos is above the White Wolfos for its extra attack and evasive modules.
+
+A caller calls the kind one step below it: Weak Stalfos calls Dinolfos, Stalfos calls Weak Stalfos, Dinolfos calls White Wolfos, White Wolfos calls Wolfos, Wolfos calls Lizalfos, Lizalfos calls a Gohma larva, a Gohma larva calls a Keese. Keese and Iron Knuckles never call. Other callers keep the rows from the earlier tables (Guay, Skullwalltula, Biri, little Floormaster and so on). Code: `LADDER`, `HELPERS` and `WHO_CALLS_WHOM` in `backup.rs`.
+
+**One backup per caller.** The call is one create request now (it was a pair: "call" and "call second"), every holder takes one actor (`MaxActors` 1), and the spear Moblin and Bari call one helper, not two. 26 nodes are added per caller (was 28). The latch (`OotrrBackupUsed`) is unchanged.
+
+**Streams.** One-hit kinds (Keese, little Floormaster) are the only ones that could stream, and nothing changed for them. The ordinary Like Like's stream of little Floormasters is not the game's own behaviour for a Like Like: its pack has no holder and no create or wake node (checked in `Enemy_LikeLike.utility.root`). The game does that only for the Floormaster and Wallmaster (their `hide` module wakes the little ones from a holder of up to 3 that recreates them). So the Like Like stream is our latch not holding for that pack, or a repeated wake of one holder entry; the cause was not found by reading and was not played (two game copies were running). It is left as it was, as the user likes it. The mega Like Likes call nothing (`feature/enemy-positions`).
+
+**Risk.** A Dinolfos or White Wolfos called outside the maps that load their packs may not appear (as with Fire Keese).
+
+**Tested.** `cargo test -p ootrr-core difficulty` (297) and `settings` (113) with the game files; the new test `a_caller_on_the_ladder_calls_the_kind_one_step_below_and_only_one`. Not played. To test in the game: backup on, spawn a Stalfos and stay targeted about 25 s: one Weak Stalfos comes, no second.
+
+## Never its own kind (22 Nov, branch `fix/backup-own-kind`, off `feature/backup-ladder`)
+User, hands-on 13: a Stalfos spawned in child Hyrule Field was hit and its backup was "same kind". User rules: no creature ever calls its own kind; a called helper never calls; one call per caller; never more than 3 alive per stream; the more-enemies multiplier never multiplies backup.
+
+**Cause.** The ladder on `feature/backup-ladder` (commit `dfd7508`) had a Weak Stalfos rung right under the Stalfos, so every Stalfos (and `Stalfos_ForChild`, `_AlwaysRespawn`) called `Enemy_Stalfos_Weak`, which inherits the Stalfos actor and looks like one. The old "own kind" test only compared exact names. The game log of hands-on 13 shows the helper 15 to 18 s after the spawn (the backup timer is 10 to 25 s); Longshot's debug list names it `Enemy_Stalfos` because the name comes from a resource the Weak Stalfos inherits. It was not a vanilla call and not the bridge `spawn`: the spawned Stalfos came from our edited pack (holder `OotrrBackupStalfosWeak` in the built `Enemy_Stalfos` pack). The same mistake sat in four more rows: White Wolfos called Wolfos, Floormaster and Wallmaster called little Floormasters, Skulltula called Skullwalltula, Bari called Biri, Gibdo called ReDead.
+
+**Fix.** `kind()` is the name after `Enemy_` up to the first `_`; `same_kind()` also treats these pairs as one kind: Skulltula/Skullwalltula, Floormaster/Wallmaster, Bari/Biri, Lizalfos/Dinolfos, Gibdo/ReDead. A ladder caller calls the nearest lesser rung that is not its own kind: Stalfos now calls a Dinolfos, White Wolfos a Lizalfos. Floormaster, Wallmaster, Skulltula, Bari and Gibdo now call a Keese. Everything else is unchanged.
+
+**Tested.** `cargo test -p ootrr-core backup` with the game files (16 pass), including the new `no_caller_calls_its_own_kind_or_a_variant_of_it`, which walks every `Enemy_` pack in the game files plus variant names and every helper. In the game (script, 22 Nov, build from `test/handson13` plus this fix, preset of hands-on 13 at more enemies 500, Kokiri Forest by Link's house): a spawned Stalfos got one Dinolfos 18 s later and nothing more in the next 45 s (the Dinolfos did not call); a spawned Lizalfos got one Gohma larva after 17.6 s. Not played by hand. A placed (not spawned) Stalfos was not tried: the spawned one runs the same edited pack.

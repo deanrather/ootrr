@@ -1096,7 +1096,7 @@ mod tests {
         let vanilla_emits = |n: &str| -> usize { crate::ainb::Ainb::parse(&sarc::get(&vanilla, n).unwrap().data).unwrap().find_els(fx::EMIT).len() };
         for name in ["AI/Enemy_Stalfos.utility.root.ainb", "AI/EnemyBase.utility.root.ainb"] {
             let caller: crate::ainb::Ainb = crate::ainb::Ainb::parse(&sarc::get(&shared, name).unwrap().data).unwrap();
-            assert_eq!((caller.find_els(regen::HEAL).len(), caller.find_els(fairy::CLEAR).len(), caller.find_els(backup::REQUEST).len(), caller.find_els(fx::EMIT).len() - vanilla_emits(name)), (4, 1, 2, 7), "{name} carries regen, fairy and backup, each with its flash");
+            assert_eq!((caller.find_els(regen::HEAL).len(), caller.find_els(fairy::CLEAR).len(), caller.find_els(backup::REQUEST).len(), caller.find_els(fx::EMIT).len() - vanilla_emits(name)), (4, 1, 1, 7), "{name} carries regen, fairy and backup, each with its flash");
             assert!(crate::ainb::audit(&caller).is_empty());
         }
         assert_eq!(outs.iter().filter(|x| x.path == "Pack/Actor/Enemy_Stalfos.pack.zs").count(), 1);
@@ -1499,7 +1499,7 @@ mod tests {
         assert_eq!(max_life(&es, life), Some(Node::I32(a * 2)));
         let global: Vec<Entry> = sarc::parse(&rf.zs.decompress(&outs.iter().find(|x| x.path == backup::GLOBAL).unwrap().z).unwrap()).unwrap();
         let graph: crate::ainb::Ainb = crate::ainb::Ainb::parse(&sarc::get(&global, "AI/Enemy_Stalfos.utility.root.ainb").unwrap().data).unwrap();
-        assert_eq!(graph.find_els(backup::REQUEST).len(), 2);
+        assert_eq!(graph.find_els(backup::REQUEST).len(), 1);
         assert!(sarc::get(&es, backup::STALFOS_GRAPH).map(|e| &e.data) == sarc::get(&was, backup::STALFOS_GRAPH).map(|e| &e.data), "the module itself is vanilla");
         assert!(sarc::get(&es, backup::HELPERS[backup::helper_of("Enemy_Stalfos")].1).is_some() && sarc::get(&was, backup::HELPERS[backup::helper_of("Enemy_Stalfos")].1).is_none());
         assert_eq!(backup::holder_of(&es, "Enemy_Stalfos").unwrap().as_deref(), Some(backup::HELPERS[backup::helper_of("Enemy_Stalfos")].1));
