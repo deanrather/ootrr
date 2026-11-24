@@ -782,7 +782,6 @@ pub const MENU: &[Page] = &[
             sec("Minigames", &["unbreakable_bowling_grass", "harder_talon_cuccos"]),
         ],
     },
-    Page { id: "gerudo_card", label: "Gerudo Membership Card", heading: IN_DEV, sections: &[sec("Shuffle", &["shuffle_gerudo_card"])] },
     Page { id: "cosmetics", label: "Cosmetics", heading: GAMEPLAY, sections: &[sec("Looks", &["mega_like_likes"])] },
     Page { id: "debug", label: "Debug", heading: DEBUG, sections: &[sec("Debug", &["debug_location_names"]), sec("Spawn enemies", &["enemy_spawn_combo"])] },
 ];
