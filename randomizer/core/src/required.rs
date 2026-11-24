@@ -68,8 +68,6 @@ pub const TREES: [&str; 12] = [
 pub const DIFFICULTY_FILES: [&str; 2] = [crate::difficulty::lottery::FILE, crate::difficulty::elink::FILE];
 pub const DIFFICULTY_TREES: [&str; 3] = [crate::difficulty::extras::MORE_SCENES, crate::difficulty::ground::NAV_DIR, crate::difficulty::ground::STITCHED_DIR];
 
-/// Pickup actors take the pose file of their model when the game has one: `Model/Item_*_Animation.anim.bfres.zs`
-/// (75 files, about 1 MB).
 pub const POSE_HEAD: &str = "Model/Item_";
 pub const POSE_TAIL: &str = "_Animation.anim.bfres.zs";
 
