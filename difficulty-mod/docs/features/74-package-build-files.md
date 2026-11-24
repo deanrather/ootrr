@@ -47,6 +47,6 @@ A setting that reads a game file outside `required::TREES` must add it to `requi
 
 Building from a `.nup` or `.nx` failed for Enemies regen health, Fairy helps, Mega Like Likes, No heart drops, Limited ammo and every More enemies value, because the files they read were not in the unpack list. They are now (about 33 MB more), and a game-file test builds with every Difficulty setting from the unpack set alone and requires the same bytes as the folder build.
 
-For details about implementation and testing, see difficulty-mod/docs/features/74-package-build-files.md.
+Merged with nightly dda8087, which fixed nightly's own tests. For details about implementation and testing, see difficulty-mod/docs/features/74-package-build-files.md.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
