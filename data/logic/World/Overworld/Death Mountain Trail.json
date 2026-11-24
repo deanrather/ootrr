@@ -27,7 +27,8 @@
                 here(can_blast_or_smash) or
                 (is_adult and (here(can_plant_bean and Progressive_Strength_Upgrade) or plant_beans)) or
                 (logic_dmt_climb_hovers and can_use(Hover_Boots))",
-            # The remake entrance needs a strength upgrade at any age; explosives alone do not open it.
+            # The remake entrance needs a strength upgrade from a child (explosives alone do not open
+            # it); an adult gets in without one.
             "Dodongos Cavern Beginning": "Progressive_Strength_Upgrade or is_adult",
             "DMT Storms Grotto": "can_open_storm_grotto"
         }

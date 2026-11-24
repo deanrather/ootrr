@@ -265,7 +265,7 @@ mod tests {
     }
 
     #[test]
-    fn the_logic_adds_both_checks_and_the_bottle_rule_only_when_on() {
+    fn the_logic_adds_both_checks_only_when_on_and_the_shelves_always_want_a_bottle() {
         let d: Data = Data::load().unwrap();
         let off: World = world(&d).unwrap();
         for n in LOCS {
@@ -276,16 +276,17 @@ mod tests {
         let all: Search = explore(&w, &vanilla_place(&w, &d).unwrap(), &[]);
         let dry: Search = explore(&w, &without(&w, &d, &bottles), &[]);
         let plain: Search = explore(&off, &without(&off, &d, &bottles), &[]);
-        let mut shown: usize = 0;
+        let mut plain_shelves: usize = 0;
         let sides = ["Left Side", "Right Side"].iter().flat_map(|s| ["Top Left", "Top Right", "Bottom Left", "Bottom Right"].iter().map(move |p| format!("{SHELF}{s} {p}")));
         for n in LOCS.iter().map(|s| s.to_string()).chain(sides) {
             assert!(seen(&all, &w, &n), "{n}");
             assert!(!seen(&dry, &w, &n), "{n}");
-            if shelf(&n) && seen(&plain, &off, &n) {
-                shown += 1;
+            if shelf(&n) {
+                assert!(!seen(&plain, &off, &n), "{n}: with the setting off the shelves want a bottle too");
+                plain_shelves += 1;
             }
         }
-        assert_eq!(shown, 8);
+        assert_eq!(plain_shelves, 8);
         assert!(all.won());
     }
 

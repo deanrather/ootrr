@@ -50,16 +50,18 @@ mod tests {
         p
     }
 
-    // The entrance wants a strength upgrade, which also opens the right side, so an adult
-    // reaches the torch room through the Lower Lizalfos without Bow or Din's Fire. Without the
-    // upgrade the cavern stays shut even with the Hammer.
+    // An adult gets into the cavern without a strength upgrade, but the lobby wall still wants
+    // the Hammer, explosives or the upgrade. The upgrade also opens the right side, so an adult
+    // reaches the torch room through the Lower Lizalfos without Bow or Din's Fire.
     #[test]
     fn an_adult_reaches_the_torch_room_through_the_lower_lizalfos() {
         let d: Data = Data::load().unwrap();
         let w: World = world_with(&d, &[("open_door_of_time", "open")]).unwrap();
         let p: Placement = stripped(&w, &d, &["Bow", "Dins Fire", "Bomb Bag", "Progressive Strength Upgrade"]);
         let torch: &str = "Dodongos Cavern Torch Room";
-        assert!(!adult_at(&w, &p, &["Megaton Hammer"], "Dodongos Cavern Lobby"));
+        assert!(adult_at(&w, &p, &[], "Dodongos Cavern Beginning"));
+        assert!(!adult_at(&w, &p, &[], "Dodongos Cavern Lobby"));
+        assert!(adult_at(&w, &p, &["Megaton Hammer"], "Dodongos Cavern Lobby"));
         assert!(adult_at(&w, &p, &["Progressive Strength Upgrade"], "Dodongos Cavern Lobby"));
         assert!(adult_at(&w, &p, &["Progressive Strength Upgrade"], torch));
     }

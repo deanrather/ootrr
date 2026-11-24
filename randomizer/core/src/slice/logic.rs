@@ -311,21 +311,28 @@ mod tests {
         assert!(s.won() && o.won());
     }
 
+    // The Market Potion Shop shelves want a child with a bottle (the keeper sells after his bottle
+    // business); the meeting with Zelda is not asked for.
     #[test]
-    fn the_market_potion_shop_shelves_wait_for_the_meeting_with_zelda() {
+    fn the_market_potion_shop_shelves_want_a_child_with_a_bottle() {
         let d: Data = Data::load().unwrap();
         let w: World = world(&d).unwrap();
         let all: Search = explore(&w, &vanilla_place(&w, &d).unwrap(), &[]);
-        let cut: Search = explore(&w, &vanilla_without(&w, &d, &["Weird Egg"]), &[]);
-        let skip: World = world_with(&d, &[("skip_child_zelda", "true")]).unwrap();
-        let met: Search = explore(&skip, &vanilla_without(&skip, &d, &["Weird Egg"]), &[]);
+        let unmet: Search = explore(&w, &vanilla_without(&w, &d, &["Weird Egg"]), &[]);
+        let bottles: Vec<&str> = ["Bottle", "Bottle with Milk", "Rutos Letter", "Bottle with Red Potion", "Bottle with Green Potion", "Bottle with Blue Potion", "Bottle with Fairy", "Bottle with Fish", "Bottle with Blue Fire", "Bottle with Bugs", "Bottle with Poe", "Bottle with Big Poe"]
+            .into_iter()
+            .filter(|b| w.item(b).is_some())
+            .collect();
+        let dry: Search = explore(&w, &vanilla_without(&w, &d, &bottles), &[]);
         let shelves: Vec<&str> = w.locs.iter().map(|l| l.name.as_str()).filter(|n| crate::flow_extra::potion::shelf(n)).collect();
         assert_eq!(shelves.len(), 8);
+        let shop: crate::world::RegionId = w.region("Market Potion Shop").unwrap();
         for n in shelves {
             assert!(seen(&all, &w, n), "{n}");
-            assert!(!seen(&cut, &w, n), "{n}");
-            assert!(seen(&met, &skip, n), "{n}");
+            assert!(seen(&unmet, &w, n), "{n}");
+            assert!(!seen(&dry, &w, n), "{n}");
         }
+        assert!(dry.region_reached(shop, None), "the shop itself is reached without a bottle");
     }
 
     #[test]
