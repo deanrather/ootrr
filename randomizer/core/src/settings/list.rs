@@ -252,6 +252,8 @@ fn difficulty() -> Vec<Setting> {
             .tip("In Talon's game there are more cuccos to dig through, they don't stay put after they land, and you get 20 seconds instead of 30. Anju's cuccos are not changed."),
         Setting::toggle(d::FIREBALLS_NUM, d::FIREBALLS, "difficulty", "Fireball storms", false)
             .tip("Burning rocks rain down on quiet stretches of Hyrule Field, Desert Colossus, the Haunted Wasteland and the Castle garden, and on every visit to the Death Mountain Trail. Dodge them."),
+        Setting::toggle(d::BOULDERS_NUM, d::BOULDERS, "difficulty", "More boulders and Fire Keese on the Trail", false)
+            .tip("Twice as many boulders roll down the adult Death Mountain Trail, and six Fire Keese flutter over the trail, as a child and as an adult."),
         Setting::toggle(d::SPAWN_COMBO_NUM, d::SPAWN_COMBO, "difficulty", "Spawn enemies (sticks + D-pad)", false)
             .tip("For fun and practice. Hold both sticks in and press D-pad Down for a random enemy in front of Link, or Up for the same kind again. Up to twelve at once."),
         Setting::toggle(d::VOLVAGIA_NUM, d::VOLVAGIA, "difficulty", "Volvagia roams Hyrule Field (Functional WIP)", false)
