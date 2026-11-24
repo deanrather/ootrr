@@ -16,8 +16,6 @@ pub const ON: &str = "on";
 pub const ROCK: &str = "Obj_LiftRock_A_01";
 pub const GRASS: &str = "Obj_Plant_Grass_A_01";
 pub const TABLE: &str = "Drop__DropTable";
-pub const AFTER_DEKU_TREE: [&str; 1] = ["KF Child Rock 11"];
-pub const DEKU_TREE_DONE: &str = "'Defeat Queen Gohma'";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Spot {
@@ -78,11 +76,7 @@ pub fn spots_of(t: &str) -> Res<Vec<Spot>> {
             continue;
         }
         let k: Kind = Kind::of(text(r, "kind", name)?).filter(|k| k.wild()).ok_or_else(|| E::Msg(format!("rock catalog: {name} is not rock or grass")))?;
-        let mut rule: String = rule_of(k, text(r, "age", name)?);
-        if AFTER_DEKU_TREE.contains(&name) {
-            rule = format!("{rule} and {DEKU_TREE_DONE}");
-        }
-        out.push(Spot { name: name.to_string(), region: text(r, "region", name)?.to_string(), rule });
+        out.push(Spot { name: name.to_string(), region: text(r, "region", name)?.to_string(), rule: rule_of(k, text(r, "age", name)?) });
     }
     Ok(out)
 }
@@ -199,46 +193,6 @@ mod tests {
         assert_eq!(rule_of(Kind::Grass, "child"), "is_child and can_cut_shrubs");
         assert_eq!(rule_of(Kind::Grass, "adult"), "is_adult");
         assert_eq!(rule_of(Kind::Grass, "both"), "can_cut_shrubs");
-    }
-
-    #[test]
-    fn the_rock_that_exists_only_after_the_deku_tree_needs_it_in_the_logic() {
-        let d: Data = Data::load().unwrap();
-        let w: World = on_world(&d);
-        let sp: Vec<Spot> = spots().unwrap();
-        for s in &sp {
-            assert_eq!(s.rule.contains(DEKU_TREE_DONE), AFTER_DEKU_TREE.contains(&s.name.as_str()), "{}", s.name);
-        }
-        let v: Placement = vanilla_place(&w, &d).unwrap();
-        let mut bare: Placement = v.clone();
-        for l in &w.real {
-            bare.item[*l] = None;
-        }
-        let r: LocId = w.loc("KF Child Rock 11").unwrap();
-        let none: Search = explore(&w, &bare, &[]);
-        assert!(!none.loc_access(r));
-        assert!(none.loc_access(w.loc("KF Child Rock 1").unwrap()));
-        let all: Search = explore(&w, &v, &[w.item("Progressive Strength Upgrade").unwrap(); 3]);
-        assert!(all.loc_access(r));
-    }
-
-    #[test]
-    fn no_seed_needs_the_deku_tree_rock_to_finish_the_deku_tree() {
-        let d: Data = Data::load().unwrap();
-        for rocks in ["all", "overworld"] {
-            let s: Settings = with(&[("shuffle_rocks", rocks)]);
-            let p: Plan = plan(&s).unwrap();
-            let w: World = world_with(&d, &p.logic()).unwrap();
-            for n in 0..4 {
-                let g: Generated = generate_data(&d, &s, &format!("deku rock {rocks} {n}"), &GenOpts::default()).unwrap();
-                let mut pl: Placement = vanilla_place(&w, &d).unwrap();
-                for (loc, item) in &g.seed_file.placements {
-                    pl.put(w.loc(loc).unwrap(), w.item(item).unwrap());
-                }
-                pl.item[w.loc("KF Child Rock 11").unwrap()] = None;
-                assert!(explore(&w, &pl, &[]).loc_access(w.loc("Queen Gohma").unwrap()), "{rocks} {n}");
-            }
-        }
     }
 
     #[test]

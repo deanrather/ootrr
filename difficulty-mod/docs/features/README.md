@@ -52,6 +52,6 @@ This index lists every feature file in this folder. Which build carries a featur
 | 54 | [Gerudo fighter](54-gerudo-fighter.md) | part of `more_enemies` | See the file |
 | 55 | [AI graph attachments](55-ainb-attachments.md) | none (tooling) | Byte-identical round trip by test |
 | 57 | [Owl ride to Lon Lon Ranch](57-owl-ranch.md) | part of `owl_warps` | See the file |
-| 70 | [Kokiri Forest rock 11](70-kf-rock-11.md) (upstream issue 70) | none (logic fix) | No (logic only) |
+| 70 | [Kokiri Forest rock 11](70-kf-rock-11.md) (upstream issue 70; superseded by upstream retiring the rock, 24 Nov) | none | No (removed) |
 
 Features 01 to 08 I built directly. Features 09 to 19 were built by sub-agents; what those files say about investigation and testing comes from the agents' reports, which I did not re-run except where noted.

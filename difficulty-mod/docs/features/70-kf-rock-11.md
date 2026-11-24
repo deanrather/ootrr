@@ -1,5 +1,7 @@
 # Kokiri Forest rock 11 before the Deku Tree (upstream issue 70)
 
+**Superseded on 24 Nov.** Upstream nightly (commit 7146d21, 22 Nov) took rock 11 out of the shuffle itself: `data/rocks_catalog.json` lists "KF Child Rock 11" under `retire`, so it is no longer a check. When nightly was merged into the fork, the logic rule described below (`AFTER_DEKU_TREE` in `randomizer/core/src/pot_slice/rocks.rs`) and its two tests were removed: the location they named no longer exists, and both tests failed on the merged tree. `rocks.rs` on the fork is now upstream's file unchanged. The rest of this page is the record of the fork's own fix.
+
 ## Original request
 Upstream issue 70: "unable to pick up or break rock in kokiri forest". The check "KF Child Rock 11" cannot be picked up or broken until after the Great Deku Tree. The reporter guessed it was tied to the Kokiri kid who is normally there, and that a time saver removing him leaves the rock stuck. The user's preferences, in order: remove the rock if no check is lost; then keep the kid and drop his interruption; finally (23 Nov) "fix the logic. the logic is probably copied from the n64 game that behaved differently, so it's likely an issue in this version's logic."
 
