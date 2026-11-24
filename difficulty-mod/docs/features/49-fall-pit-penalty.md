@@ -1,6 +1,6 @@
 # Fall in pit penalty
 
-Setting `fall_pit_penalty` (number 162), a slider from 0 to 3, default 1 (the game's own penalty). Difficulty page, section Player. Code: `randomizer/core/src/difficulty/falls.rs`, wired in `difficulty.rs`.
+Setting `fall_pit_penalty` (number 600; it was 162 until 24 Nov, when upstream nightly gave 162 to its own fishing setting, so a settings string made by an older fork build with this setting off its default is not read back correctly: its old number now means upstream's setting. The setting is fork-only, so nothing upstream changes), a slider from 0 to 3, default 1 (the game's own penalty). Difficulty page, section Player. Code: `randomizer/core/src/difficulty/falls.rs`, wired in `difficulty.rs`.
 
 ## The request
 First: "near-death falls: falling down a hole takes you down to 1 heart" (22 Nov). After playing that version (hands-on 15), the user turned it into a slider, "Fall in pit penalty", 0 to 3:

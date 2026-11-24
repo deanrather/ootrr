@@ -10,7 +10,7 @@ Notes that apply to every feature in this folder. Read this first; the per-featu
 
 ## How a difficulty feature is wired
 
-1. **Setting:** declared in `fn difficulty()` in `crates/core/src/settings/list.rs`. Its id and number are constants in `crates/core/src/difficulty.rs`. Numbers 110 to 129 are used; take 130 next.
+1. **Setting:** declared in `fn difficulty()` in `crates/core/src/settings/list.rs`. Its id and number are constants in `crates/core/src/difficulty.rs`. Upstream hands out setting numbers in order (its nightly branch reached 171 on 24 Nov) and twice took a number a fork-only setting already had (160 and 162). A new fork-only setting therefore takes the next free number from 600 up (600 `fall_pit_penalty`, 601 `enemy_aggression`), never one near upstream's latest; before choosing, list the numbers on upstream nightly and on the fork. The test `no_two_settings_share_a_number` in `randomizer/core/src/settings.rs` fails on any duplicate.
 2. **Menu:** placed on the `difficulty` page in `crates/core/src/settings/menu.rs`.
 3. **Read:** `difficulty::read` turns settings into `difficulty::Opts`.
 4. **Apply:** `difficulty::stage` runs in the late stage of the build (`slice/edit.rs` calls `difficulty::worked`). Each step reads the previous step's output, so two features that edit the same file combine instead of overwriting.

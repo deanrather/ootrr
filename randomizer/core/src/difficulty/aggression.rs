@@ -3,7 +3,7 @@ use crate::difficulty::stats;
 use crate::error::{Error, Res};
 
 pub const SETTING: &str = "enemy_aggression";
-pub const NUM: u16 = 160;
+pub const NUM: u16 = 601;
 pub const NORMAL: i64 = 100;
 pub const PEACEFUL: i64 = 0;
 pub const RANGE: (i64, i64) = (0, 300);

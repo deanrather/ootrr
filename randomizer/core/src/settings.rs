@@ -178,6 +178,18 @@ mod tests {
     }
 
     #[test]
+    fn no_two_settings_share_a_number() {
+        let mut seen: std::collections::BTreeMap<u16, &str> = std::collections::BTreeMap::new();
+        for s in &schema().settings {
+            assert_ne!(s.num, 0, "{} has no number", s.id);
+            if let Some(other) = seen.insert(s.num, s.id.as_str()) {
+                panic!("setting number {} is used by both {other} and {}", s.num, s.id);
+            }
+        }
+        assert_eq!(seen.len(), schema().settings.len());
+    }
+
+    #[test]
     fn every_dependency_names_a_real_setting() {
         for s in &schema().settings {
             for d in &s.deps {

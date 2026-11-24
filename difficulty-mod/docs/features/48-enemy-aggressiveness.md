@@ -1,6 +1,6 @@
 # Enemy aggressiveness
 
-Setting `enemy_aggression` (number 160), slider 0x to 3x in steps of 0.5x, default 1x (off). Code: `randomizer/core/src/difficulty/aggression.rs`, wired in `difficulty::edit_entry`.
+Setting `enemy_aggression` (number 601; it was 160 until 24 Nov, when upstream nightly gave 160 to its own `lacs_medallions`, so a settings string made by an older fork build with this setting off its default is not read back correctly: its old number now means upstream's setting. The setting is fork-only, so nothing upstream changes), slider 0x to 3x in steps of 0.5x, default 1x (off). Code: `randomizer/core/src/difficulty/aggression.rs`, wired in `difficulty::edit_entry`.
 
 ## What was requested
 
