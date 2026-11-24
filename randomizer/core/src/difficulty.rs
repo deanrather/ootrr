@@ -1,3 +1,4 @@
+pub mod aggression;
 pub mod ambush;
 pub mod beamos;
 pub mod fireballs;
@@ -140,6 +141,7 @@ pub struct Opts {
     pub damage: i64,
     pub hurt: hurt::Hurt,
     pub speed: i64,
+    pub aggression: i64,
     pub no_hearts: bool,
     pub no_fairies: bool,
     pub no_ammo: bool,
@@ -179,7 +181,7 @@ pub struct Opts {
 
 impl Default for Opts {
     fn default() -> Opts {
-        Opts { health: NORMAL, damage: NORMAL, hurt: hurt::Hurt::Normal, speed: NORMAL, no_hearts: false, no_fairies: false, no_ammo: false, lose_heart: false, pit: falls::VANILLA, no_bottles: false, no_target: false, no_dupes: false, extra: 0, respawn: false, minibosses: false, regen: false, minions: false, fairy_helps: false, backup: false, gates: false, encounters: false, cucco: false, bowling: false, talon: false, fireballs: false, spawn_combo: false, randomizer: false, sizes: sizes::Range::Off, sized_health: false, fuses: false, mega_like: false, volvagia: false, gerudo: false, forest_open: false, shops: false, mido_gone: false, entrances: gates::Shuffle::Off, timers: NORMAL, feints: 0 }
+        Opts { health: NORMAL, damage: NORMAL, hurt: hurt::Hurt::Normal, speed: NORMAL, aggression: NORMAL, no_hearts: false, no_fairies: false, no_ammo: false, lose_heart: false, pit: falls::VANILLA, no_bottles: false, no_target: false, no_dupes: false, extra: 0, respawn: false, minibosses: false, regen: false, minions: false, fairy_helps: false, backup: false, gates: false, encounters: false, cucco: false, bowling: false, talon: false, fireballs: false, spawn_combo: false, randomizer: false, sizes: sizes::Range::Off, sized_health: false, fuses: false, mega_like: false, volvagia: false, gerudo: false, forest_open: false, shops: false, mido_gone: false, entrances: gates::Shuffle::Off, timers: NORMAL, feints: 0 }
     }
 }
 
@@ -194,7 +196,7 @@ impl Opts {
     }
 
     pub fn packs(&self) -> bool {
-        self.health != NORMAL || self.damage != NORMAL || self.hurt != hurt::Hurt::Normal || self.speed != NORMAL || self.cut().any() || self.no_target || self.no_bottles
+        self.health != NORMAL || self.damage != NORMAL || self.hurt != hurt::Hurt::Normal || self.speed != NORMAL || self.aggression != NORMAL || self.cut().any() || self.no_target || self.no_bottles
     }
 
     pub fn gate_list(&self) -> Vec<gates::Gate> {
@@ -225,6 +227,9 @@ impl Opts {
         }
         if self.speed != NORMAL {
             out.push(format!("Enemies are set to move and attack {} times as fast. Experimental: most enemies ignore it, and in our tests only Lizalfos clearly sped up.", times(self.speed)));
+        }
+        if let Some(n) = aggression::note(self.aggression) {
+            out.push(n);
         }
         if self.regen {
             out.push("Enemies and bosses you leave alone heal. About 15 seconds after the last hit they get back one point of health every 5 seconds, up to their usual health.".to_string());
@@ -370,6 +375,7 @@ pub fn read(s: &Settings, bad: &mut Vec<String>) -> Opts {
     let health: i64 = num(HEALTH, STAT_RANGE);
     let damage: i64 = num(DAMAGE, DAMAGE_RANGE);
     let speed: i64 = num(SPEED, SPEED_RANGE);
+    let aggression: i64 = num(aggression::SETTING, aggression::RANGE);
     let extra: i64 = num(MORE, MORE_RANGE) - NORMAL;
     let hurt: hurt::Hurt = chosen(s.text(HURT), bad).map(hurt::Hurt::from_setting).unwrap_or(hurt::Hurt::Normal);
     let mut flag = |id: &str| -> bool {
@@ -378,7 +384,7 @@ pub fn read(s: &Settings, bad: &mut Vec<String>) -> Opts {
             false
         })
     };
-    let o: Opts = Opts { health, damage, hurt, speed, no_hearts: flag(NO_HEARTS), no_fairies: flag(NO_FAIRIES), no_ammo: flag(NO_AMMO), lose_heart: flag(LOSE_HEART), pit: falls::VANILLA, no_bottles: flag(NO_BOTTLES), no_target: flag(NO_TARGET), no_dupes: flag(NO_DUPES), extra: 0, respawn: flag(RESPAWN), minibosses: flag(MINIBOSSES), regen: flag(REGEN), minions: flag(MINIONS), fairy_helps: flag(FAIRY_HELPS), backup: flag(BACKUP), gates: flag(GATES), encounters: false, cucco: flag(CUCCO), bowling: flag(BOWLING), talon: flag(TALON), fireballs: flag(FIREBALLS), spawn_combo: flag(SPAWN_COMBO), randomizer: flag(RANDOMIZER), sizes: sizes::Range::Off, sized_health: flag(SIZES_HEALTH), fuses: flag(FUSES), mega_like: flag(MEGA_LIKE), volvagia: flag(VOLVAGIA), gerudo: extra > horde::FROM, forest_open: false, shops: false, mido_gone: false, entrances: gates::Shuffle::Off, timers: NORMAL, feints: 0 };
+    let o: Opts = Opts { health, damage, hurt, speed, aggression, no_hearts: flag(NO_HEARTS), no_fairies: flag(NO_FAIRIES), no_ammo: flag(NO_AMMO), lose_heart: flag(LOSE_HEART), pit: falls::VANILLA, no_bottles: flag(NO_BOTTLES), no_target: flag(NO_TARGET), no_dupes: flag(NO_DUPES), extra: 0, respawn: flag(RESPAWN), minibosses: flag(MINIBOSSES), regen: flag(REGEN), minions: flag(MINIONS), fairy_helps: flag(FAIRY_HELPS), backup: flag(BACKUP), gates: flag(GATES), encounters: false, cucco: flag(CUCCO), bowling: flag(BOWLING), talon: flag(TALON), fireballs: flag(FIREBALLS), spawn_combo: flag(SPAWN_COMBO), randomizer: flag(RANDOMIZER), sizes: sizes::Range::Off, sized_health: flag(SIZES_HEALTH), fuses: flag(FUSES), mega_like: flag(MEGA_LIKE), volvagia: flag(VOLVAGIA), gerudo: extra > horde::FROM, forest_open: false, shops: false, mido_gone: false, entrances: gates::Shuffle::Off, timers: NORMAL, feints: 0 };
     let forest_open: bool = chosen(s.text(FOREST), bad).map(|t| t == "open").unwrap_or(true);
     let entrances: gates::Shuffle = chosen(s.text(ENTRANCES), bad).map(|t| gates::Shuffle::from_setting(t)).unwrap_or(gates::Shuffle::Wide);
     let shops: bool = chosen(s.text(crate::shops::plan::SETTING), bad).map(|t| t != "off").unwrap_or(false);
@@ -428,10 +434,21 @@ fn edit_entry(e: &Entry, o: &Opts) -> Res<Option<Vec<u8>>> {
     {
         return if stats::is_enemy(s) { stats::movement(&e.data, o.speed) } else { Ok(None) };
     }
-    if o.speed != NORMAL
+    if (o.speed != NORMAL || o.aggression != NORMAL)
         && let Some(s) = stats::stem(n, stats::PACE_DIR, stats::PACE_EXT)
     {
-        return if stats::is_enemy(s) { stats::pace(&e.data, o.speed) } else { Ok(None) };
+        let pct: i64 = aggression::pace_pct(s, o.speed, o.aggression);
+        return if pct != NORMAL { stats::pace(&e.data, pct) } else { Ok(None) };
+    }
+    if o.aggression != NORMAL
+        && let Some(s) = stats::stem(n, aggression::CLIENT_DIR, aggression::CLIENT_EXT)
+    {
+        return if aggression::scales(s) { aggression::pauses(&e.data, o.aggression) } else { Ok(None) };
+    }
+    if o.aggression == aggression::PEACEFUL
+        && let Some(s) = stats::stem(n, aggression::SENSE_DIR, aggression::SENSE_EXT)
+    {
+        return if aggression::calms(s) { aggression::calm(&e.data) } else { Ok(None) };
     }
     if n.starts_with(drops::DIR) {
         return drops::edit(&e.data, drops::for_table(n, o.cut()));

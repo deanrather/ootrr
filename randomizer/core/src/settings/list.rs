@@ -210,6 +210,9 @@ fn difficulty() -> Vec<Setting> {
         Setting::number(d::SPEED_NUM, d::SPEED, "difficulty", "Enemy speed", d::NORMAL, d::SPEED_RANGE.0, d::SPEED_RANGE.1)
             .multiplier(d::SPEED_STEP, d::NORMAL)
             .tip("How fast enemies move and attack, from 0.75x to 2x. Experimental: most enemies ignore it so far, and only Lizalfos clearly speed up."),
+        Setting::number(d::aggression::NUM, d::aggression::SETTING, "difficulty", "Enemy aggressiveness", d::NORMAL, d::aggression::RANGE.0, d::aggression::RANGE.1)
+            .multiplier(d::aggression::STEP, d::NORMAL)
+            .tip("How often enemies attack, from 0x to 3x. 0x is peaceful: ordinary enemies never notice you, while bosses, minibosses and enemies a check needs (Business and puzzle scrubs, Poe sisters, Big Poes, Armos, Iron Knuckles, Dead Hand, Skull Kid) still fight. 0.5x to 3x divide the pauses between attacks; enemies that already attack as soon as they can, like Keese and Deku Babas, do not change. Stacks with Enemy speed. Experimental."),
         Setting::toggle(d::REGEN_NUM, d::REGEN, "difficulty", "Enemies regen health", false)
             .tip("Enemies you leave alone heal. About 15 seconds after your last hit they get back one point every 5 seconds."),
         Setting::toggle(d::BACKUP_NUM, d::BACKUP, "difficulty", "Enemies call for backup", false)
