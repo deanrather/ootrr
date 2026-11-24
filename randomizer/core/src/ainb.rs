@@ -64,6 +64,34 @@ fn put(out: &mut [u8], o: usize, v: usize) {
     out[o..o + 4].copy_from_slice(&(v as u32).to_le_bytes());
 }
 
+fn hdr32(h: &[u8; HDR], o: usize) -> usize {
+    u32::from_le_bytes([h[o], h[o + 1], h[o + 2], h[o + 3]]) as usize
+}
+
+/// The transition section (and the sections the header names at 0x38 and 0x50; when they share
+/// one offset the parser files the bytes under the last of them) open with a table of
+/// absolute file offsets to their own entries, for example the 11 transitions of
+/// Sequence/ShortCut.module. When the section moves, those offsets move with it, or the graph
+/// reads garbage and stalls (the shortcut menu locked after one unused node was added).
+fn relocate(blob: &[u8], old_at: usize, new_at: usize) -> Vec<u8> {
+    let mut out: Vec<u8> = blob.to_vec();
+    if blob.is_empty() || old_at == new_at {
+        return out;
+    }
+    let end: usize = old_at + blob.len();
+    let mut i: usize = 0;
+    while i + 4 <= blob.len() {
+        let v: usize = u32::from_le_bytes([blob[i], blob[i + 1], blob[i + 2], blob[i + 3]]) as usize;
+        if v < old_at + i + 4 || v >= end {
+            break;
+        }
+        let n: usize = v - old_at + new_at;
+        out[i..i + 4].copy_from_slice(&(n as u32).to_le_bytes());
+        i += 4;
+    }
+    out
+}
+
 impl Ainb {
     pub fn parse(b: &[u8]) -> Res<Ainb> {
         let r: Rd = Rd::new(b);
@@ -220,7 +248,11 @@ impl Ainb {
         let ios: usize = self.ins.iter().map(|v| v.len()).sum::<usize>() + self.outs.iter().map(|v| v.len()).sum::<usize>();
         let after: usize = io + 0x30 + ios;
         let (a, c): (&Vec<u8>, &Vec<u8>) = if self.jump_first { (&self.jump, &self.multi) } else { (&self.multi, &self.jump) };
-        let mut blobs: Vec<&Vec<u8>> = vec![a, c, &self.h50, &self.qids];
+        let (a_old, c_old): (usize, usize) = if self.jump_first { (hdr32(&self.hdr, 0x30), hdr32(&self.hdr, 0x38)) } else { (hdr32(&self.hdr, 0x38), hdr32(&self.hdr, 0x30)) };
+        let a2: Vec<u8> = relocate(a, a_old, after);
+        let c2: Vec<u8> = relocate(c, c_old, after + a.len());
+        let h2: Vec<u8> = relocate(&self.h50, hdr32(&self.hdr, 0x50), after + a.len() + c.len());
+        let mut blobs: Vec<&Vec<u8>> = vec![&a2, &c2, &h2, &self.qids];
         if let Some(x) = &self.exb {
             blobs.push(x);
         }
@@ -390,6 +422,31 @@ pub(crate) mod tests {
             a.params[root].pl[j] = [0, 3];
         }
         a
+    }
+
+    #[test]
+    fn the_transition_table_follows_its_section_when_the_file_grows() {
+        let root: std::path::PathBuf = ootrr_game::test_romfs::path();
+        let Ok(raw) = std::fs::read(root.join("Sequence").join("ShortCut.module.ainb")) else {
+            eprintln!("skipped, no RomFS dump at {} (set OOTRR_ROMFS)", root.display());
+            return;
+        };
+        let mut a: Ainb = Ainb::parse(&raw).unwrap();
+        assert_eq!(a.write().unwrap(), raw);
+        let table = |b: &[u8]| -> (usize, Vec<usize>) {
+            let at: usize = u32::from_le_bytes([b[0x30], b[0x31], b[0x32], b[0x33]]) as usize;
+            let v: Vec<usize> = (0..11).map(|i| u32::from_le_bytes([b[at + 4 * i], b[at + 4 * i + 1], b[at + 4 * i + 2], b[at + 4 * i + 3]]) as usize - at).collect();
+            (at, v)
+        };
+        let (at0, rel0) = table(&raw);
+        a.add_node(&build::Spec::node("SeqExecuteGenericDummyAction", "t#grow")).unwrap();
+        let b: Vec<u8> = a.write().unwrap();
+        let (at1, rel1) = table(&b);
+        assert!(at1 > at0);
+        assert_eq!(rel0, rel1, "every transition offset moved with its section");
+        assert_eq!(rel0[0], 44);
+        let c: Ainb = Ainb::parse(&b).unwrap();
+        assert_eq!(c.write().unwrap(), b);
     }
 
     #[test]

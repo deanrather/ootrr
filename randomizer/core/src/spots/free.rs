@@ -55,7 +55,7 @@ impl Data {
                 return Err(E::Msg(format!("remake freestanding catalog: {} is already a location", l.name)));
             }
             self.remake.insert(l.name.clone(), l.vanilla.clone());
-            self.cat.locs.push(l);
+            self.cat.push(l);
         }
         Ok(self)
     }

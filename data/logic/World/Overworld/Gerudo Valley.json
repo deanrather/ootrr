@@ -6,7 +6,7 @@
         "locations": {
             "GV Adult Upper Waterfall Wonderitem": "is_adult",
             "GV Adult Lower Waterfall Wonderitem": "is_adult",
-            "GV GS Small Bridge": "can_use(Boomerang) and (at_night or gold_skulls_ignore_daytime)",
+            "GV GS Small Bridge": "can_use(Boomerang) and can_get_night_gs",
             "Bug Rock": "is_child and has_bottle"
         },
         "exits": {
@@ -76,8 +76,8 @@
         "locations": {
             "GV Chest": "can_use(Megaton_Hammer)",
             "GV Trade Poachers Saw": "'Broken Sword Access'",
-            "GV GS Behind Tent": "can_use(Hookshot) and (at_night or gold_skulls_ignore_daytime)",
-            "GV GS Pillar": "can_use(Hookshot) and (at_night or gold_skulls_ignore_daytime)"
+            "GV GS Behind Tent": "can_use(Hookshot) and can_get_night_gs",
+            "GV GS Pillar": "can_use(Hookshot) and can_get_night_gs"
         },
         "exits": {
             "Gerudo Fortress": "True",

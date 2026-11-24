@@ -181,7 +181,7 @@ pub fn build(a: &[String]) -> Res<()> {
     };
     let romfs: &P = prepared.as_ref().map(|p| p.romfs.as_path()).unwrap_or(P::new(game));
     if cos.title {
-        let target: std::path::PathBuf = if host.flat() { P::new(load).join(name) } else { P::new(load).join(ootrr_core::TITLE_ID).join(name) };
+        let target: std::path::PathBuf = if host.no_title() { P::new(load).join(name) } else { P::new(load).join(ootrr_core::TITLE_ID).join(name) };
         ootrr_core::title_logo::preflight(&target, romfs)?;
     }
     let b: Built = slice::build_for(&seed, romfs, P::new(load), name, host)?;

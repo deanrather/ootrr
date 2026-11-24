@@ -17,6 +17,7 @@ export const state = {
   result: null,
   hide_spoiler: false,
   spoiler_log: true,
+  delete_others: false,
 };
 
 const subs = new Set();
@@ -43,7 +44,7 @@ function take(store, key) {
 }
 
 export function save() {
-  put(localStorage, KEY, { vals: state.vals, seed: state.seed, plando: state.plando, paths: state.paths, cosmetic: state.cosmetic, hide_spoiler: state.hide_spoiler, spoiler_log: state.spoiler_log, include_update: state.include_update });
+  put(localStorage, KEY, { vals: state.vals, seed: state.seed, plando: state.plando, paths: state.paths, cosmetic: state.cosmetic, hide_spoiler: state.hide_spoiler, spoiler_log: state.spoiler_log, delete_others: state.delete_others, include_update: state.include_update });
   put(sessionStorage, RKEY, state.result);
 }
 
@@ -59,6 +60,7 @@ export function restore(schema) {
   if (s && typeof s.seed === "string") state.seed = s.seed.slice(0, 100);
   if (s && typeof s.hide_spoiler === "boolean") state.hide_spoiler = s.hide_spoiler;
   if (s && typeof s.spoiler_log === "boolean") state.spoiler_log = s.spoiler_log;
+  if (s && typeof s.delete_others === "boolean") state.delete_others = s.delete_others;
   if (s && typeof s.include_update === "boolean") state.include_update = s.include_update;
   if (s && Array.isArray(s.plando)) {
     state.plando = s.plando

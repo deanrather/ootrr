@@ -328,8 +328,15 @@ mod tests {
         assert_eq!(j.len(), 1);
         assert_eq!((j[0].sale.entry.as_str(), j[0].sale.actor.as_str(), j[0].sale.price), ("OOTRR_Scrub_LwGrottoRear", "Item_HoverBoot", 30));
         assert_eq!(j[0].sale.flag, "HavePlayedEvent.Enemy_Scrub_Business_DekuStick_01");
-        assert!(jobs(&d, &seed(&[("Jabu Jabus Belly Deku Scrub", "Rupees (50)")])).is_err());
-        assert!(jobs(&d, &seed(&[("Jabu Jabus Belly Deku Scrub", "Progressive Hookshot")])).is_err());
+        // A menu scrub sells any item with a remake actor, and an upgrade the tier the reach order
+        // fixes for its sale (crate::slice::tier_order). An item the remake has no actor for has
+        // nothing to sell.
+        let j: Vec<Job> = jobs(&d, &seed(&[("Jabu Jabus Belly Deku Scrub", "Rupees (50)")])).unwrap();
+        assert_eq!((j.len(), j[0].item.as_str()), (1, "Rupees (50)"));
+        let j: Vec<Job> = jobs(&d, &seed(&[("Jabu Jabus Belly Deku Scrub", "Progressive Hookshot")])).unwrap();
+        assert_eq!(j.len(), 1);
+        assert!(["Item_Hookshot", "Item_Longshot"].contains(&j[0].sale.actor.as_str()), "{}", j[0].sale.actor);
+        assert!(jobs(&d, &seed(&[("Jabu Jabus Belly Deku Scrub", "Ice Trap")])).is_err());
     }
 
     #[test]

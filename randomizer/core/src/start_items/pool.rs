@@ -26,7 +26,7 @@ fn gone_kinds(p: &Plan) -> Vec<&'static str> {
 }
 
 pub fn active(p: &Plan) -> bool {
-    p.open.beans || !gone_kinds(p).is_empty() || p.kit.take.iter().any(|t| t.strip != Strip::Keep && t.count > 0)
+    p.fire_loop_open() || p.open.beans || !gone_kinds(p).is_empty() || p.kit.take.iter().any(|t| t.strip != Strip::Keep && t.count > 0)
 }
 
 fn kind_of<'a>(d: &'a Data, w: &World, it: ItemId) -> &'a str {
@@ -126,6 +126,9 @@ pub fn base(d: &Data, w: &World, p: &Plan, vanilla: &Placement, free: &[LocId]) 
             notes.push(format!("{n} removed dungeon items (Maps, Compasses or Boss Keys whose setting is Removed or Start with) were taken out of the shuffled locations and replaced by {JUNK}."));
         }
     }
+    if p.fire_loop_open() {
+        spare_fire_key(w, free, &mut out, junk, &mut notes);
+    }
     if p.open.beans {
         let beans: Vec<ItemId> = crate::open_world::skips::BEAN_ITEMS.iter().filter_map(|n| w.item(n)).collect();
         let mut n: usize = 0;
@@ -144,6 +147,20 @@ pub fn base(d: &Data, w: &World, p: &Plan, vanilla: &Placement, free: &[LocId]) 
         strip_one(&c, t, &mut out, &mut notes)?;
     }
     Ok((out, notes))
+}
+
+pub const FIRE_NOTE: &str = "The Fire Temple Boss Key loop door starts unlocked, so the Hammer alone opens it, and one Fire Temple small key was taken out of the shuffled locations and replaced by Rupee (1).";
+
+fn spare_fire_key(w: &World, free: &[LocId], out: &mut Placement, junk: ItemId, notes: &mut Vec<String>) {
+    let Some(k) = w.item("Small Key (Fire Temple)") else {
+        return;
+    };
+    let spare: Option<LocId> = w.loc(crate::slice::support::FIRE_SPARE_KEY).filter(|l| free.contains(l) && out.get(*l) == Some(k));
+    let Some(l) = spare.or_else(|| free.iter().copied().find(|l| out.get(*l) == Some(k))) else {
+        return;
+    };
+    out.put(l, junk);
+    notes.push(FIRE_NOTE.to_string());
 }
 
 #[cfg(test)]
@@ -179,8 +196,15 @@ mod tests {
     }
 
     #[test]
-    fn defaults_change_nothing() {
+    fn defaults_only_take_out_the_spare_fire_key() {
         let (d, w, p, v, pk) = setup(&Settings::default());
+        assert!(active(&p));
+        let (b, n): (Placement, Vec<String>) = base(&d, &w, &p, &v, &pk.free).unwrap();
+        let changed: Vec<&str> = w.real.iter().filter(|l| b.get(**l) != v.get(**l)).map(|l| w.locs[*l].name.as_str()).collect();
+        assert_eq!(changed, vec![crate::slice::support::FIRE_SPARE_KEY]);
+        assert_eq!(b.get(w.loc(crate::slice::support::FIRE_SPARE_KEY).unwrap()), w.item(JUNK));
+        assert_eq!(n, vec![FIRE_NOTE.to_string()]);
+        let (d, w, p, v, pk) = setup(&with(&[("shuffle_smallkeys", Value::s("vanilla"))]));
         assert!(!active(&p));
         let (b, n): (Placement, Vec<String>) = base(&d, &w, &p, &v, &pk.free).unwrap();
         assert_eq!(b.item, v.item);
@@ -189,7 +213,7 @@ mod tests {
 
     #[test]
     fn removed_maps_and_boss_keys_leave_the_shuffled_locations() {
-        let s: Settings = with(&[("shuffle_mapcompass", Value::s("remove")), ("shuffle_bosskeys", Value::s("remove")), ("shuffle_ganon_bosskey", Value::s("remove"))]);
+        let s: Settings = with(&[("shuffle_mapcompass", Value::s("remove")), ("shuffle_bosskeys", Value::s("remove")), ("shuffle_ganon_bosskey", Value::s("remove")), ("shuffle_smallkeys", Value::s("vanilla"))]);
         let (d, w, p, v, pk) = setup(&s);
         let (b, n): (Placement, Vec<String>) = base(&d, &w, &p, &v, &pk.free).unwrap();
         let gone = |pl: &Placement| pk.free.iter().filter(|l| pl.get(**l).is_some_and(|i| ["Map", "Compass", "BossKey", "GanonBossKey"].contains(&kind_of(&d, &w, i)))).count();

@@ -134,7 +134,7 @@ const RAINBOW_BRIDGE: View = View {
         yes("Vanilla", "vanilla"),
         broken("Always open", "open"),
         broken("Stones", "stones"),
-        broken("Medallions", "medallions"),
+        yes("Medallions", "medallions"),
         yes("Dungeon rewards", "dungeons"),
         missing("Dungeons"),
         broken("Tokens", "tokens"),
@@ -146,7 +146,7 @@ const RAINBOW_BRIDGE: View = View {
 const GANON_BK: View = View {
     id: "shuffle_ganon_bosskey",
     label: "Ganon's Boss Key",
-    tip: "Vanilla - Ganon's Boss Key will appear in the vanilla location.\n\nOwn dungeon - Ganon's Boss Key can appear anywhere inside Ganon's Castle.\n\nStart with - Places Ganon's Boss Key in your starting inventory.\n\nAny dungeon - Ganon's Boss Key can only appear inside of any dungeon.\n\nOverworld - Ganon's Boss Key can only appear outside of dungeons.\n\nAnywhere - Ganon's Boss Key can appear anywhere in the world.\n\nTrigger - These settings put the boss key on a trigger, granting the key once the requirements are met:\n- Stones: Obtain the specified amount of Spiritual Stones.\n- Medallions: Obtain the specified amount of medallions.\n- Dungeon rewards: Obtain the specified total sum of Spiritual Stones or medallions.\n- Dungeons: Complete the specified amount of dungeons. Dungeons are considered complete after stepping into the blue warp after the boss.\n- Tokens: Obtain the specified amount of Skulltula tokens.\n- Triforce Pieces: Obtain the specified amount of Triforce Pieces.\n\nLACS - Dungeon Rewards - Zelda gives Ganon's Boss Key in the Light Arrows Cutscene, which plays once you hold the set number of Stones and Medallions together. The Light Arrows are shuffled into the item pool. Experimental, untested in the game.\n\nSame Region - Ganon's Boss Key can only appear in Ganon's Castle or a nearby area.",
+    tip: "Vanilla - Ganon's Boss Key will appear in the vanilla location.\n\nOwn dungeon - Ganon's Boss Key can appear anywhere inside Ganon's Castle.\n\nStart with - Places Ganon's Boss Key in your starting inventory.\n\nAny dungeon - Ganon's Boss Key can only appear inside of any dungeon.\n\nOverworld - Ganon's Boss Key can only appear outside of dungeons.\n\nAnywhere - Ganon's Boss Key can appear anywhere in the world.\n\nTrigger - These settings put the boss key on a trigger, granting the key once the requirements are met:\n- Stones: Obtain the specified amount of Spiritual Stones.\n- Medallions: Obtain the specified amount of medallions.\n- Dungeon rewards: Obtain the specified total sum of Spiritual Stones or medallions.\n- Dungeons: Complete the specified amount of dungeons. Dungeons are considered complete after stepping into the blue warp after the boss.\n- Tokens: Obtain the specified amount of Skulltula tokens.\n- Triforce Pieces: Obtain the specified amount of Triforce Pieces.\n\nLACS - Dungeon Rewards - Zelda gives Ganon's Boss Key in the Light Arrows Cutscene, which plays once you hold the set number of Stones and Medallions together. The Light Arrows are shuffled into the item pool. Experimental, untested in the game.\n\nLACS - Medallions - Zelda gives Ganon's Boss Key in the Light Arrows Cutscene, which plays once you hold the set number of Medallions. The Light Arrows are shuffled into the item pool. Experimental, untested in the game.\n\nSame Region - Ganon's Boss Key can only appear in Ganon's Castle or a nearby area.",
     kind: Kind::Pick,
     opts: &[
         yes("Vanilla", "vanilla"),
@@ -156,6 +156,7 @@ const GANON_BK: View = View {
         yes("Overworld", "overworld"),
         yes("Anywhere", "keysanity"),
         yes("LACS - Dungeon Rewards", "lacs_dungeons"),
+        yes("LACS - Medallions", "lacs_medallions"),
         broken("Trigger-Stones", "stones"),
         broken("Trigger-Medallions", "medallions"),
         broken("Trigger-Rewards", "dungeons"),
@@ -217,7 +218,7 @@ const JABU: View = View {
 const CARPENTERS: View = View {
     id: "gerudo_fortress",
     label: "Fortress Carpenters",
-    tip: "Sets the state of the carpenters captured by Gerudo in Gerudo Fortress, and with it the number of guards that spawn.\n\nNormal - All 4 carpenters are required to be saved.\n\nFast - Tested in game. Three carpenters start free. The Membership Card is vanilla and is granted when the last carpenter is rescued.\n\nOpen - Tested in game. Start with the Gerudo Membership Card and the bridge built. The Membership Card check is still in the game and randomized. It triggers when you interact with your first jail cell.\n\nOnly \"Normal\" is compatible with Gerudo Fortress Keyrings.",
+    tip: "Sets the state of the carpenters captured by Gerudo in Gerudo Fortress, and with it the number of guards that spawn.\n\nNormal - All 4 carpenters are required to be saved.\n\nFast - Tested in game. Three carpenters start free. The guard gives the Membership Card check when the last carpenter is rescued: the card itself, or a random item when Shuffle Gerudo Membership Card is on.\n\nOpen - Tested in game. Start with the Gerudo Membership Card and the bridge built. The Membership Card check is still in the game and randomized. It triggers when you interact with your first jail cell.\n\nOnly \"Normal\" is compatible with Gerudo Fortress Keyrings.",
     kind: Kind::Pick,
     opts: &[
         yes("Normal", "normal"),
@@ -346,10 +347,11 @@ pub const MOVED: &[(&str, &[PortSection])] = &[
 ];
 
 /// A warning shown at the top of a page, above its settings.
-pub const WARNINGS: &[(&str, &str)] = &[(
-    "experimental",
-    "These settings have known unexpected behavior that could lead to many seeds being unbeatable and other minor bugs.",
-)];
+pub const WARNINGS: &[(&str, &str)] = &[("experimental", UNSTABLE), ("difficulty", UNSTABLE)];
+
+pub const UNSTABLE: &str = "These settings have known unexpected behavior that could lead to many seeds being unbeatable and other minor bugs.";
+
+pub const HIDDEN: &[&str] = &["enemy_randomizer"];
 
 const LOGIC: PortSection = port(
                 "Logic",
@@ -367,6 +369,7 @@ const LOGIC: PortSection = port(
                     gray_check("Full Wallets", "Start with a full wallet. All wallet upgrades come filled with rupees."),
                     Entry::View(&PLANT_BEANS),
                     Entry::View(&EPONA),
+                    Entry::Plain("night_skulls_suns_song"),
                     Entry::Hidden("bombchus_in_logic"),
                     Entry::Plain("nocturne_trigger"),
                     Entry::Plain("prelude_trigger"),
@@ -394,6 +397,7 @@ const WIN_CONDITION: PortSection = port(
                     ),
                     Entry::View(&GANON_BK),
                     Entry::Plain("lacs_rewards"),
+                    Entry::Plain("lacs_medallions"),
                     Entry::Hidden("ganon_bosskey_stones"),
                     Entry::Hidden("ganon_bosskey_medallions"),
                     Entry::Hidden("ganon_bosskey_rewards"),
@@ -442,8 +446,8 @@ const AREA_ACCESS: PortSection = port(
                     Entry::View(&GV_BRIDGE),
                     Entry::View(&RAINBOW_BRIDGE),
                     Entry::Plain("bridge_rewards"),
+                    Entry::Plain("bridge_medallions"),
                     Entry::Hidden("bridge_stones"),
-                    Entry::Hidden("bridge_medallions"),
                     Entry::Hidden("bridge_tokens"),
                     Entry::Hidden("bridge_hearts"),
                     Entry::View(&TRIALS),
@@ -628,9 +632,9 @@ const SHOPSANITY: View = View {
 const SHOPSANITY_PRICES: View = View {
     id: "shopsanity_prices",
     label: "Shopsanity Prices",
-    tip: "The price range of the non-vanilla shop items, named by the wallet that can pay the highest price. Prices lean to the middle of the range, in steps of 5 rupees, and vanilla shop items keep their own price.\n\nAffordable - Every item costs 10 rupees.\n\nStarting Wallet - 10 to 200 rupees.\n\nAdult Wallet - 10 to 500 rupees. Items above 200 need the Adult's Wallet in logic.\n\nGiant's Wallet - 10 to 995 rupees. Items above 500 need the Giant's Wallet in logic.\n\nThe remake's wallets hold 200, 500 and 1000 rupees, and there is no Tycoon's Wallet. Kokiri Shop items never cost more than 200, so the Kokiri Sword and other early items stay in reach.",
+    tip: "The price range of the non-vanilla shop items. Prices lean to the middle of the range, in steps of 5 rupees, and vanilla shop items keep their own price.\n\nAffordable - Every item costs 10 rupees.\n\nCheap - 0 to 95 rupees, no wallet upgrade needed.\n\nAdult Wallet - 10 to 500 rupees. Items above 200 need the Adult's Wallet in logic.\n\nGiant's Wallet - 10 to 995 rupees. Items above 500 need the Giant's Wallet in logic.\n\nThe remake's wallets hold 200, 500 and 1000 rupees, and there is no Tycoon's Wallet. Kokiri Shop items never cost more than 200, so the Kokiri Sword and other early items stay in reach.",
     kind: Kind::Pick,
-    opts: &[yes("Affordable", "affordable"), yes("Starting Wallet", "starting"), yes("Adult Wallet", "adult"), yes("Giant's Wallet", "giant")],
+    opts: &[yes("Affordable", "affordable"), yes("Cheap", "cheap"), yes("Adult Wallet", "adult"), yes("Giant's Wallet", "giant")],
 };
 
 const LOCATIONS_TAB: &[PortSection] = &[
@@ -653,6 +657,7 @@ const LOCATIONS_TAB: &[PortSection] = &[
             Entry::Plain("song_harp_colors"),
             Entry::Plain("shuffle_ocarinas"),
             Entry::Plain("shuffle_kokiri_sword"),
+            Entry::Plain("shuffle_gerudo_card"),
             Entry::View(&SKULLTULAS),
             Entry::View(&FREESTANDING),
         ],
@@ -678,6 +683,7 @@ const LOCATIONS_TAB: &[PortSection] = &[
             Entry::Plain("shuffle_treasure_reward"),
             Entry::Plain("shuffle_potion_shop"),
             Entry::Plain("shuffle_trade_checks"),
+            Entry::Plain("adult_trade_shuffle"),
             Entry::View(&COWS),
             Entry::Plain("shuffle_frog_songs"),
             Entry::Plain("shuffle_frog_bug_heart"),
@@ -750,8 +756,8 @@ pub const MENU: &[Page] = &[
         heading: GAMEPLAY,
         sections: &[
             sec("Cutscenes", &["skip_intro", "skip_cutscenes", "skip_story_scenes", "faster_chests", "skip_first_pickup_text", "skip_area_intros"]),
-            sec("Side quests", &["skip_mask_quest", "anju_one_cucco", "skulls_by_day"]),
-            sec("Dungeons", &["deku_bridge_safe"]),
+            sec("Side quests", &["skip_mask_quest", "anju_one_cucco", "skulls_by_day", "free_scarecrow"]),
+            sec("Dungeons", &["deku_bridge_safe", "skip_tower_escape"]),
             sec("Travel", &["owl_warps"]),
             sec("Puzzles", &["faster_blocks"]),
         ],
@@ -776,6 +782,7 @@ pub const MENU: &[Page] = &[
             sec("Minigames", &["unbreakable_bowling_grass", "harder_talon_cuccos"]),
         ],
     },
+    Page { id: "gerudo_card", label: "Gerudo Membership Card", heading: IN_DEV, sections: &[sec("Shuffle", &["shuffle_gerudo_card"])] },
     Page { id: "cosmetics", label: "Cosmetics", heading: GAMEPLAY, sections: &[sec("Looks", &["mega_like_likes"])] },
     Page { id: "debug", label: "Debug", heading: DEBUG, sections: &[sec("Debug", &["debug_location_names"]), sec("Spawn enemies", &["enemy_spawn_combo"])] },
 ];
@@ -840,9 +847,11 @@ pub fn menu_json(sch: &Schema) -> Json {
             None => Vec::new(),
         };
         for s in p.sections {
-            let ids: Vec<&str> = s.ids.iter().copied().filter(|x| have.contains(x) && placed.insert(x)).collect();
+            let all: Vec<&str> = s.ids.iter().copied().filter(|x| have.contains(x) && placed.insert(x)).collect();
+            let (hidden, ids): (Vec<&str>, Vec<&str>) = all.into_iter().partition(|x| HIDDEN.contains(x));
             if !ids.is_empty() {
-                secs.push(Json::obj().with("label", s.label.into()).with("ids", Json::strs(ids.into_iter())));
+                let j: Json = Json::obj().with("label", s.label.into()).with("ids", Json::strs(ids.into_iter()));
+                secs.push(if hidden.is_empty() { j } else { j.with("hidden", Json::strs(hidden.into_iter())) });
             }
         }
         if !secs.is_empty() {

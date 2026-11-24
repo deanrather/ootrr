@@ -4,6 +4,7 @@ pub mod layout;
 pub mod logic;
 pub mod mode;
 pub mod pools;
+pub mod story;
 pub mod text;
 
 use std::collections::BTreeMap as BM;

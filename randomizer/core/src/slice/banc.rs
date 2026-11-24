@@ -19,9 +19,15 @@ pub struct Found {
 /// Chests whose Dynamic has no Drop__DropActor, so the game gives the default item of the chest
 /// actor. Each default here was seen in game. Reading such a chest reports its default, and
 /// writing one adds the field.
-pub const DEFAULT_DROPS: [(u64, &str); 1] = [
+pub const DEFAULT_DROPS: [(u64, &str); 3] = [
     // Forest Temple Falling Ceiling Room Chest (room 24): a five pack of bombs in a playthrough.
     (15117164073907033527, "Item_BombBundle_Small"),
+    // Gerudo Training Ground Lobby Left Chest, the invisible chest of room 0: a large magic jar
+    // in the Trophy Tom walkthrough (0:53).
+    (11182647876438515984, "Tbox_MagicJar_Large"),
+    // Gerudo Training Ground Hammer Room Clear Chest (room 5): arrows in the same walkthrough
+    // (8:26). The chest has only Drop__CheckActor (the Bow) and Drop__DropActor_Substitute.
+    (4961588221597286817, "TBox_ArrowBundle_Medium"),
 ];
 
 pub fn default_drop(hash: u64) -> Option<&'static str> {

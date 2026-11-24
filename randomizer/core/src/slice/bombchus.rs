@@ -69,7 +69,7 @@ mod tests {
     fn off_is_the_default_and_changes_nothing() {
         let p: Plan = plan(&Settings::default()).unwrap();
         assert!(!p.chus);
-        assert_eq!(p.logic(), vec![(crate::open_world::EPONA, "1")]);
+        assert_eq!(p.logic(), [&crate::slice::support::OWN_KEYS[..], &[(crate::open_world::EPONA, "1"), crate::open_world::trade::LOGIC[0]]].concat());
         assert!(!p.notes.iter().any(|n| n == NOTE));
     }
 
@@ -77,7 +77,7 @@ mod tests {
     fn on_is_accepted_sets_the_logic_flag_and_adds_the_caution() {
         let p: Plan = plan(&on()).unwrap();
         assert!(p.chus);
-        assert_eq!(p.logic(), vec![(LOGIC_KEY, "true"), (crate::open_world::EPONA, "1")]);
+        assert_eq!(p.logic(), [&crate::slice::support::OWN_KEYS[..], &[(LOGIC_KEY, "true"), (crate::open_world::EPONA, "1"), crate::open_world::trade::LOGIC[0]]].concat());
         assert!(p.notes.iter().any(|n| n == NOTE));
         assert!(NOTE.contains("Bomb Bag") && NOTE.contains("Experimental"));
     }

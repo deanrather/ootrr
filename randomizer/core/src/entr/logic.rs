@@ -129,18 +129,26 @@ pub fn pick(w: &mut World, m: Mode, seed: &str, h: &Have) -> Res<Layout> {
     let mut r: Rng = Rng::from_text(&format!("{seed}/entrances"));
     let n: u64 = DUNGEONS.len() as u64;
     let mut cur: Layout = Layout::vanilla();
+    let mut tried: HM<Vec<usize>, bool> = HM::new();
     for _ in 0..STEPS {
         let i: usize = r.below(n) as usize;
         let k: usize = r.below(n - 1) as usize;
         let j: usize = if k >= i { k + 1 } else { k };
         let mut next: Layout = cur.clone();
         next.at.swap(i, j);
-        if !ages_fit(&cat, &next)?.is_empty() {
-            continue;
-        }
-        wire(w, &x, &next);
-        let (ok, got): (bool, Vec<bool>) = reach(w, h);
-        if ok && keeps(&base, &got) && keys_fit(w, h) {
+        let good: bool = match tried.get(&next.at) {
+            Some(g) => *g,
+            None => {
+                let g: bool = ages_fit(&cat, &next)?.is_empty() && {
+                    wire(w, &x, &next);
+                    let (ok, got): (bool, Vec<bool>) = reach(w, h);
+                    ok && keeps(&base, &got) && keys_fit(w, h)
+                };
+                tried.insert(next.at.clone(), g);
+                g
+            }
+        };
+        if good {
             cur = next;
         }
     }

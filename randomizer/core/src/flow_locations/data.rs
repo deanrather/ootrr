@@ -198,7 +198,7 @@ mod tests {
         assert!(!d.locs.is_empty());
         for (i, l) in d.locs.iter().enumerate() {
             assert!(d.locs[i + 1..].iter().all(|m| m.name != l.name), "{}", l.name);
-            assert!(!l.edits.is_empty() || crate::scrubs_b::is_b(l), "{}", l.name);
+            assert!(!l.edits.is_empty() || crate::scrubs_b::is_b(l) || crate::flow_extra::scripted(&l.name), "{}", l.name);
         }
         for g in &d.gaps {
             assert!(d.by_name(&g.name).is_none(), "{}", g.name);

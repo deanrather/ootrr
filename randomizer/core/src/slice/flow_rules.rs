@@ -71,7 +71,18 @@ const ROUTINES: [&str; 4] = ["Dm_SY_GetInEvent:GetInEvent", "NpcCommon:NpcCommon
 const BOTTLE_ROUTINES: [&str; 3] = ["Dm_SY_GetInEvent:GetInEventInBottle", "Dm_SY_GetInEvent:GetInEventInEquipedBottle", "Dm_SY_GetInEvent:GetInEventInBottle_BlueBottleShop"];
 
 /// Reward events built by their own modules (clones, tiers of a chain, sales with prices).
-fn own_module(l: &Loc) -> bool {
+/// A sale whose price a module sets on its sale event (crate::scrub_prices, crate::merchant_prices,
+/// crate::scrubs_b): the scrub sales and Medigoron. Their event stays one plain call, so an
+/// upgrade there gets a fixed tier (crate::slice::tier_order) and ammo no bag check.
+pub fn priced_sale(d: &Data, name: &str) -> bool {
+    d.flow.by_name(name).is_some_and(priced_loc)
+}
+
+pub fn priced_loc(l: &Loc) -> bool {
+    l.name == "GC Medigoron" || crate::scrubs_a::is_a(l) || crate::scrubs_b::is_b(l) || l.cat == "scrub_sale" || l.cat == "scrub_menu"
+}
+
+pub fn own_module(l: &Loc) -> bool {
     crate::flow_extra::trade::is(&l.name)
         || crate::flow_extra::cows::is(&l.name)
         || crate::flow_extra::frogs::is(&l.name)
@@ -121,7 +132,7 @@ pub fn ok(d: &Data, name: &str) -> bool {
     if crate::flow_extra::trade::is(name) {
         return l.gated && d.vanilla_of(name).is_some_and(|v| l.item.as_deref() != d.item(v).and_then(|i| i.actor.as_deref()));
     }
-    if crate::flow_extra::cows::is(name) || crate::flow_extra::frogs::is(name) || crate::flow_extra::potion::is(name) {
+    if crate::flow_extra::cows::is(name) || crate::flow_extra::frogs::is(name) || crate::flow_extra::potion::is(name) || crate::flow_extra::scripted(name) {
         return l.gated && l.item.is_some() && d.vanilla_of(name).is_some();
     }
     if crate::scrubs_b::is_b(l) {

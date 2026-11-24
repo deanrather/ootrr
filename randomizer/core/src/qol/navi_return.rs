@@ -33,8 +33,8 @@ pub const ASK_ADULT: &str = "OOTRR_Return_Adult";
 
 const VOICE: &str = "{3.0:0f0100}{4.0:0800526573706f6e736500}";
 
-pub const NOTE_DUNGEONS: &str = "Calling Navi with the D-pad inside a dungeon offers a trip back to the dungeon entrance. Boss and miniboss rooms never offer it. Room tutorial hints from Navi are replaced by the question; enemy hints while targeting stay. Experimental and untested in the game.";
-pub const NOTE_EVERYWHERE: &str = "Calling Navi with the D-pad offers a trip back: to the entrance inside a dungeon, otherwise to Kokiri Forest as a child or the Temple of Time as an adult. Boss and miniboss rooms never offer it. Room tutorial hints from Navi are replaced by the question, enemy hints while targeting stay, and the question is in English in every language. Experimental and untested in the game.";
+pub const NOTE_DUNGEONS: &str = "Calling Navi with the D-pad inside a dungeon offers a trip back to the dungeon entrance. Boss and miniboss rooms never offer it, nor does a running minigame timer such as the one in Dampe's race. Room tutorial hints from Navi are replaced by the question; enemy hints while targeting stay. Experimental and untested in the game.";
+pub const NOTE_EVERYWHERE: &str = "Calling Navi with the D-pad offers a trip back: to the entrance inside a dungeon, otherwise to Kokiri Forest as a child or the Temple of Time as an adult. Boss and miniboss rooms never offer it, nor does a running minigame timer such as the one in Dampe's race. Room tutorial hints from Navi are replaced by the question, enemy hints while targeting stay, and the question is in English in every language. Experimental and untested in the game.";
 
 /// Where Navi can send you from.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -101,6 +101,19 @@ pub const STAY: [&str; 30] = [
 
 pub const HOME_CHILD: (&str, &str) = ("KokiriForest_Child", "EntrancePos");
 pub const HOME_ADULT: (&str, &str) = ("Market_Adult", "LightPrelude");
+
+pub const TIMER_ACTOR: &str = "ChallengeSystemActor";
+pub const TIMER: &str = "EventQueryMiniGameTimerIsCounting";
+const SYSTEM: &str = "GameSystemActor";
+
+fn system_actor(f: &mut Flow, name: &str) -> Res<()> {
+    if f.actors.iter().any(|a| a.name == name && a.sub.is_empty()) {
+        return Ok(());
+    }
+    let base: Actor = f.actors.iter().find(|a| a.name == SYSTEM && a.sub.is_empty()).cloned().ok_or(Error::Format("navi return: the flow has no GameSystemActor"))?;
+    f.actors.push(Actor { name: name.to_string(), sub: String::new(), arg: String::new(), actions: Vec::new(), queries: Vec::new(), params: base.params, ep: base.ep, cut: base.cut });
+    Ok(())
+}
 
 /// The actor and action or query indexes for `name` on `actor`, adding either when the flow
 /// lacks it. A new actor copies the member settings of the flow's first actor.
@@ -211,6 +224,7 @@ struct Slots {
     warp: (u16, u16),
     map: (u16, u16),
     child: (u16, u16),
+    timer: (u16, u16),
 }
 
 /// The question, the answer switch and the map change, returning the question.
@@ -244,12 +258,14 @@ pub fn patch_flow(b: &mut Bf, mode: Mode) -> Res<usize> {
         return Err(Error::Format("navi return: NaviHint_Field is not the do-nothing event, the flow is already edited or differs"));
     }
     let before: usize = f.events.len();
+    system_actor(f, TIMER_ACTOR)?;
     let s: Slots = Slots {
         talk: slot(f, "Npc_Navi", "EventTalk")?,
         choice: query_slot(f, "GameSystemActor", "EventQueryTalkChoice2")?,
         warp: slot(f, "GameSystemActor", "EventReserveBancChange")?,
         map: query_slot(f, "GameDataActor", "EventQueryIsGameDataString64")?,
         child: query_slot(f, "Player_Event", "EventQueryPlayerIsChild")?,
+        timer: query_slot(f, TIMER_ACTOR, TIMER)?,
     };
     let mut tail: u16 = stay;
     if mode == Mode::Everywhere {
@@ -271,6 +287,7 @@ pub fn patch_flow(b: &mut Bf, mode: Mode) -> Res<usize> {
         let q: u16 = asked.iter().find(|(b, _)| b == banc).map(|x| x.1).ok_or(Error::Format("navi return: a dungeon lost its question"))?;
         tail = is_map(f, &s, map, q, tail)?;
     }
+    tail = push(f, Kind::Switch { actor: s.timer.0, query: s.timer.1, cases: two(stay, tail), params: None })?;
     f.entries[e].main = tail;
     Ok(f.events.len() - before)
 }
@@ -494,6 +511,10 @@ mod tests {
 
     /// Walks the patched entry for one map and age, answering the question with `yes`.
     fn walk(f: &Flow, map: &str, child: bool, yes: bool) -> Option<(String, String)> {
+        walk_timed(f, map, child, yes, false)
+    }
+
+    fn walk_timed(f: &Flow, map: &str, child: bool, yes: bool, counting: bool) -> Option<(String, String)> {
         let mut i: u16 = f.entries[0].main;
         for _ in 0..500 {
             match &f.events[i as usize].kind {
@@ -507,6 +528,7 @@ mod tests {
                         }
                         "Player_Event.EventQueryPlayerIsChild" => child,
                         "GameSystemActor.EventQueryTalkChoice2" => yes,
+                        "ChallengeSystemActor.EventQueryMiniGameTimerIsCounting" => counting,
                         x => panic!("unexpected query {x}"),
                     };
                     i = cases.iter().find(|c| c.val == if truth { 0 } else { 1 }).unwrap().ev;
@@ -594,7 +616,33 @@ mod tests {
         }
         let mut b: Bf = sample();
         let n: usize = patch_flow(&mut b, Mode::Dungeons).unwrap();
-        assert_eq!(n, DUNGEONS.len() + 12 * 3);
+        assert_eq!(n, DUNGEONS.len() + 12 * 3 + 1);
+    }
+
+    #[test]
+    fn a_running_minigame_timer_keeps_navi_quiet_in_either_mode() {
+        for mode in [Mode::Dungeons, Mode::Everywhere] {
+            let mut b: Bf = sample();
+            patch_flow(&mut b, mode).unwrap();
+            let f: &Flow = &b.flows[0];
+            let Kind::Switch { actor, query, cases, params } = &f.events[f.entries[0].main as usize].kind else {
+                panic!("the entry does not start with a switch");
+            };
+            assert_eq!(query_name(f, *actor, *query), format!("{TIMER_ACTOR}.{TIMER}"));
+            assert!(params.is_none());
+            assert_eq!(cases.iter().find(|c| c.val == 0).map(|c| c.ev), Some(1));
+            let a: &Actor = &f.actors[*actor as usize];
+            let sys: &Actor = f.actors.iter().find(|a| a.name == "GameSystemActor").unwrap();
+            assert_eq!((&a.params, a.ep, a.cut), (&sys.params, sys.ep, sys.cut));
+            let mut maps: Vec<&str> = DUNGEONS.iter().map(|d| d.0).collect();
+            maps.extend(["Graveyard_Adult", "ZoraDomain_Child", "HyruleField_Adult", "HyruleField_Child", "GerudoValley_Adult", "Market_Child", "GohmaStage"]);
+            for m in maps {
+                for child in [true, false] {
+                    assert_eq!(walk_timed(f, m, child, true, true), None, "{m} {mode:?}");
+                }
+            }
+            assert!(walk_timed(f, "InsideTheDekuTree", true, true, false).is_some());
+        }
     }
 
     fn dump() -> Option<std::path::PathBuf> {
@@ -605,6 +653,52 @@ mod tests {
             eprintln!("skipped: no romfs at {}, set OOTRR_ROMFS", p.display());
             None
         }
+    }
+
+    fn flow_of(rf: &mut Romfs, name: &str) -> Flow {
+        let b: Bf = Bf::parse(&rf.read_zs(&format!("Event/EventFlow/{name}.bfevfl.zs")).unwrap()).unwrap();
+        b.flows.into_iter().find(|f| f.name == name).unwrap()
+    }
+
+    fn timer_switches(f: &Flow) -> Vec<Vec<Case>> {
+        f.events
+            .iter()
+            .filter_map(|e| match &e.kind {
+                Kind::Switch { actor, query, cases, .. } if query_name(f, *actor, *query) == format!("{TIMER_ACTOR}.{TIMER}") => Some(cases.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn the_timer_check_reads_the_game_query_the_way_the_pedestal_does() {
+        let Some(root) = dump() else {
+            return;
+        };
+        let mut rf: Romfs = Romfs::open(&root).unwrap();
+        let sword: Flow = flow_of(&mut rf, "Market_Adult_Field_AdultToChild");
+        let used: Vec<Vec<Case>> = timer_switches(&sword);
+        assert_eq!(used.len(), 1);
+        assert_eq!(used[0].iter().map(|c| c.val).collect::<Vec<u32>>(), vec![1]);
+        let race: Flow = flow_of(&mut rf, "MiniGame_DampeRace");
+        let starts = |f: &Flow| f.actors.iter().any(|a| a.name == TIMER_ACTOR && a.actions.iter().any(|x| x == "EventTriggerMiniGameTimerStart"));
+        assert!(starts(&race));
+        for m in ["MiniGame_Diving", "MiniGame_HorseRace", "Minigame_FindOutCucco", "Npc_Hylia_RunningMan_Adult", "SubEvent_GetSwordBigGoron", "DreamBossStage", "SageOfForest", "Get_StoneOfFire"] {
+            assert!(starts(&flow_of(&mut rf, m)), "{m}");
+        }
+        let none = |_: &str| -> Option<Vec<u8>> { None };
+        let outs: Vec<Out> = stage(&mut rf, Mode::Everywhere, &none).unwrap();
+        let b: Bf = Bf::parse(&rf.zs.decompress(&outs[0].z).unwrap()).unwrap();
+        let f: &Flow = b.flows.iter().find(|f| f.name == FLOW).unwrap();
+        let e: &Entry = f.entries.iter().find(|e| e.name == ENTRY).unwrap();
+        let Kind::Switch { actor, query, cases, params: None } = &f.events[e.main as usize].kind else {
+            panic!("the Navi question does not start with the timer check");
+        };
+        assert_eq!(query_name(f, *actor, *query), format!("{TIMER_ACTOR}.{TIMER}"));
+        assert!(is_nothing(f, cases.iter().find(|c| c.val == 0).unwrap().ev as usize));
+        let mine: &Actor = &f.actors[*actor as usize];
+        let theirs: &Actor = sword.actors.iter().find(|a| a.name == TIMER_ACTOR).unwrap();
+        assert_eq!((&mine.params, mine.ep, mine.cut), (&theirs.params, theirs.ep, theirs.cut));
     }
 
     #[test]

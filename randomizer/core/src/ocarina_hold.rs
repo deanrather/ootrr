@@ -73,6 +73,17 @@ fn table() -> &'static Vec<(String, String)> {
     })
 }
 
+pub fn chest_form(actor: &str) -> String {
+    if OCARINAS.contains(&actor) {
+        return shown(actor).unwrap_or_else(|| actor.to_string());
+    }
+    actor.to_string()
+}
+
+pub fn in_chest(d: &Data, loc: &str) -> bool {
+    loc != crate::slice::treasure::LOC && !crate::slice::chest_targets::is_sale(d, loc) && d.cat.by_name(loc).is_some_and(|l| l.kind == "chest")
+}
+
 /// The item actor whose pickup actor `form` is.
 pub fn tier_of(form: &str) -> Option<&'static str> {
     table().iter().find(|(_, p)| p == form).map(|(i, _)| i.as_str())
@@ -141,6 +152,77 @@ pub fn after(f: &mut Flow, tier: &str, then: u16) -> Res<u16> {
     push(f, Kind::Action { next, actor: pa, act: px, params: Some(Cont { items: add }) })
 }
 
+const PICK_PREFIX: &str = "OOTRRPickOcarina";
+
+fn push_pick(f: &mut Flow, k: Kind) -> Res<u16> {
+    let i: u16 = u16::try_from(f.events.len()).ok().filter(|i| *i != crate::bfevfl::flow::NONE).ok_or(Error::Format("ocarina: the flow has too many events"))?;
+    f.events.push(crate::bfevfl::Event { name: format!("{PICK_PREFIX}{i}"), kind: k });
+    Ok(i)
+}
+
+fn ask_name(f: &mut Flow, value: &str, hit: u16, miss: u16) -> Res<u16> {
+    let (a, q): (u16, u16) = crate::progressive::ensure(f, "GameDataActor", "EventQueryIsGameDataString64")?;
+    let c: Cont = Cont { items: vec![("GameDataName".to_string(), Val::Str(crate::pickup_tiers::NAME.to_string())), ("Index".to_string(), Val::Int(-1)), ("Value".to_string(), Val::Str(value.to_string()))] };
+    push_pick(f, Kind::Switch { actor: a, query: q, cases: vec![crate::bfevfl::Case { val: 0, ev: hit }, crate::bfevfl::Case { val: 1, ev: miss }], params: Some(c) })
+}
+
+fn owns(f: &mut Flow, actor: &str, yes: u16, no: u16) -> Res<u16> {
+    let (a, q): (u16, u16) = crate::progressive::ensure(f, "GameDataActor", "EventQueryCheckIsGet")?;
+    let c: Cont = Cont { items: vec![("ActorName".to_string(), Val::Str(actor.to_string()))] };
+    push_pick(f, Kind::Switch { actor: a, query: q, cases: vec![crate::bfevfl::Case { val: 0, ev: yes }, crate::bfevfl::Case { val: 1, ev: no }], params: Some(c) })
+}
+
+fn settle(f: &mut Flow, next: u16) -> Res<u16> {
+    let (a, x): (u16, u16) = crate::start_state::slot(f, "EventSystemActor", "EventWait")?;
+    let c: Cont = Cont { items: vec![("IsWaitEnd".to_string(), Val::Bool(1)), ("Frames".to_string(), Val::Int(crate::pickup_tiers::SETTLE))] };
+    push_pick(f, Kind::Action { next, actor: a, act: x, params: Some(c) })
+}
+
+pub fn picked_up(d: &Data, seed: &SeedFile) -> bool {
+    seed.placements.iter().any(|(loc, item)| d.family(item) == Some(FAMILY) && crate::slice::tier_order::fixed_spot(d, loc) && !crate::shops::is_loc(loc))
+}
+
+const FAMILY: &str = "Ocarina";
+
+pub fn patch_get(f: &mut Flow, i: usize, name: &str) -> Res<bool> {
+    let then: u16 = match f.events.get(i) {
+        Some(crate::bfevfl::Event { name: n, kind: Kind::Action { next, .. } }) if n == name => *next,
+        _ => return Err(Error::Msg(format!("ocarina: event {i} of {} is not the pouch add {name}, the game files differ", f.name))),
+    };
+    if f.events.iter().any(|e| e.name.starts_with(PICK_PREFIX)) {
+        return Ok(false);
+    }
+    let best: &str = OCARINAS[1];
+    let to_best: u16 = after(f, best, then)?;
+    let to_first: u16 = after(f, OCARINAS[0], then)?;
+    let first_or_best: u16 = owns(f, best, to_best, to_first)?;
+    let hits: [u16; 2] = [settle(f, first_or_best)?, settle(f, to_best)?];
+    let mut miss: u16 = then;
+    for (tier, hit) in OCARINAS.iter().zip(hits).rev() {
+        let idx: usize = crate::progressive::tiers(FAMILY)?.iter().position(|t| t == tier).ok_or(Error::Format("ocarina: the Ocarina chain lost a tier"))?;
+        for n in crate::pickup_tiers::names(FAMILY, idx)?.iter().rev() {
+            miss = ask_name(f, n, hit, miss)?;
+        }
+    }
+    if let Kind::Action { next, .. } = &mut f.events[i].kind {
+        *next = miss;
+    }
+    Ok(true)
+}
+
+pub fn stage(rf: &mut crate::romfs::Romfs, late: &mut Vec<crate::staging::Out>, work: &std::path::Path, on: bool) -> Res<()> {
+    if !on {
+        return Ok(());
+    }
+    for (flow, i, name) in crate::pickup_tiers::GETS {
+        crate::story_skip::stage_late(rf, late, work, flow, |b| {
+            let f: &mut Flow = b.flows.iter_mut().find(|x| x.name == flow).ok_or_else(|| Error::Msg(format!("ocarina: no {flow} flow")))?;
+            patch_get(f, i, name).map(|_| ())
+        })?;
+    }
+    Ok(())
+}
+
 fn forms_in(d: &Data, item: &str) -> Vec<String> {
     d.item(item).map(|i| i.actor.iter().chain(i.tiers.iter()).filter(|a| no_anim(a)).cloned().collect()).unwrap_or_default()
 }
@@ -167,6 +249,15 @@ pub fn spots(d: &Data, seed: &SeedFile) -> Vec<(String, Vec<String>)> {
     for (loc, item) in &seed.placements {
         if holds_up(d, loc) && d.vanilla_of(loc) != Some(item.as_str()) {
             let fs: Vec<String> = forms_in(d, item);
+            if !fs.is_empty() {
+                out.push((loc.clone(), fs));
+            }
+        }
+    }
+    for (loc, item) in &seed.placements {
+        if d.family(item) == Some(FAMILY) && in_chest(d, loc) && !out.iter().any(|x| &x.0 == loc) {
+            let mut fs: Vec<String> = forms_in(d, item).into_iter().filter(|a| OCARINAS.contains(&a.as_str())).collect();
+            fs.dedup();
             if !fs.is_empty() {
                 out.push((loc.clone(), fs));
             }
@@ -244,7 +335,10 @@ mod tests {
         let mut s: crate::settings::Settings = crate::settings::Settings::default();
         crate::slice::pick::shuffle_both(&mut s);
         let spot: &str = crate::slice::flow_rules::OCARINA_OF_TIME;
-        let mut g = crate::slice::generate::generate_data(&d, &s, "ocarina of time spot", &crate::slice::GenOpts::default()).unwrap();
+        let mut g = (0..20)
+            .map(|n| crate::slice::generate::generate_data(&d, &s, &format!("ocarina of time spot {n}"), &crate::slice::GenOpts::default()).unwrap())
+            .find(|g| g.seed_file.placements.iter().all(|(l, i)| i != "Progressive Hookshot" || !crate::slice::tier_order::fixed_spot(&d, l)))
+            .unwrap();
         assert!(g.seed_file.placements.contains_key(spot), "the Ocarina of Time spot is not shuffled");
         // Put the Hookshot there; only the build is tested here.
         let at: String = g.seed_file.placements.iter().find(|(_, i)| i.as_str() == "Progressive Hookshot").map(|(l, _)| l.clone()).unwrap();
@@ -327,6 +421,134 @@ mod pickup_tests {
     use crate::settings::{Settings, Value};
     use crate::slice::data::Data;
 
+    fn walk(f: &crate::bfevfl::Flow, from: u16, named: &str, owned: &[&str]) -> Vec<String> {
+        use crate::bfevfl::{Kind, Val};
+        let mut out: Vec<String> = Vec::new();
+        let mut at: u16 = from;
+        let mut steps: usize = 0;
+        while at != crate::bfevfl::flow::NONE && steps < 128 {
+            steps += 1;
+            let e = &f.events[usize::from(at)];
+            at = match &e.kind {
+                Kind::Switch { actor, query, cases, params } => {
+                    let q: &str = &f.actors[usize::from(*actor)].queries[usize::from(*query)];
+                    let yes: bool = match (q, params.as_ref().and_then(|c| c.get("Value").or_else(|| c.get("ActorName")))) {
+                        ("EventQueryIsGameDataString64", Some(Val::Str(v))) => v == named,
+                        ("EventQueryCheckIsGet", Some(Val::Str(v))) => owned.contains(&v.as_str()),
+                        _ => false,
+                    };
+                    cases.iter().find(|c| c.val == if yes { 0 } else { 1 }).map(|c| c.ev).unwrap_or(crate::bfevfl::flow::NONE)
+                }
+                Kind::Action { next, actor, act, params } => {
+                    let what: &str = &f.actors[usize::from(*actor)].actions[usize::from(*act)];
+                    let arg: String = match params.as_ref().and_then(|c| c.get("Actor").or_else(|| c.get("Value"))) {
+                        Some(Val::Str(s)) => s.clone(),
+                        _ => String::new(),
+                    };
+                    out.push(format!("{what} {arg}").trim().to_string());
+                    *next
+                }
+                Kind::Sub { next, flow, entry, .. } => {
+                    out.push(format!("{flow}:{entry}"));
+                    *next
+                }
+                _ => crate::bfevfl::flow::NONE,
+            };
+        }
+        out
+    }
+
+    #[test]
+    fn an_ocarina_in_a_chest_drops_its_pickup_and_the_chest_flow_equips_it() {
+        let root: std::path::PathBuf = ootrr_game::test_romfs::path();
+        if !root.join("Pack").join("ZsDic.pack.zs").is_file() {
+            eprintln!("skipped: no romfs at {}, set OOTRR_ROMFS", root.display());
+            return;
+        }
+        let d: Data = Data::load().unwrap();
+        let mut s: Settings = Settings::default();
+        crate::slice::pick::shuffle_both(&mut s);
+        let mut g = crate::slice::generate::generate_data(&d, &s, "ocarina chest", &crate::slice::GenOpts::default()).unwrap();
+        let chest: &str = "KF Midos Top Left Chest";
+        let at: String = g.seed_file.placements.iter().find(|(_, i)| i.as_str() == "Ocarina").map(|(l, _)| l.clone()).unwrap();
+        if at != chest {
+            let there: String = g.seed_file.placements[chest].clone();
+            g.seed_file.placements.insert(at, there);
+            g.seed_file.placements.insert(chest.to_string(), "Ocarina".to_string());
+        }
+        assert!(super::in_chest(&d, chest));
+        let (ts, _, _) = crate::slice::chest_targets::targets(&d, &g.seed_file).unwrap();
+        let t = ts.iter().find(|t| t.name == chest).unwrap();
+        assert_eq!(t.family, Some("Ocarina"));
+        assert!(super::is_form(&t.new_actor), "{}", t.new_actor);
+        let packs: Vec<String> = super::wanted(&d, &g.seed_file).into_iter().filter(|(l, _)| l == chest).map(|(_, p)| p.pack).collect();
+        assert_eq!(packs, ["Obj_Ocarina_Fairy", "Obj_Ocarina_TimeLand"]);
+        let load: std::path::PathBuf = std::env::temp_dir().join(format!("ootrr_ocarina_chest_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&load);
+        let b = crate::slice::edit::build(&g.seed_file, &root, &load, "ocarina chest").unwrap();
+        let romfs: std::path::PathBuf = b.root.join("romfs");
+        for p in &packs {
+            assert!(romfs.join("Pack").join("Actor").join(format!("{p}.pack.zs")).is_file(), "{p}");
+        }
+        let mut rf: crate::romfs::Romfs = crate::romfs::Romfs::open(&root).unwrap();
+        let mut seen: usize = 0;
+        for flow in [crate::progressive::SMALL_FLOW, crate::progressive::BIG_FLOW] {
+            let Ok(z) = std::fs::read(flow.split('/').fold(romfs.clone(), |x, s| x.join(s))) else {
+                continue;
+            };
+            let bf = crate::bfevfl::Bf::parse(&rf.zs.decompress(&z).unwrap()).unwrap();
+            let f = &bf.flows[0];
+            let Some(e) = f.entries.iter().find(|e| e.name == crate::progressive::entry_name("Ocarina")) else {
+                continue;
+            };
+            seen += 1;
+            let shown: Vec<String> = e.subs.iter().filter_map(|i| f.events[usize::from(*i)].kind.params().and_then(|c| c.get("ContentName")).and_then(|v| match v {
+                crate::bfevfl::Val::Str(s) => Some(s.clone()),
+                _ => None,
+            })).collect();
+            assert_eq!(shown, ["Obj_Ocarina_Fairy", "Obj_Ocarina_TimeLand"], "{flow}");
+            for t in super::OCARINAS {
+                assert!(f.events.iter().any(|e| e.kind.params().is_some_and(|c| c.get("GameDataName") == Some(&crate::bfevfl::Val::Str(super::EQUIP.to_string())) && c.get("Value") == Some(&crate::bfevfl::Val::Str(t.to_string())))), "{flow} {t}");
+            }
+        }
+        assert!(seen > 0, "no chest flow routes the Ocarina");
+        let _ = std::fs::remove_dir_all(&load);
+    }
+
+    #[test]
+    fn a_picked_up_ocarina_is_added_like_saria_s_gift_and_equipped() {
+        let root: std::path::PathBuf = ootrr_game::test_romfs::path();
+        if !root.join("Pack").join("ZsDic.pack.zs").is_file() {
+            eprintln!("skipped: no romfs at {}, set OOTRR_ROMFS", root.display());
+            return;
+        }
+        let mut rf: crate::romfs::Romfs = crate::romfs::Romfs::open(&root).unwrap();
+        for (flow, i, name) in crate::pickup_tiers::GETS {
+            let mut b = crate::bfevfl::Bf::parse(&rf.read_zs(&format!("Event/EventFlow/{flow}.bfevfl.zs")).unwrap()).unwrap();
+            let f = b.flows.iter_mut().find(|x| x.name == flow).unwrap();
+            let before: Vec<String> = walk(f, i as u16, "Obj_Rupee_Green", &[]);
+            assert!(super::patch_get(f, i, name).unwrap());
+            assert!(!super::patch_get(f, i, name).unwrap());
+            let b = crate::bfevfl::Bf::parse(&b.write().unwrap()).unwrap();
+            let f = b.flows.iter().find(|x| x.name == flow).unwrap();
+            assert_eq!(walk(f, i as u16, "Obj_Rupee_Green", &[]), before, "{flow}");
+            let equip = |t: &str| format!("EventTriggerSetGameDataString64 {t}");
+            let add = |t: &str| format!("EventTriggerAddOrRemovePouchContent {t}");
+            for (n, owned, tier) in [
+                ("Item_Ocarina_Fairy", &[][..], "Item_Ocarina_Fairy"),
+                ("Obj_Ocarina_Fairy", &[][..], "Item_Ocarina_Fairy"),
+                ("Item_Ocarina_Fairy", &["Item_Ocarina_Time"][..], "Item_Ocarina_Time"),
+                ("Obj_Ocarina_TimeLand", &[][..], "Item_Ocarina_Time"),
+                ("Item_Ocarina_Time", &["Item_Ocarina_Fairy"][..], "Item_Ocarina_Time"),
+            ] {
+                let w: Vec<String> = walk(f, i as u16, n, owned);
+                assert_eq!(w.get(1).map(|s| s.as_str()), Some("EventWait"), "{flow} {n} {w:?}");
+                assert_eq!(&w[2..4], [add(tier), equip(tier)], "{flow} {n} {w:?}");
+                assert_eq!(&w[4..], &before[1..], "{flow} {n}");
+            }
+        }
+    }
+
     #[test]
     fn a_generated_seed_with_an_ocarina_at_a_pickup_spot_builds_its_pickup_pack() {
         let root: std::path::PathBuf = std::env::var_os("OOTRR_ROMFS").map(std::path::PathBuf::from).unwrap_or_else(|| std::path::PathBuf::from("D:/Oot/romfs"));
@@ -356,6 +578,21 @@ mod pickup_tests {
         let b = crate::slice::edit::build(&g.seed_file, &root, &load, "ocarina spot").unwrap_or_else(|e| panic!("{loc}: {e}"));
         let actor = b.root.join("romfs").join("Pack").join("Actor");
         assert!(actor.join("Obj_Ocarina_Fairy.pack.zs").is_file() || actor.join("Obj_Ocarina_TimeLand.pack.zs").is_file(), "{loc}");
+        let packs: std::collections::BTreeSet<String> = std::fs::read_dir(&actor).unwrap().filter_map(|e| e.ok()?.file_name().to_str()?.strip_suffix(".pack.zs").map(|s| s.to_string())).collect();
+        let mut rf: crate::romfs::Romfs = crate::romfs::Romfs::open(&root).unwrap();
+        let mut placed: usize = 0;
+        for dir in std::fs::read_dir(b.root.join("romfs").join("Banc")).unwrap().filter_map(|e| e.ok()).map(|e| e.path()).filter(|p| p.is_dir()) {
+            for f in std::fs::read_dir(&dir).unwrap().filter_map(|e| e.ok()).map(|e| e.path()).filter(|p| p.to_string_lossy().ends_with(".bcett.byml.zs")) {
+                let y = crate::byml::Byml::parse(&rf.zs.decompress(&std::fs::read(&f).unwrap()).unwrap()).unwrap();
+                for a in y.root.get("Actors").and_then(|v| v.as_arr()).into_iter().flatten() {
+                    if a.get("Gyaml").and_then(|v| v.as_str()).is_some_and(|g| packs.contains(g)) {
+                        placed += 1;
+                        assert!(a.get("Scale").is_none(), "{} in {} is scaled", a.get("Gyaml").and_then(|v| v.as_str()).unwrap_or(""), f.display());
+                    }
+                }
+            }
+        }
+        assert!(placed > 0);
         let _ = std::fs::remove_dir_all(&load);
     }
 }

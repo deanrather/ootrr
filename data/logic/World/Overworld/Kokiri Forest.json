@@ -7,7 +7,6 @@
             "Showed Mido Sword & Shield": "is_child and Kokiri_Sword and Deku_Shield"
         },
         "locations": {
-            "KF West Ledge Chest": "can_use(Hookshot)",
             "KF Kokiri Sword Chest": "is_child",
             "KF Grass Near Ramp Green Rupee 1": "is_child",
             "KF Grass Near Ramp Green Rupee 2": "is_child",
@@ -36,12 +35,12 @@
             "KF Bean Platform Green Rupee 6": "is_adult and (here(can_plant_bean) or Hover_Boots)",
             "KF Bean Platform Red Rupee": "is_adult and (here(can_plant_bean) or Hover_Boots)",
             "KF GS Know It All House": "
-                is_child and can_child_attack and (at_night or gold_skulls_ignore_daytime) and
+                is_child and can_child_attack and can_get_night_gs and
                 (had_night_start or can_leave_forest or can_play(Suns_Song) or gold_skulls_ignore_daytime)",
             "KF GS Bean Patch": "
                 can_plant_bugs and can_child_attack",
             "KF GS House of Twins": "
-                is_adult and (at_night or gold_skulls_ignore_daytime) and
+                is_adult and can_get_night_gs and
                 (Hookshot or (logic_adult_kokiri_gs_hovers and Hover_Boots) or logic_adult_kokiri_gs_nothing)",
             "KF Gossip Stone": "True",
             "Gossip Stone Fairy": "can_summon_gossip_fairy_without_suns and has_bottle",
@@ -148,14 +147,14 @@
         "scene": "KF Kokiri Shop",
         "locations": {
             "KF Shop Wonderitem": "True",
-            "KF Shop Item 1": "True",
-            "KF Shop Item 2": "True",
-            "KF Shop Item 3": "True",
-            "KF Shop Item 4": "True",
-            "KF Shop Item 5": "True",
-            "KF Shop Item 6": "True",
-            "KF Shop Item 7": "True",
-            "KF Shop Item 8": "True"
+            "KF Shop Right Side Bottom Left": "True",
+            "KF Shop Left Side Bottom Left": "True",
+            "KF Shop Left Side Bottom Right": "True",
+            "KF Shop Right Side Bottom Right": "True",
+            "KF Shop Right Side Top Left": "True",
+            "KF Shop Left Side Top Right": "True",
+            "KF Shop Right Side Top Right": "True",
+            "KF Shop Left Side Top Left": "True"
         },
         "exits": {
             "Kokiri Forest": "True"

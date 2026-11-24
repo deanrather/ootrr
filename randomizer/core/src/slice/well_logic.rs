@@ -22,7 +22,7 @@ mod tests {
             }
         }
         let mut extra: Vec<ItemId> = Vec::new();
-        for (i, name) in w.items.names.iter().enumerate() {
+        for i in 0..w.items.names.len() {
             if w.items.adv[i] && i != k && !gone.contains(&i) {
                 extra.extend([i; 3]);
             }

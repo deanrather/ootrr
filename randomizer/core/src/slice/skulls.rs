@@ -97,7 +97,7 @@ pub fn drop_actor(t: &Table, d: &Data, item: &str, tier: Option<&str>) -> Res<St
     if let Some(a) = pickup(t, d, item) {
         return Ok(crate::slice::skull_kit::kit_actor(&a));
     }
-    let p: crate::slice::key_spots::Pick = crate::slice::key_spots::resolve(d, item, tier)?;
+    let p: crate::slice::key_spots::Pick = crate::slice::key_spots::resolve_kit(d, item, tier)?;
     p.hang_with()?;
     Ok(p.hang())
 }
@@ -261,7 +261,6 @@ pub fn spoiler_with(d: &Data, w: &World, p: &Plan, free: &[LocId], got: &Placeme
             continue;
         }
         let reason: String = match (cat.get(n), t.as_ref()) {
-            _ if crate::slice::junk_spots::only(p, n) && !p.excluded.iter().any(|e| e == n) => crate::slice::junk_spots::SHORT.to_string(),
             (Some(c), Some(t)) => why(d, w, p, t, c).unwrap_or_else(|| "not picked".to_string()),
             (None, _) if p.skulls == Mode::Matched && crate::slice::skull_names::listed(n) => why_extra(w, p, n).unwrap_or_else(|| "not picked".to_string()),
             (None, _) => "no remake actor is matched to it".to_string(),
@@ -310,13 +309,13 @@ mod tests {
     }
 
     #[test]
-    fn the_vanilla_game_reaches_all_tokens_but_the_one_above_the_theater() {
+    fn the_vanilla_game_reaches_all_tokens() {
         let d: Data = Data::load().unwrap();
         let w: World = world(&d).unwrap();
         let v: Placement = crate::slice::fill::vanilla_place(&w, &d).unwrap();
         assert_eq!(token_spots(&w, &v).len(), 100);
-        assert_eq!(reachable_tokens(&w, &v), 99);
-        assert_eq!(check_tokens(&w, &v, &v).unwrap(), 99);
+        assert_eq!(reachable_tokens(&w, &v), 100);
+        assert_eq!(check_tokens(&w, &v, &v).unwrap(), 100);
     }
 
     #[test]
@@ -380,8 +379,7 @@ mod tests {
                 assert!(sp.contains("Gold Skulltulas, 100 in the logic"), "{sp}");
                 assert!(sp.contains("KF GS Know It All House:"));
                 if v == "matched" {
-                    let short: String = format!("ZR GS Tree: Gold Skulltula Token (vanilla, {}", crate::slice::junk_spots::SHORT);
-                    assert!(sp.contains(&short) || (sp.contains("ZR GS Tree: ") && !sp.contains("ZR GS Tree: Gold Skulltula Token")), "{sp}");
+                    assert!(sp.contains("ZR GS Tree: "), "{sp}");
                 } else {
                     assert!(sp.contains("ZR GS Tree: Gold Skulltula Token (vanilla, no remake actor"), "{sp}");
                 }

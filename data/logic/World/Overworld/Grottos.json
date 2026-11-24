@@ -143,6 +143,8 @@
         "region_name": "HF Open Grotto",
         "scene": "HF Open Grotto",
         "locations": {
+            # The remake chest of this name sits in a Lake Hylia grotto with four timed
+            # candles and no lit torch: Din's Fire or Fire Arrows (with magic) light them.
             "HF Open Grotto Chest": "has_fire_source",
             "HF Open Grotto Beehive 1": "can_break_lower_beehive",
             "HF Open Grotto Beehive 2": "can_break_lower_beehive",
@@ -218,17 +220,7 @@
         "region_name": "HF Near Kak Grotto",
         "scene": "HF Near Kak Grotto",
         "locations": {
-            "HF GS Near Kak Grotto": "can_use(Boomerang) or can_use(Hookshot)"
-        },
-        "exits": {
-            "Hyrule Field": "True"
-        }
-    },
-    {
-        "region_name": "HF Tektite Grotto",
-        "scene": "HF Tektite Grotto",
-        "locations": {
-            "HF Tektite Grotto Freestanding PoH": "(Progressive_Scale, 2) or can_use(Iron_Boots)"
+            "HF GS Near Kak Grotto": "is_adult and can_break_crate and at('HF Near Kak Grotto', is_child and can_child_attack)"
         },
         "exits": {
             "Hyrule Field": "True"

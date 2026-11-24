@@ -35,7 +35,7 @@ pub fn read(s: &Settings, rewards: bool, bad: &mut Vec<String>) -> bool {
 
 pub fn fits(d: &Data, name: &str, i: &Item) -> bool {
     match d.flow.by_name(name) {
-        Some(l) if is_b(l) => crate::scrubs_a::sells(i) || d.vanilla_of(name) == Some(i.name.as_str()),
+        Some(l) if is_b(l) => i.actor.is_some() || !i.tiers.is_empty() || d.vanilla_of(name) == Some(i.name.as_str()),
         _ => true,
     }
 }
@@ -104,20 +104,21 @@ mod tests {
     }
 
     #[test]
-    fn a_menu_scrub_takes_pouch_items_and_its_own_vanilla_item_only() {
+    fn a_menu_scrub_takes_any_item_with_a_remake_actor_or_tiers() {
         let d: Data = Data::load().unwrap();
-        for x in ["Hover Boots", "Lens of Truth", "Bottle", "Piece of Heart", "Suns Song"] {
-            let i: &Item = d.item(x).unwrap();
-            assert!(fits(&d, "Jabu Jabus Belly Deku Scrub", i) && d.flow_accepts(i), "{x}");
+        // The one time sale hands out any item with a remake actor: rupees, shields, tunics and
+        // dungeon items (credited through crate::debug_names) included. An upgrade sells the tier
+        // the reach order fixes for the sale (crate::scrubs_b::jobs).
+        for x in ["Hover Boots", "Lens of Truth", "Bottle", "Piece of Heart", "Suns Song", "Rupees (50)", "Scarecrow Song", "Deku Shield", "Double Defense", "Goron Tunic", "Deku Seeds (30)", "Small Key (Forest Temple)", "Progressive Hookshot", "Deku Stick Capacity", "Progressive Wallet"] {
+            assert!(fits(&d, "Jabu Jabus Belly Deku Scrub", d.item(x).unwrap()), "{x}");
         }
-        for x in ["Rupees (50)", "Scarecrow Song", "Deku Shield", "Double Defense", "Goron Tunic", "Deku Seeds (30)"] {
+        // The remake has nothing to sell for these.
+        for x in ["Ice Trap", "Magic Bean Pack", "Triforce Piece"] {
             assert!(!fits(&d, "Jabu Jabus Belly Deku Scrub", d.item(x).unwrap()), "{x}");
+            assert!(fits(&d, "Kak 50 Gold Skulltula Reward", d.item(x).unwrap()), "{x} is only judged at a menu scrub");
         }
         assert!(fits(&d, "LW Deku Scrub Grotto Rear", d.item("Deku Seeds (30)").unwrap()));
         assert!(fits(&d, "Jabu Jabus Belly Deku Scrub", d.item("Deku Nuts (5)").unwrap()));
-        for x in ["Progressive Hookshot", "Deku Stick Capacity", "Progressive Wallet"] {
-            assert!(!crate::slice::flow_rules::allows(&d, "Jabu Jabus Belly Deku Scrub", d.item(x).unwrap()), "{x}");
-        }
     }
 
     #[test]
@@ -135,10 +136,12 @@ mod tests {
         for n in 0..3 {
             let g: Generated = generate_data(&d, &with(true, Some(true)), &format!("scrubs b {n}"), &GenOpts::default()).unwrap();
             assert_eq!(g.seed_file.placements.len(), a.seed_file.placements.len() + NEW.len());
+            // An upgrade at a menu scrub sells the tier the reach order fixes for the sale.
+            let fixed: crate::slice::tier_order::Verdict = crate::slice::tier_order::fixed_actors(&d, &g.seed_file).unwrap();
             for x in NEW {
                 let it: &str = &g.seed_file.placements[x];
                 assert!(fits(&d, x, d.item(it).unwrap()), "{x} holds {it}");
-                assert!(d.family(it).is_none(), "{x} holds {it}");
+                assert!(d.family(it).is_none() || fixed.assign.contains_key(x), "{x} holds {it}");
             }
             assert!(g.report.contains(NOTE));
         }
@@ -163,8 +166,13 @@ mod tests {
         let s: Settings = with(true, Some(true));
         let o: GenOpts = GenOpts { plando: vec![Entry { location: "Jabu Jabus Belly Deku Scrub".to_string(), item: "Hover Boots".to_string() }], ..GenOpts::default() };
         assert_eq!(generate_data(&d, &s, "plando", &o).unwrap().seed_file.placements["Jabu Jabus Belly Deku Scrub"], "Hover Boots");
-        let bad: GenOpts = GenOpts { plando: vec![Entry { location: "Jabu Jabus Belly Deku Scrub".to_string(), item: "Rupees (50)".to_string() }], ..GenOpts::default() };
-        assert!(generate_data(&d, &s, "plando", &bad).is_err());
+        let any: GenOpts = GenOpts { plando: vec![Entry { location: "Jabu Jabus Belly Deku Scrub".to_string(), item: "Rupees (50)".to_string() }], ..GenOpts::default() };
+        assert_eq!(generate_data(&d, &s, "plando", &any).unwrap().seed_file.placements["Jabu Jabus Belly Deku Scrub"], "Rupees (50)");
+        // The scrub sells any item now, but the setting rules still hold: small keys stay in their
+        // own dungeon by default, and Jabu Jabu's Belly is not the Forest Temple.
+        let bad: GenOpts = GenOpts { plando: vec![Entry { location: "Jabu Jabus Belly Deku Scrub".to_string(), item: "Small Key (Forest Temple)".to_string() }], ..GenOpts::default() };
+        let e: String = generate_data(&d, &s, "plando", &bad).err().map(|e| e.to_string()).unwrap_or_default();
+        assert!(e.contains("cannot be placed"), "{e}");
         let back: GenOpts = GenOpts { plando: vec![Entry { location: "LW Deku Scrub Grotto Rear".to_string(), item: "Deku Seeds (30)".to_string() }], ..GenOpts::default() };
         assert_eq!(generate_data(&d, &s, "plando", &back).unwrap().seed_file.placements["LW Deku Scrub Grotto Rear"], "Deku Seeds (30)");
     }

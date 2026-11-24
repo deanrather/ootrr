@@ -16,9 +16,10 @@ pub fn dict_id(z: &[u8]) -> Option<u32> {
     }
     let d: u8 = *z.get(4)?;
     let n: usize = [0, 1, 2, 4][(d & 3) as usize];
+    let at: usize = if d & 0x20 == 0 { 6 } else { 5 };
     let mut id: u32 = 0;
     for i in 0..n {
-        id |= (*z.get(5 + i)? as u32) << (8 * i);
+        id |= (*z.get(at + i)? as u32) << (8 * i);
     }
     if n == 0 { None } else { Some(id) }
 }
@@ -156,5 +157,14 @@ mod tests {
         assert_eq!(dict_id(&zs::compress_raw(&[1, 2, 3], Some(300)).unwrap()), Some(300));
         assert_eq!(dict_id(&zs::compress_raw(&[1, 2, 3], None).unwrap()), None);
         assert_eq!(dict_id(b"nope"), None);
+    }
+
+    #[test]
+    fn a_window_descriptor_comes_before_the_dictionary_id() {
+        assert_eq!(dict_id(&[0x28, 0xB5, 0x2F, 0xFD, 0x81, 0x68, 0x04, 0xa4, 0xbb]), Some(4));
+        assert_eq!(dict_id(&[0x28, 0xB5, 0x2F, 0xFD, 0x81, 0x68, 0x01, 0x00]), Some(1));
+        assert_eq!(dict_id(&[0x28, 0xB5, 0x2F, 0xFD, 0x61, 0x01, 0x60, 0x43]), Some(1));
+        assert_eq!(dict_id(&[0x28, 0xB5, 0x2F, 0xFD, 0x80, 0x68, 0x04]), None);
+        assert_eq!(dict_id(&[0x28, 0xB5, 0x2F, 0xFD, 0x81, 0x68]), None);
     }
 }

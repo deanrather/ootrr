@@ -113,7 +113,10 @@ pub(crate) fn tables(rf: &mut Romfs, o: &Opts, modded: bool, s: &Spec, l: &Layer
     let a: File = table(rf, o, modded, ACTOR_INFO, |y: &mut Byml| {
         let mut r: Node = rows::actor_row(rows::need(y, &s.item, ACTOR_INFO)?, &s.name, heap);
         if let Some(m) = &l.model {
-            crate::pickup_pack::model::row(&mut r, rows::need(y, m, ACTOR_INFO)?)?;
+            crate::pickup_pack::model::row(&mut r, rows::need(y, m, ACTOR_INFO)?, l.pose.as_deref())?;
+        }
+        if l.own {
+            r.set(rows::ACTOR_NAME, Node::Str(s.name.clone()));
         }
         at[0] = rows::insert(y, r)?;
         Ok(())
@@ -127,7 +130,13 @@ pub(crate) fn tables(rf: &mut Romfs, o: &Opts, modded: bool, s: &Spec, l: &Layer
         return Err(E::Msg(format!("the new row sits at {} in the actor table and at {} in the game actor table, the two tables no longer line up", at[0], at[1])));
     }
     let q: File = table(rf, o, modded, POUCH_INFO, |y: &mut Byml| {
-        let r: Node = rows::pouch_row(rows::need(y, &s.item, POUCH_INFO)?, &s.name);
+        let mut r: Node = rows::pouch_row(rows::need(y, &s.item, POUCH_INFO)?, &s.name);
+        if l.own {
+            rows::quiet(&mut r);
+        } else if s.name.starts_with(crate::slice::key_spots::DUNGEON_PREFIX) {
+            r.remove("PouchSpecialDeal");
+            r.set("PouchStockable", Node::Bool(true));
+        }
         rows::insert(y, r)?;
         if l.ammo {
             ammo::apply(y, &s.name, identity)?;
@@ -439,11 +448,16 @@ pub fn run_with(romfs: &P, load: &P, mod_name: &str, s: &Spec, o: &Opts, l: &Lay
     if !rf.root.join(pack_of(&s.item)).is_file() {
         return Err(E::Msg(format!("the game has no actor pack for {}", s.item)));
     }
-    let lifted: Layers = crate::pickup_pack::lift::layers(&mut rf, &s.item, l)?;
+    let posed: Layers = crate::pickup_pack::model::layers(&mut rf, l)?;
+    let lifted: Layers = crate::pickup_pack::lift::layers(&mut rf, &s.item, &posed)?;
     let l: &Layers = &lifted;
     let mut packs: Vec<Vec<Entry>> = Vec::new();
-    for n in [BASE, DONOR, s.item.as_str()].into_iter().chain(l.model.as_deref()) {
+    for n in [BASE, DONOR, s.item.as_str()] {
         packs.push(sarc::parse(&start(&mut rf, o.base.as_ref(), &pack_of(n))?)?);
+    }
+    if let Some(m) = l.model.as_deref() {
+        let es: Vec<Entry> = sarc::parse(&start(&mut rf, o.base.as_ref(), &pack_of(m))?)?;
+        packs.push(es.into_iter().filter(|e| crate::pickup_pack::closure::is_byml(&e.data)).collect());
     }
     let pl: Plan = plan_with(&packs, s, l)?;
     let (mut rst, modded): (Rst, bool) = size_table(&mut rf, o)?;

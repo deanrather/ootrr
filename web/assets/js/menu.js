@@ -5,7 +5,7 @@ import { defaults, effective, enabled, from_preset, match_preset, changed, with_
 import { make_row, is_wide } from "./controls.js";
 import { FIELDS, field_el, gen_line, gen_missing, page_fields } from "./config.js";
 import { build_index, search, grouped } from "./search.js";
-import { generate, busy, on_run, render_seed, set_pages } from "./run.js";
+import { generate, busy, on_run, render_seed, set_pages, load_seed_file } from "./run.js";
 import { panel as plando_panel } from "./plando.js";
 import { live, refresh_string } from "./strings.js";
 import { register, set_first, on_show, go, show, current_page } from "./nav.js";
@@ -394,7 +394,21 @@ function topbar() {
   const ta = h("textarea", { rows: "2", placeholder: "Paste a settings string here", "aria-label": "Settings string to import", spellcheck: "false" });
   const imp_out = h("div", { "aria-live": "polite" });
   const load = h("button", { type: "button", class: "btn primary" }, "Load settings");
-  const bar = h("div", { class: "importbar", hidden: true }, ta, h("div", { class: "row" }, load, h("button", { type: "button", class: "btn", onclick: () => toggle_import(false) }, "Close")), imp_out);
+  // A seed file (.ootrr) opens on the Seed page, where it can be built again.
+  const seed_pick = h("input", { type: "file", accept: ".ootrr,.json,application/json", class: "hide" });
+  const seed_btn = h("button", { type: "button", class: "btn", onclick: () => seed_pick.click() }, "Open a seed file");
+  seed_pick.onchange = async () => {
+    const f = seed_pick.files && seed_pick.files[0];
+    seed_pick.value = "";
+    if (!f) return;
+    const err = await load_seed_file(f);
+    if (err) return fill(imp_out, notice("error", err));
+    fill(imp_out);
+    toggle_import(false);
+    go("seed");
+    show();
+  };
+  const bar = h("div", { class: "importbar", hidden: true }, ta, h("div", { class: "row" }, load, seed_btn, seed_pick, h("button", { type: "button", class: "btn", onclick: () => toggle_import(false) }, "Close")), imp_out);
   function toggle_import(open) {
     bar.hidden = !open;
     imp_btn.setAttribute("aria-expanded", String(open));

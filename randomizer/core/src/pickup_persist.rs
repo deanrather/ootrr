@@ -385,7 +385,9 @@ mod tests {
         let d: Data = Data::load().unwrap();
         let flags: HM<String, bool> = respawn_flags(&mut rf).unwrap();
         let mut seen: BS<&str> = BS::new();
-        for l in d.cat.locs.iter().filter(|l| is_world(l)) {
+        // The spots of NEW_ROWS keep actors that never save (the letter, the key); they only stay
+        // as themselves and are never a swap target, and the build adds rows for their swaps.
+        for l in d.cat.locs.iter().filter(|l| is_world(l) && !crate::slice::pickups::needs_row(&l.name)) {
             seen.insert(l.item.as_str());
         }
         for i in ["Piece of Heart", "Recovery Heart", "Rupee (1)", "Rupees (5)", "Rupees (20)", "Rupees (50)"] {
@@ -412,6 +414,10 @@ mod tests {
         let mut n: usize = 0;
         for l in d.cat.locs.iter().filter(|l| is_world(l)) {
             for r in &l.refs {
+                if crate::slice::pickups::needs_row(&l.name) {
+                    assert_eq!(rs.get(&r.hash), None, "{} has a row now, drop it from NEW_ROWS", l.name);
+                    continue;
+                }
                 n += 1;
                 assert!(kept(&rs, r.hash), "{} hash {} row {:?}", l.name, r.hash, rs.get(&r.hash));
             }

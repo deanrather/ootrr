@@ -31,6 +31,9 @@ pub fn open(l: &Loc, p: &Plan) -> bool {
     if crate::flow_extra::potion::is(&l.name) {
         return p.rewards.potion;
     }
+    if crate::flow_extra::scripted(&l.name) {
+        return true;
+    }
     if crate::open_world::skips::is_bean_sale(&l.name) {
         return p.rewards.bean_sale;
     }
@@ -45,7 +48,7 @@ pub fn pouch(i: &Item) -> bool {
 }
 
 pub fn bound(d: &Data, item: &str) -> bool {
-    d.flow.locs.iter().any(|l| l.gated && !crate::flow_extra::trade::is(&l.name) && !crate::flow_extra::cows::is(&l.name) && !crate::flow_extra::frogs::is(&l.name) && !crate::flow_extra::potion::is(&l.name) && !crate::scrubs_a::is_a(l) && !crate::scrubs_b::is_b(l) && !crate::open_world::skips::is_bean_sale(&l.name) && d.vanilla_of(&l.name) == Some(item) && d.flow_ok(&l.name))
+    d.flow.locs.iter().any(|l| l.gated && !crate::flow_extra::trade::is(&l.name) && !crate::flow_extra::cows::is(&l.name) && !crate::flow_extra::frogs::is(&l.name) && !crate::flow_extra::potion::is(&l.name) && !crate::flow_extra::scripted(&l.name) && !crate::scrubs_a::is_a(l) && !crate::scrubs_b::is_b(l) && !crate::open_world::skips::is_bean_sale(&l.name) && d.vanilla_of(&l.name) == Some(item) && d.flow_ok(&l.name))
 }
 
 /// Whether a gated reward spot can hold `i`. The items bound to a gated reward (bound: the
@@ -77,7 +80,7 @@ mod tests {
     }
 
     fn gated(d: &Data) -> Vec<String> {
-        d.flow.locs.iter().filter(|l| l.gated && !crate::flow_extra::trade::is(&l.name) && !crate::flow_extra::cows::is(&l.name) && !crate::flow_extra::frogs::is(&l.name) && !crate::flow_extra::potion::is(&l.name) && !crate::scrubs_a::is_a(l) && !crate::scrubs_b::is_b(l) && !crate::open_world::skips::is_bean_sale(&l.name)).map(|l| l.name.clone()).collect()
+        d.flow.locs.iter().filter(|l| l.gated && !crate::flow_extra::trade::is(&l.name) && !crate::flow_extra::cows::is(&l.name) && !crate::flow_extra::frogs::is(&l.name) && !crate::flow_extra::potion::is(&l.name) && !crate::flow_extra::scripted(&l.name) && !crate::scrubs_a::is_a(l) && !crate::scrubs_b::is_b(l) && !crate::open_world::skips::is_bean_sale(&l.name)).map(|l| l.name.clone()).collect()
     }
 
     #[test]
@@ -112,6 +115,12 @@ mod tests {
         let mut s: Settings = with(Some(true));
         s.set(crate::flow_extra::MERCHANTS_SETTING, Value::s("no_beans")).unwrap();
         let off: Generated = generate_data(&d, &with(Some(false)), "extra", &GenOpts::default()).unwrap();
+        // Every item may go to these rewards: Kak 20 and Biggoron hand out through the generic
+        // pouch get, Medigoron's priced sale sells any item (an upgrade at the tier the reach order
+        // fixes, crate::slice::tier_order), and a dungeon item at any of them credits its dungeon.
+        // So only crate::slice::generate::allowed judges them.
+        let p: crate::slice::support::Plan = plan(&s).unwrap();
+        let w: crate::world::World = crate::slice::logic::world_with(&d, &p.logic()).unwrap();
         for n in 0..3 {
             let g: Generated = generate_data(&d, &s, &format!("extra {n}"), &GenOpts::default()).unwrap();
             for x in SHUFFLED {
@@ -122,10 +131,8 @@ mod tests {
             assert!(g.report.contains("structural event edits"));
             for x in SHUFFLED {
                 let it: &str = &g.seed_file.placements[x];
-                assert!(d.item(it).is_some_and(|i| crate::slice::flow_rules::allows(&d, x, i)), "{x} holds {it}");
+                assert!(crate::slice::generate::allowed(&d, &w, &p, w.item(it).unwrap(), w.loc(x).unwrap()), "{x} holds {it}");
             }
-            let medi: &str = &g.seed_file.placements["GC Medigoron"];
-            assert!(d.item(medi).is_some_and(super::pouch), "GC Medigoron holds {medi}");
         }
     }
 

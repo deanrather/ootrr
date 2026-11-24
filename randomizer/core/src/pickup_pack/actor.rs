@@ -20,21 +20,11 @@ pub const SHARED_ANIM: &str = "Item_Common_Animation";
 const ANIM_LIST: &str = "AnimationResources";
 const ANIM_NAME: &str = "ModelProjectName";
 pub const ELINK_REF: &str = "ELinkRef";
-/// The effect and sound link setup every vanilla pickup with an ELinkRef also names
-/// (Component/XLink/ActorBasic). The pickup base has none, and without it the ELink user never
-/// plays: the glint stayed off with either user.
-pub const XLINK_REF: &str = "XLinkRef";
 /// What a pickup plays on its own: the shared Item_Common set's turn in place, as the game's
 /// fishing pond Heart Piece (Obj_Heart_Piece_MiniGame) does. Without it the item model stands in
 /// its bare pose, centred on the actor, half sunk in the floor, and never turns.
 pub const SPIN: &str = "Rotate_Obj";
 const AUTO_PLAY: &str = "AutoPlayASName";
-/// The effect user the pickups show: the Gold Skulltula token's. Its Wait key plays the token's
-/// glint (Obj_TokenGold_Wait_00) on the bone Skl_Root, which item models have, while Rotate_Obj
-/// plays. The Heart Piece's Wait effect sits on the bone Root, which item models lack, so it
-/// showed nothing (ELink2/elink2.Product.110.belnk.zs).
-pub const GLINT_USER: &str = "Obj_Token_Gold";
-const ELINK_USER: &str = "UserName";
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Made {
@@ -49,9 +39,22 @@ pub fn spin_file(name: &str) -> String {
     format!("Component/ASInfo/{name}.engine__component__ASInfo.bgyml")
 }
 
-/// The pickup's own effect settings, naming [`GLINT_USER`].
-pub fn glint_file(name: &str) -> String {
-    format!("Component/ELink/{name}.engine__component__ELinkParam.bgyml")
+pub fn own_name_ref(name: &str) -> String {
+    format!("?ActorSystem/ActorName/{name}.engine__actor__ActorName.bgyml")
+}
+
+pub const DEAL_PARAM: &str = "SpecialDeal";
+pub const STOCK_PARAM: &str = "EnableStock";
+pub const PLAIN_DEAL: &str = "None";
+
+pub fn deal_of(l: &Layers, name: &str) -> Option<(&'static str, bool)> {
+    if l.own {
+        Some((crate::pickup_pack::rows::QUIET_DEAL, false))
+    } else if name.starts_with(crate::slice::key_spots::DUNGEON_PREFIX) {
+        Some((PLAIN_DEAL, true))
+    } else {
+        None
+    }
 }
 
 pub fn pouch_file(name: &str) -> String {
@@ -163,20 +166,18 @@ pub fn make_with(p: &Pool, s: &Spec, l: &Layers) -> Res<Made> {
         let spin_path: String = spin_file(&s.name);
         comps.set(AS_INFO_REF, Node::Str(local(&spin_path)));
         extra.push((spin_path, Byml { root: spin, version, big: false }.write()?));
-        let mut glint: Node = Node::Map(Vec::new());
-        glint.set(ELINK_USER, Node::Str(GLINT_USER.to_string()));
-        let glint_path: String = glint_file(&s.name);
-        comps.set(ELINK_REF, Node::Str(local(&glint_path)));
-        comps.set(XLINK_REF, Node::Str(need(&donor, DONOR, XLINK_REF)?.to_string()));
-        extra.push((glint_path, Byml { root: glint, version, big: false }.write()?));
     } else {
         comps.set(AS_INFO_REF, Node::Str(need(&donor, DONOR, AS_INFO_REF)?.to_string()));
     }
     comps.set(AS_REF, Node::Str(need(&donor, DONOR, AS_REF)?.to_string()));
-    comps.set(NAME_REF, Node::Str(need(&item, &s.item, NAME_REF)?.to_string()));
+    if l.own || s.name.starts_with(crate::slice::key_spots::DUNGEON_PREFIX) {
+        comps.set(NAME_REF, Node::Str(own_name_ref(&s.name)));
+    } else {
+        comps.set(NAME_REF, Node::Str(need(&item, &s.item, NAME_REF)?.to_string()));
+    }
     match &l.model {
         Some(m) => {
-            let (r, f, b): (String, String, Vec<u8>) = model::anim(&s.name, version)?;
+            let (r, f, b): (String, String, Vec<u8>) = model::anim(&s.name, version, l.pose.as_deref())?;
             comps.set(ANIM_REF, Node::Str(r));
             comps.set(MODEL_REF, Node::Str(model::model_ref(p, m)?));
             extra.push((f, b));
@@ -203,11 +204,23 @@ pub fn make_with(p: &Pool, s: &Spec, l: &Layers) -> Res<Made> {
     actor.set(COMPONENTS, comps);
     let mut pouch: Node = Node::Map(Vec::new());
     pouch.set(PARENT, Node::Str(work(&item_pouch)));
-    let who: String = identity(p, s, &item, &item_pouch)?;
+    // Goron's Bracelet saves under its armor actor, as the shop shelf does (crate::shelf::actor).
+    let who: String = if l.own || s.name.starts_with(crate::slice::key_spots::DUNGEON_PREFIX) {
+        s.name.clone()
+    } else {
+        crate::shelf::actor::shelf_identity(&identity(p, s, &item, &item_pouch)?).to_string()
+    };
     pouch.set(POUCH_ACTOR, Node::Str(work(&actor_file(&who))));
     pouch.set(FIRST_CHECK, Node::Bool(false));
     if s.style == Style::Touch {
         pouch.set(AUTO_GET, Node::Bool(true));
+    }
+    if let Some((deal, stock)) = deal_of(l, &s.name) {
+        pouch.set(DEAL_PARAM, Node::U32(crate::flags::hash_name(deal)));
+        pouch.set(STOCK_PARAM, Node::Bool(stock));
+        for k in [crate::pickup_pack::kit::MANY, crate::pickup_pack::kit::AT_MAX] {
+            pouch.set(k, Node::Bool(true));
+        }
     }
     Ok(Made {
         actor: (actor_file(&s.name), Byml { root: actor, version, big: false }.write()?),
@@ -272,7 +285,7 @@ pub(crate) mod tests {
                         (AS_REF, "?AS/Item_Common.root.asb"),
                         (ATTENTION_REF, "?Component/Attention/Press.game__component__AttentionSenderParam.bgyml"),
                         (NAME_REF, "?ActorSystem/ActorName/Item_Arrow_Fire.engine__actor__ActorName.bgyml"),
-                        (XLINK_REF, "?Component/XLink/ActorBasic.engine__component__XLinkParam.bgyml"),
+                        ("XLinkRef", "?Component/XLink/ActorBasic.engine__component__XLinkParam.bgyml"),
                     ]),
                 ),
             ]),
@@ -335,6 +348,28 @@ pub(crate) mod tests {
         assert_eq!(y.root.get(FIRST_CHECK), Some(&Node::Bool(false)));
         assert_eq!(y.root.get(AUTO_GET), Some(&Node::Bool(true)));
         assert_eq!(y.root.get("SpecialDeal"), None);
+        assert_eq!(y.root.get(crate::pickup_pack::kit::AT_MAX), None);
+    }
+
+    fn pouch_of(name: &str, l: &Layers) -> Byml {
+        let s: Spec = Spec { name: name.to_string(), ..spec(Style::Touch) };
+        Byml::parse(&make_with(&pool(), &s, l).unwrap().pouch.1).unwrap()
+    }
+
+    #[test]
+    fn a_dungeon_item_pack_deals_as_its_pouch_row_says_and_always_plays_its_get() {
+        let own: Layers = Layers { own: true, ..Layers::default() };
+        let cases: [(&str, &Layers, &str, bool); 2] = [("Obj_SmallKey_ForestTemple", &own, "NotPushToPouch", false), ("Obj_OOTRR_SmallKey_ForestTemple", &Layers::default(), "None", true)];
+        for (name, l, deal, stock) in cases {
+            let y: Byml = pouch_of(name, l);
+            assert_eq!(y.root.get(DEAL_PARAM), Some(&Node::U32(crate::flags::hash_name(deal))), "{name}");
+            assert_eq!(y.root.get(STOCK_PARAM), Some(&Node::Bool(stock)), "{name}");
+            for k in [crate::pickup_pack::kit::MANY, crate::pickup_pack::kit::AT_MAX] {
+                assert_eq!(y.root.get(k), Some(&Node::Bool(true)), "{name} {k}");
+            }
+        }
+        assert_eq!(crate::flags::hash_name("SmallKey"), 2499381459);
+        assert_eq!(crate::flags::hash_name("NotPushToPouch"), 2292023464);
     }
 
     #[test]
@@ -410,21 +445,20 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn the_spin_layer_plays_the_turn_and_names_the_token_glint() {
+    fn the_spin_layer_plays_the_turn_and_adds_no_effect() {
         let on: Layers = Layers { spin: true, ..Layers::default() };
         let m: Made = make_with(&pool(), &spec(Style::Touch), &on).unwrap();
-        assert_eq!(m.extra.iter().map(|e| e.0.clone()).collect::<Vec<String>>(), vec![spin_file("Obj_Test"), glint_file("Obj_Test")]);
+        assert_eq!(m.extra.iter().map(|e| e.0.clone()).collect::<Vec<String>>(), vec![spin_file("Obj_Test")]);
         let y: Byml = Byml::parse(&m.actor.1).unwrap();
         let c: &Node = y.root.get(COMPONENTS).unwrap();
         let text = |k: &str| c.get(k).and_then(|v| v.as_str()).map(|x| x.to_string());
         assert_eq!(text(AS_INFO_REF).as_deref(), Some("?Component/ASInfo/Obj_Test.engine__component__ASInfo.bgyml"));
-        assert_eq!(text(ELINK_REF).as_deref(), Some("?Component/ELink/Obj_Test.engine__component__ELinkParam.bgyml"));
-        assert_eq!(text(XLINK_REF).as_deref(), Some("?Component/XLink/ActorBasic.engine__component__XLinkParam.bgyml"));
+        assert_eq!(text(ELINK_REF), None);
+        assert_eq!(text("XLinkRef"), None);
         let own = |f: &str| -> Byml { Byml::parse(&m.extra.iter().find(|e| e.0 == f).unwrap().1).unwrap() };
         let spin: Byml = own(&spin_file("Obj_Test"));
         assert_eq!(spin.root.get(PARENT).and_then(|v| v.as_str()), Some("Work/Component/ASInfo/Item_Obj.engine__component__ASInfo.gyml"));
         assert_eq!(spin.root.get(AUTO_PLAY).and_then(|v| v.as_str()), Some(SPIN));
-        assert_eq!(own(&glint_file("Obj_Test")).root.get(ELINK_USER).and_then(|v| v.as_str()), Some(GLINT_USER));
     }
 
     #[test]
@@ -439,3 +473,5 @@ pub(crate) mod tests {
         assert!(make_with(&p, &spec(Style::Touch), &on).is_err());
     }
 }
+
+

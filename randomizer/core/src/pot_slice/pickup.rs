@@ -1,4 +1,4 @@
-pub const PICKUPS: [(&str, &str); 28] = [
+pub const PICKUPS: [(&str, &str); 31] = [
     ("Rupee (1)", "Obj_Rupee_Green"),
     ("Rupees (5)", "Obj_Rupee_Blue"),
     ("Rupees (20)", "Obj_Rupee_Red"),
@@ -25,8 +25,11 @@ pub const PICKUPS: [(&str, &str); 28] = [
     ("Heart Container", "Obj_Heart_Container"),
     ("Piece of Heart", "Obj_Heart_Piece"),
     ("Piece of Heart (Out of Logic)", "Obj_Heart_Piece"),
+    ("Piece of Heart (Treasure Chest Game)", "Obj_Heart_Piece"),
     ("Bombchus (5)", "Obj_Bombchu"),
     ("Gold Skulltula Token", "Obj_Token_Gold"),
+    ("Business Scrub Seed", "Obj_ScrubBusinessSeed"),
+    ("Magic Jar (Large)", "Obj_MagicJar_Large"),
 ];
 
 pub const TOKEN: &str = "Obj_Token_Gold";
@@ -79,7 +82,7 @@ mod tests {
     fn unlisted_items_have_no_pickup() {
         assert_eq!(of("Hookshot"), None);
         assert_eq!(of("Nothing"), None);
-        assert_eq!(of("Piece of Heart (Treasure Chest Game)"), None);
+        assert_eq!(of("Piece of Heart (Treasure Chest Game)"), Some("Obj_Heart_Piece"));
         assert_eq!(shipped_kit("Piece of Heart"), Some("Obj_Heart_Piece"));
         assert_eq!(of("Ocarina"), None);
         assert_eq!(of("Fire Arrows"), Some("Obj_Arrow_Fire"));

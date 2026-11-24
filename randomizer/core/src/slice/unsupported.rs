@@ -23,7 +23,7 @@ pub(crate) const UNCHANGED: [&str; 19] = [
     "ganon_bosskey_hearts",
 ];
 
-pub(crate) const APPLIED: [&str; 5] = ["starting_hearts", "starting_songs", "bridge", "bridge_rewards", "trials"];
+pub(crate) const APPLIED: [&str; 6] = ["starting_hearts", "starting_songs", "bridge", "bridge_rewards", "bridge_medallions", "trials"];
 
 pub fn not_yet(id: &str) -> bool {
     UNCHANGED.contains(&id) && !APPLIED.contains(&id)

@@ -131,6 +131,10 @@ pub fn spec(item: &str, a: &[String]) -> Res<(Spec, Layers)> {
                 l.magic = true;
                 1
             }
+            ("--own", _) => {
+                l.own = true;
+                1
+            }
             ("--host", Some(_)) => 2,
             ("--name", Some(v)) => {
                 s.name = v.to_string();
@@ -207,21 +211,29 @@ mod tests {
         let all: Vec<Entry> = load().unwrap();
         assert!(all.len() >= 60, "{}", all.len());
         for e in &all {
-            assert!(["A", "B", "C", "D", "E", "S"].contains(&e.group.as_str()), "{}", e.item);
+            assert!(["A", "B", "C", "D", "E", "F", "S"].contains(&e.group.as_str()), "{}", e.item);
             for (a, st) in e.builds() {
                 if !st.ready() {
                     continue;
                 }
                 let (s, _): (Spec, Layers) = spec(&e.item, a).unwrap();
                 assert_eq!(Some(&s.name), e.pack.as_ref(), "{}", e.item);
-                assert!(s.item.starts_with("Item_"), "{}", e.item);
+                // Group F adds the chest ammo bundles, whose item actors are TBox_ (or Tbox_) rather than Item_.
+                assert!(["Item_", "TBox_", "Tbox_"].iter().any(|p| s.item.starts_with(p)), "{}", e.item);
+                assert!(crate::pickup_pack::is_actor_name(&s.name), "{}", e.item);
             }
         }
         let n: usize = all.iter().filter(|e| e.status == Status::Built).count();
         assert!(n >= 50, "{n}");
+        // The placement sweep writes Goron's Bracelet under its armor actor, where its save flags live, and lifts the flag.
         let goron: &Entry = all.iter().find(|e| e.item == "Item_Gauntlet_Goron").unwrap();
-        assert_eq!(goron.flag.as_deref(), Some("in_game_first"));
-        assert_eq!(goron.identity.as_deref(), Some("Item_Gauntlet_Goron"));
+        assert_eq!(goron.flag, None);
+        assert_eq!(goron.identity.as_deref(), Some(crate::shelf::actor::shelf_identity("Item_Gauntlet_Goron")));
+        assert_eq!(goron.identity.as_deref(), Some("Armor_Child_Gauntlet_Goron"));
+        // Every placement sweep (group F) entry is built and names its pack and identity.
+        let swept: Vec<&Entry> = all.iter().filter(|e| e.group == "F").collect();
+        assert!(swept.len() >= 20, "{}", swept.len());
+        assert!(swept.iter().all(|e| e.status == Status::Built && e.pack.is_some() && e.identity.is_some()));
     }
 
     #[test]
@@ -231,7 +243,7 @@ mod tests {
         assert!(l.plain());
         let (s, l): (Spec, Layers) = spec("Item_Bottle_Letter", &strs(&["--name", "Obj_Bottle_LetterLand", "--tag", "LetterBottle", "--tag", "LetterBottle"])).unwrap();
         assert_eq!(s.name, "Obj_Bottle_LetterLand");
-        assert_eq!(l, Layers { tags: strs(&["LetterBottle"]), ammo: false, magic: false, model: None, spin: false, lift: 0 });
+        assert_eq!(l, Layers { tags: strs(&["LetterBottle"]), ammo: false, magic: false, model: None, spin: false, lift: 0, own: false, pose: None });
         let (s, l): (Spec, Layers) = spec("Item_Range_Bow", &strs(&["--ammo", "--magic", "--press"])).unwrap();
         assert_eq!(s.style, Style::Press);
         assert!(l.ammo && l.magic);

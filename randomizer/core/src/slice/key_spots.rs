@@ -16,7 +16,7 @@ pub const REFUSED: [&str; 2] = ["in_game_first", "not_for_placement"];
 pub const AMMO: &str = "--ammo";
 pub const SHIELDS: [(&str, &str); 2] = [("Deku Shield", "Obj_Shield_Deku"), ("Hylian Shield", "Obj_Shield_Hylian")];
 pub const LOST: &str = "A shuffled pot, crate, flying pot, beehive, rock or grass tuft gives its item once and stays used in the save from the moment it breaks. An item you do not pick up is lost, also when it falls into a pit or lands out of reach, and a lost key item can make the seed unbeatable. Save before breaking holders that may hold key items. Experimental, untested in the game.";
-pub const NOTE: &str = "Key items can sit at shuffled pickup spots. Every item whose pickup pack is built can lie on the ground, sit in a pot, a crate, a flying pot or a beehive, under a rock, in a grass tuft or at a Gold Skulltula, the seed build writes those packs into the mod. Upgrade tiers at these spots always go low to high in the order the player can reach them, and nut and stick capacity there is always the top tier. A spot that exists once per age only takes items that do no harm when found twice, such as rupees, hearts, ammo and gear that a second copy does not change.";
+pub const NOTE: &str = "Key items can sit at shuffled pickup spots. Every item whose pickup pack is built can lie on the ground, sit in a pot, a crate, a flying pot or a beehive, under a rock, in a grass tuft or at a Gold Skulltula, the seed build writes those packs into the mod. An upgrade picked up at these spots gives the next tier you do not have yet, whatever tier its model shows, and the get window names the tier you get (untested in the game). A spot that exists once per age only takes items that do no harm when found twice, such as rupees, hearts, ammo and gear that a second copy does not change.";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Spot {
@@ -69,7 +69,8 @@ fn entries() -> &'static [Entry] {
 }
 
 pub fn chosen(e: &Entry) -> Option<Vec<String>> {
-    if e.flag.as_deref().is_some_and(|f| REFUSED.contains(&f)) || !e.item.starts_with("Item_") {
+    let actor: bool = e.item.starts_with("Item_") || e.item.starts_with("TBox_") || e.item.starts_with("Tbox_");
+    if e.flag.as_deref().is_some_and(|f| REFUSED.contains(&f)) || !actor {
         return None;
     }
     let ammo: Option<&catalog::Variant> = e.variants.iter().find(|v| v.status == Status::Built && v.args.iter().any(|a| a == AMMO));
@@ -96,8 +97,48 @@ fn picks() -> &'static BM<String, Pick> {
     M.get_or_init(|| entries().iter().filter_map(|e| pick_in(entries(), &e.item)).map(|p| (p.content.clone(), p)).collect())
 }
 
+pub const DUNGEON_PREFIX: &str = "Obj_OOTRR_";
+
+pub fn dungeon_pick(d: &Data, item: &str) -> Option<Pick> {
+    let i: &Item = d.item(item)?;
+    let dungeon: &str = i.dungeon.as_deref().and_then(crate::dungeon_grant::struct_of)?;
+    let tag: &str = match i.kind.as_str() {
+        "SmallKey" | "HideoutSmallKey" => "SmallKey",
+        "BossKey" | "GanonBossKey" => "BossKey",
+        "Map" => "Map",
+        "Compass" => "Compass",
+        _ => return None,
+    };
+    let actor: String = i.actor.clone()?;
+    let name: String = format!("{DUNGEON_PREFIX}{tag}_{dungeon}");
+    // Pressed, so its get runs the Dm_SY_Get add that the key sweep follows
+    // (crate::debug_names::key_sweep_after_add). A skulltula kit is always taken by touch.
+    Some(Pick { content: actor, pack: name.clone(), args: vec!["--name".to_string(), name, "--heap".to_string(), "199928".to_string(), "--press".to_string()] })
+}
+
+/// The same pick taken by touch, as a skulltula kit must be.
+pub fn touch(mut p: Pick) -> Pick {
+    p.args.retain(|a| a != "--press");
+    p
+}
+
 pub fn pick(content: &str) -> Option<Pick> {
     picks().get(content).cloned()
+}
+
+/// The pick a Gold Skulltula or holder kit can carry: the chosen build when its layers fit a kit,
+/// otherwise the entry's plain build (no ammo, magic or tag layer).
+pub fn kit_pick(content: &str) -> Option<Pick> {
+    let p: Pick = pick(content)?;
+    if p.kit_spec().is_ok() {
+        return Some(p);
+    }
+    let e: &Entry = entries().iter().find(|e| e.item == content)?;
+    if !e.status.ready() {
+        return None;
+    }
+    let plain: Pick = Pick { content: content.to_string(), pack: p.pack.clone(), args: e.args.clone() };
+    plain.kit_spec().is_ok().then_some(plain)
 }
 
 /// The pick that builds the pickup pack `pack`.
@@ -113,7 +154,8 @@ pub fn contents(d: &Data, item: &str) -> Vec<String> {
     let Some(i) = d.item(item) else {
         return Vec::new();
     };
-    if NEVER.contains(&item) || !(i.kind == "Item" || crate::slice::song_spots::is_song_item(i)) || i.dungeon.is_some() {
+    let kind: bool = matches!(i.kind.as_str(), "Item" | "DungeonReward" | "Token") || crate::slice::song_spots::is_song_item(i);
+    if NEVER.contains(&item) || !kind || i.dungeon.is_some() {
         return Vec::new();
     }
     match family(i) {
@@ -138,13 +180,15 @@ pub fn placeable(d: &Data, item: &str, at: Spot) -> bool {
 }
 
 fn judge(d: &Data, item: &str, at: Spot) -> bool {
+    if at != Spot::Skull && crate::dungeon_packs::of(d, item).is_some() {
+        return true;
+    }
+    if let Some(p) = dungeon_pick(d, item) {
+        return at == Spot::Free || touch(p).kit_spec().is_ok();
+    }
     let cs: Vec<String> = contents(d, item);
     !cs.is_empty()
-        && cs.iter().all(|c| match pick(c) {
-            Some(p) if at != Spot::Free => p.kit_spec().is_ok(),
-            Some(_) => true,
-            None => false,
-        })
+        && cs.iter().all(|c| if at == Spot::Free { pick(c).is_some() } else { kit_pick(c).is_some() })
 }
 
 pub fn shield(item: &str) -> Option<&'static str> {
@@ -157,6 +201,9 @@ pub fn top_only(d: &Data, item: &str) -> bool {
 
 pub fn resolve(d: &Data, item: &str, tier: Option<&str>) -> Res<Pick> {
     let i: &Item = d.item(item).ok_or_else(|| E::Msg(format!("unknown item {item}")))?;
+    if let Some(p) = crate::dungeon_packs::of_item(i) {
+        return Ok(p.pick());
+    }
     let content: String = match (tier, family(i)) {
         (Some(t), _) => t.to_string(),
         (None, Some(f)) if TOP_ONLY.contains(&f) => i.tiers.last().cloned().unwrap_or_default(),
@@ -167,6 +214,17 @@ pub fn resolve(d: &Data, item: &str, tier: Option<&str>) -> Res<Pick> {
         return Err(E::Msg(format!("{item} as {content} has no pickup pack this build can place yet")));
     }
     pick(&content).ok_or_else(|| E::Msg(format!("{item} has no pickup pack this build can place yet ({content})")))
+}
+
+/// resolve for a kit spot (a Gold Skulltula drop or a holder): the kit-capable build.
+pub fn resolve_kit(d: &Data, item: &str, tier: Option<&str>) -> Res<Pick> {
+    if let Some(p) = dungeon_pick(d, item) {
+        let p: Pick = touch(p);
+        p.kit_spec()?;
+        return Ok(p);
+    }
+    let p: Pick = resolve(d, item, tier)?;
+    kit_pick(&p.content).ok_or_else(|| E::Msg(format!("{item} has no pickup pack a kit can carry ({})", p.content)))
 }
 
 pub fn top(f: &str) -> Option<&'static str> {
@@ -260,12 +318,19 @@ mod tests {
         assert!(bow.spec().unwrap().1.ammo);
         assert!(pick("Item_Range_SlingShot").unwrap().spec().unwrap().1.ammo);
         assert_eq!(pick("Item_Bottle_Letter").unwrap().pack, "Obj_Bottle_LetterLand");
-        assert!(pick("Item_Gauntlet_Goron").is_none());
+        // Goron's Bracelet saves under its armor actor now, so its in_game_first flag is lifted.
+        assert_eq!(pick("Item_Gauntlet_Goron").map(|p| p.pack), Some("Obj_Gauntlet_Goron".to_string()));
         assert!(pick("Item_NutBag_Medium").is_none());
         assert!(pick("Item_NutBag_Large").is_some());
         assert!(pick("Item_Bombchu").is_none());
-        assert!(pick("Item_BombchuBundle_Small").is_none());
+        // Marked built so a Gold Skulltula can drop Bombchus (5).
+        assert_eq!(pick("Item_BombchuBundle_Small").map(|p| p.pack), Some("Obj_BombchuBundle_Small".to_string()));
         assert!(pick("Item_Shield_Deku").is_none());
+        // The placement sweep packs: renamed ones keep their own name, chest ammo bundles take TBox_ items.
+        assert_eq!(pick("Item_Token_Gold").map(|p| p.pack), Some("Obj_Token_GoldLand".to_string()));
+        assert_eq!(pick("Item_Arrow_Fire").map(|p| p.pack), Some("Obj_Arrow_FireLand".to_string()));
+        assert_eq!(pick("TBox_ArrowBundle_Medium").map(|p| p.pack), Some("Obj_TBox_ArrowBundle_Medium".to_string()));
+        assert_eq!(pick("Item_Medal_Light").map(|p| p.pack), Some("Obj_Medal_Light".to_string()));
         assert_eq!(pick("Item_Ocarina_Fairy").map(|p| p.pack), Some("Obj_Ocarina_Fairy".to_string()));
         assert_eq!(pick("Item_Ocarina_Time").map(|p| p.pack), Some("Obj_Ocarina_TimeLand".to_string()));
         assert!(pick("Item_Nothing").is_none());
@@ -310,16 +375,34 @@ mod tests {
                 assert!(placeable(&d, item, at) || (at == Spot::Pot && crate::pot_slice::pickup::holds(item)), "{item} {at:?}");
             }
         }
-        assert!(!placeable(&d, "Bow", Spot::Skull));
-        assert!(!placeable(&d, "Slingshot", Spot::Skull));
+        // A skulltula kit cannot carry the ammo layer, so the Bow and Slingshot kits fall back to the
+        // plain build (the starter bag hook adds the bag after the pickup's get).
+        assert!(placeable(&d, "Bow", Spot::Skull));
+        assert!(placeable(&d, "Slingshot", Spot::Skull));
+        assert!(pick("Item_Range_Bow").unwrap().kit_spec().is_err());
+        assert!(!kit_pick("Item_Range_Bow").unwrap().args.iter().any(|a| a == AMMO));
+        assert_eq!(resolve_kit(&d, "Bow", Some("Item_Range_Bow")).unwrap().hang(), "Obj_Range_Bow_GH");
+        // The letter's built entry carries the LetterBottle tag, which a kit cannot carry, so it stays off skulltulas.
         assert!(!placeable(&d, "Rutos Letter", Spot::Skull));
         assert!(placeable(&d, "Rutos Letter", Spot::Free));
         assert!(placeable(&d, "Progressive Hookshot", Spot::Skull));
-        assert!(!placeable(&d, "Progressive Strength Upgrade", Spot::Free));
+        // Goron's Bracelet has a pack now, so every strength tier can lie anywhere.
+        for at in [Spot::Free, Spot::Pot, Spot::Skull] {
+            assert!(placeable(&d, "Progressive Strength Upgrade", at), "{at:?}");
+        }
         assert!(placeable(&d, "Ocarina", Spot::Free) && placeable(&d, "Ocarina", Spot::Skull));
         assert!(!placeable(&d, "Milk", Spot::Free));
-        assert!(!placeable(&d, "Small Key (Forest Temple)", Spot::Free));
+        for at in [Spot::Free, Spot::Pot, Spot::Skull] {
+            assert!(placeable(&d, "Small Key (Forest Temple)", at), "{at:?}");
+        }
+        let key: Pick = resolve(&d, "Small Key (Forest Temple)", None).unwrap();
+        assert_eq!(key.pack, "Obj_SmallKey_ForestTemple");
+        assert!(key.args.iter().any(|a| a == "--own"));
+        let kit: Pick = resolve_kit(&d, "Small Key (Forest Temple)", None).unwrap();
+        assert_eq!(kit.pack, format!("{DUNGEON_PREFIX}SmallKey_ForestTemple"));
+        assert!(!kit.args.iter().any(|a| a == "--press"));
         assert!(!placeable(&d, "Rupees (5)", Spot::Free));
+        assert!(!placeable(&d, "Bunny Hood", Spot::Free));
         assert!(placeable(&d, "Deku Nut Capacity", Spot::Pot));
         assert_eq!(contents(&d, "Deku Nut Capacity"), vec!["Item_NutBag_Large".to_string()]);
         assert_eq!(resolve(&d, "Deku Stick Capacity", None).unwrap().pack, "Obj_StickBag_Large");
@@ -342,3 +425,4 @@ mod tests {
         assert!(pick("Item_Range_Bow").unwrap().kit_spec().is_err());
     }
 }
+

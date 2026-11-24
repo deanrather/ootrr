@@ -4,14 +4,14 @@
         "scene": "Zoras Fountain",
         "hint": "ZORAS_FOUNTAIN",
         "locations": {
-            "ZF Scarecrow Ledge Chest": "is_adult and can_blast_or_smash and can_use(Hookshot)",
+            "ZF Scarecrow Ledge Chest": "is_adult and can_use(Scarecrow)",
             "ZF Iceberg Freestanding PoH": "is_adult",
             "ZF Near Jabu Pot 1": "is_child",
             "ZF Near Jabu Pot 2": "is_child",
             "ZF Near Jabu Pot 3": "is_child",
             "ZF Near Jabu Pot 4": "is_child",
             "ZF GS Tree": "is_child and can_bonk",
-            "ZF GS Above the Log": "can_use(Boomerang) and (at_night or gold_skulls_ignore_daytime)",
+            "ZF GS Above the Log": "can_use(Boomerang) and can_get_night_gs",
             "ZF Fairy Gossip Stone": "True",
             "ZF Jabu Gossip Stone": "True",
             "Gossip Stone Fairy": "can_summon_gossip_fairy_without_suns and has_bottle",
@@ -60,7 +60,7 @@
             "ZF Hidden Cave Pot 1": "True",
             "ZF Hidden Cave Pot 2": "True",
             "ZF Hidden Cave Pot 3": "True",
-            "ZF GS Hidden Cave": "Hookshot and (at_night or gold_skulls_ignore_daytime)"
+            "ZF GS Hidden Cave": "Hookshot and can_get_night_gs"
         }
     },
     {
@@ -76,14 +76,14 @@
         "region_name": "ZD Shop",
         "scene": "ZD Shop",
         "locations": {
-            "ZD Shop Item 1": "True",
-            "ZD Shop Item 2": "True",
-            "ZD Shop Item 3": "True",
-            "ZD Shop Item 4": "True",
-            "ZD Shop Item 5": "True",
-            "ZD Shop Item 6": "True",
-            "ZD Shop Item 7": "True",
-            "ZD Shop Item 8": "True"
+            "ZD Shop Left Side Bottom Right": "True",
+            "ZD Shop Right Side Top Left": "True",
+            "ZD Shop Left Side Top Right": "True",
+            "ZD Shop Right Side Top Right": "True",
+            "ZD Shop Left Side Bottom Left": "True",
+            "ZD Shop Right Side Bottom Right": "True",
+            "ZD Shop Right Side Bottom Left": "True",
+            "ZD Shop Left Side Top Left": "True"
         },
         "exits": {
             "Zoras Domain": "True"

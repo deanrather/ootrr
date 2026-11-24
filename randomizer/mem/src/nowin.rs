@@ -27,6 +27,10 @@ impl Proc {
         false
     }
 
+    pub fn write(&self, _at: u64, _b: &[u8]) -> bool {
+        false
+    }
+
     pub fn query(&self, _at: u64) -> Option<Region> {
         None
     }

@@ -26,7 +26,7 @@ pub struct Ctx<'a> {
 
 pub type Stage = fn(&mut Romfs, &Ctx, &mut Vec<Out>) -> Res<()>;
 
-pub const STAGES: [(&str, Stage); 26] = [
+pub const STAGES: [(&str, Stage); 27] = [
     ("boss heart chests", boss_hearts),
     ("songs", songs),
     ("song models", song_models),
@@ -53,7 +53,12 @@ pub const STAGES: [(&str, Stage); 26] = [
     ("start defaults", start_defaults),
     ("scrub rows", scrub_rows),
     ("debug location names", debug_names),
+    ("threads of time keys", key_log),
 ];
+
+fn key_log(rf: &mut Romfs, c: &Ctx, more: &mut Vec<Out>) -> Res<()> {
+    crate::key_log::stage(rf, more, &crate::key_log::plan(c.d, c.seed)?)
+}
 
 pub fn run(rf: &mut Romfs, c: &Ctx, more: &mut Vec<Out>) -> Res<()> {
     for (_, s) in STAGES {
@@ -91,7 +96,8 @@ fn hints(rf: &mut Romfs, c: &Ctx, more: &mut Vec<Out>) -> Res<()> {
 }
 
 fn dungeon_text(rf: &mut Romfs, c: &Ctx, more: &mut Vec<Out>) -> Res<()> {
-    crate::dungeon_grant::stage_text(rf, more, c.marked)
+    crate::dungeon_grant::stage_text(rf, more, c.marked)?;
+    crate::dungeon_packs::stage_text(rf, more, &crate::dungeon_packs::placed(c.d, c.seed))
 }
 
 fn scrub_hints(rf: &mut Romfs, c: &Ctx, more: &mut Vec<Out>) -> Res<()> {
@@ -222,6 +228,7 @@ fn start_defaults(rf: &mut Romfs, c: &Ctx, more: &mut Vec<Out>) -> Res<()> {
     }
     edits.extend(crate::gerudo_card::exps());
     edits.extend(crate::open_world::fortress::exps());
+    edits.extend(crate::open_world::trade::edits());
     edits.extend(c.p.trials.edits());
     c.p.trials.stage(rf, more, c.work)?;
     if let Some(n) = c.p.rainbow {
@@ -233,6 +240,9 @@ fn start_defaults(rf: &mut Romfs, c: &Ctx, more: &mut Vec<Out>) -> Res<()> {
     }
     if c.p.prelude && !c.p.rewards.dungeon_rewards {
         edits.push(crate::prelude_gate::exp());
+    }
+    if c.p.qol.fast_session {
+        edits.extend(crate::qol::skull_kid_session::defaults());
     }
     edits.push(crate::always::exp());
     crate::start_defaults::stage(rf, more, &edits)

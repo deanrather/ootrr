@@ -37,7 +37,33 @@ const EXISTS: &str = "EventQueryIsExistInPouch";
 const HOLDER: &str = "GameDataActor";
 const ROOT_ENTRY: &str = "Success_";
 const GUARD: &str = "AmmoGuard_";
-pub const NO_BAG: &str = "TBox_Rupee_Green";
+/// What ammo gives to a player without its bag: a Blue Rupee get, then 5 rupees more
+/// (NO_BAG_EXTRA), 10 rupees in all.
+pub const NO_BAG: &str = "TBox_Rupee_Blue";
+pub const NO_BAG_EXTRA: i32 = 5;
+
+/// The event after the extra rupees of a no-bag give, when `at` is that event; `at` otherwise.
+pub fn skip_extra_rupees(f: &Flow, at: u16) -> u16 {
+    if at == NONE {
+        return at;
+    }
+    match f.events.get(usize::from(at)).map(|e| &e.kind) {
+        Some(Kind::Action { next, actor, act, params }) => {
+            let a = f.actors.get(usize::from(*actor));
+            let rupee: bool = a.is_some_and(|a| a.name == "PouchSystemActor" && a.actions.get(usize::from(*act)).is_some_and(|x| x == "EventTriggerIncreaseRupee"));
+            let ours: bool = params.as_ref().is_some_and(|c| c.items.iter().any(|(k, v)| k == "Value" && *v == Val::Int(NO_BAG_EXTRA)));
+            if rupee && ours { *next } else { at }
+        }
+        _ => at,
+    }
+}
+
+/// Runs `then` after the extra rupees of a no-bag give: PouchSystemActor.EventTriggerIncreaseRupee.
+fn extra_rupees(f: &mut Flow, then: u16) -> Res<u16> {
+    let (a, x): (u16, u16) = crate::dungeon_credit::action_slot(f, "PouchSystemActor", "EventTriggerIncreaseRupee")?;
+    let c: Cont = Cont { items: vec![("Value".to_string(), Val::Int(NO_BAG_EXTRA))] };
+    push(f, Kind::Action { next: then, actor: a, act: x, params: Some(c) })
+}
 const BOMB_BAGS: &[&str] = &["Item_BombBag_Small", "Item_BombBag_Medium", "Item_BombBag_Large"];
 const QUIVERS: &[&str] = &["Item_Quiver_Small", "Item_Quiver_Medium", "Item_Quiver_Large"];
 const BULLET_BAGS: &[&str] = &["Item_BulletBag_Small", "Item_BulletBag_Medium", "Item_BulletBag_Large"];
@@ -202,7 +228,13 @@ pub fn wrap(f: &mut Flow, family: &str) -> Res<()> {
     let (a, q) = ensure_query(f)?;
     let mut subs: Vec<u16> = Vec::new();
     for x in t {
-        subs.push(give(f, x)?);
+        let form: String = crate::ocarina_hold::chest_form(x);
+        let at: u16 = give(f, &form)?;
+        if form != *x {
+            let added: u16 = crate::ocarina_hold::after(f, x, NONE)?;
+            set_next(&mut f.events[usize::from(at)].kind, added)?;
+        }
+        subs.push(at);
     }
     let root: Kind = chain(f, a, q, family, o, &subs)?;
     let main: u16 = push(f, root)?;
@@ -237,6 +269,10 @@ pub fn guard(f: &mut Flow, actor: &str) -> Res<()> {
     let (a, q) = ensure_query(f)?;
     let keep: u16 = give(f, actor)?;
     let none: u16 = give(f, NO_BAG)?;
+    let more: u16 = extra_rupees(f, NONE)?;
+    if let Kind::Sub { next, .. } = &mut f.events[usize::from(none)].kind {
+        *next = more;
+    }
     let mut at: u16 = none;
     for owner in bags {
         let c: Cont = Cont { items: vec![("ActorName".to_string(), Val::Str(owner.to_string()))] };
@@ -426,7 +462,17 @@ pub fn ammo_guard(f: &mut Flow, index: usize, event: &str, param: &str) -> Res<b
     let Some(bags) = actor.as_deref().and_then(bags_of) else {
         return Ok(false);
     };
-    let rupee: Kind = with_param(&kept, param, NO_BAG)?;
+    let mut rupee: Kind = with_param(&kept, param, NO_BAG)?;
+    let then: Option<u16> = match &rupee {
+        Kind::Action { next, .. } | Kind::Sub { next, .. } => Some(*next),
+        _ => None,
+    };
+    if let Some(t) = then {
+        let more: u16 = extra_rupees(f, t)?;
+        if let Kind::Action { next, .. } | Kind::Sub { next, .. } = &mut rupee {
+            *next = more;
+        }
+    }
     let (a, q) = ensure_query(f)?;
     let keep: u16 = push(f, kept)?;
     let none: u16 = push(f, rupee)?;
@@ -558,10 +604,14 @@ pub fn edit_chest(y: &mut Byml, hash: u64, drop: &str, event: &str) -> Option<Si
         let Some(d) = a.get_mut("Dynamic") else {
             continue;
         };
-        if d.get("Drop__DropActor").is_none() {
+        // A chest without the drop field gives its actor's default (banc::DEFAULT_DROPS).
+        if d.get("Drop__DropActor").is_none() && crate::slice::banc::default_drop(hash).is_none() {
             continue;
         }
         d.set("Drop__DropActor", Node::Str(drop.to_string()));
+        if d.get("Drop__DropActor_Substitute").is_some() {
+            d.set("Drop__DropActor_Substitute", Node::Str(drop.to_string()));
+        }
         d.set("GetEventName", Node::Str(event.to_string()));
         out = Some(Size::of_gyaml(&g));
     }
@@ -765,6 +815,28 @@ mod tests {
         assert_eq!((*actor, *query), (1, 1));
         assert_eq!(cases, &vec![Case { val: 0, ev: 1 }, Case { val: 1, ev: 0 }]);
         assert_eq!(params.as_ref().and_then(|c| c.get("ActorName")), Some(&Val::Str("Item_Hookshot".to_string())));
+    }
+
+    #[test]
+    fn an_ocarina_chest_hands_out_the_pickup_then_adds_and_equips_the_tier() {
+        let mut f: Flow = flow();
+        wrap(&mut f, "Ocarina").unwrap();
+        let e: &Entry = f.entries.iter().find(|e| e.name == "Success_Prog_Ocarina").unwrap();
+        for (sub, (form, tier)) in e.subs.iter().zip([("Obj_Ocarina_Fairy", "Item_Ocarina_Fairy"), ("Obj_Ocarina_TimeLand", "Item_Ocarina_Time")]) {
+            let Kind::Sub { next, params, .. } = &f.events[usize::from(*sub)].kind else {
+                panic!("expected the Success_ call");
+            };
+            assert_eq!(params.as_ref().and_then(|c| c.get("ContentName")), Some(&Val::Str(form.to_string())));
+            let add = &f.events[usize::from(*next)].kind;
+            assert_eq!(add.params().and_then(|c| c.get("Actor")), Some(&Val::Str(tier.to_string())));
+            let Kind::Action { next: equip, .. } = add else {
+                panic!("expected the pouch add");
+            };
+            let eq = &f.events[usize::from(*equip)].kind;
+            assert_eq!(eq.params().and_then(|c| c.get("GameDataName")), Some(&Val::Str(crate::ocarina_hold::EQUIP.to_string())));
+            assert_eq!(eq.params().and_then(|c| c.get("Value")), Some(&Val::Str(tier.to_string())));
+            assert!(matches!(eq, Kind::Action { next: NONE, .. }));
+        }
     }
 
     #[test]
@@ -1009,8 +1081,9 @@ mod tests {
         for (item, bag) in [("Item_BombBundle_Small", "Item_BombBag_Medium"), ("Item_Bomb", "Item_BombBag_Small"), ("TBox_ArrowBundle_Large", "Item_Quiver_Large"), ("TBox_DekuSeedBundle", "Item_BulletBag_Small")] {
             let mut f: Flow = prize_flow(item, ("Dm_SY_GetInEvent", "GetInEvent_NotTurn"));
             assert!(ammo_guard(&mut f, 0, "Event378", "ReveiveItem").unwrap());
-            assert_eq!(f.entries[0].subs, vec![1, 2]);
-            let pick = |owned: &[&str]| -> String {
+            // Event 1 is the extra rupees of the no-bag give, so the kept give and the rupee are 2 and 3.
+            assert_eq!(f.entries[0].subs, vec![2, 3]);
+            let pick = |owned: &[&str]| -> (String, u16) {
                 let mut at: u16 = 0;
                 loop {
                     match &f.events[at as usize].kind {
@@ -1019,16 +1092,19 @@ mod tests {
                             at = cases.iter().find(|c| c.val == if has { 0 } else { 1 }).unwrap().ev;
                         }
                         Kind::Sub { next, params, .. } => {
-                            assert_eq!(*next, 7);
                             let Some(Val::Str(s)) = params.as_ref().and_then(|c| c.get("ReveiveItem")) else { panic!("no item") };
-                            return s.clone();
+                            return (s.clone(), *next);
                         }
                         _ => panic!("unexpected event"),
                     }
                 }
             };
-            assert_eq!(pick(&[]), NO_BAG, "{item}");
-            assert_eq!(pick(&[bag]), item, "{item}");
+            // No bag: the Blue Rupee, then NO_BAG_EXTRA rupees, then on to the vanilla next event.
+            let (rupee, after): (String, u16) = pick(&[]);
+            assert_eq!(rupee, NO_BAG, "{item}");
+            assert_ne!(after, 7, "{item}");
+            assert_eq!(skip_extra_rupees(&f, after), 7, "{item}");
+            assert_eq!(pick(&[bag]), (item.to_string(), 7), "{item}");
             let before: Flow = f.clone();
             assert!(!ammo_guard(&mut f, 0, "Event378", "ReveiveItem").unwrap());
             assert_eq!(f, before);
@@ -1082,3 +1158,4 @@ mod tests {
         assert_eq!(Size::of_gyaml("Obj_TBox_A_01"), Size::Small);
     }
 }
+

@@ -97,7 +97,7 @@ impl SeedFile {
             }
         }
         for (k, v) in &self.shops {
-            if !ident_ok(k) || !ident_ok(&v.item) || (v.deal && !ident_ok(&v.pool)) || !(1..=MAX_PRICE).contains(&v.price) {
+            if !ident_ok(k) || !ident_ok(&v.item) || (v.deal && !ident_ok(&v.pool)) || !(0..=MAX_PRICE).contains(&v.price) {
                 return Err(bad(&format!("shop slot {k:?} has an empty or odd item, pool item or price")));
             }
         }
@@ -319,8 +319,8 @@ mod tests {
         let plain: SeedFile = sample();
         assert!(!plain.to_text().contains("\"shops\""));
         let mut f: SeedFile = plain.clone();
-        f.shops.insert("KF Shop Item 1".into(), ShopEntry { item: "Boomerang".into(), price: 85, deal: true, pool: "Rupees (20)".into() });
-        f.shops.insert("GC Shop Item 5".into(), ShopEntry { item: "Buy Heart".into(), price: 5, deal: false, pool: String::new() });
+        f.shops.insert("KF Shop Right Side Bottom Left".into(), ShopEntry { item: "Boomerang".into(), price: 85, deal: true, pool: "Rupees (20)".into() });
+        f.shops.insert("GC Shop Left Side Bottom Right".into(), ShopEntry { item: "Buy Heart".into(), price: 5, deal: false, pool: String::new() });
         let t: String = f.to_text();
         assert!(t.contains("\"shops\"") && t.contains("\"deal\": true"));
         let back: SeedFile = SeedFile::parse(&t).unwrap();

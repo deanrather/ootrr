@@ -1,5 +1,3 @@
-use crate::slice::data::Data;
-
 pub const SEED: &str = "Business Scrub Seed";
 
 pub const NEW: [&str; 18] = [
@@ -12,10 +10,10 @@ pub const NEW: [&str; 18] = [
     "GC Maze Silver Chest",
     "Graveyard Dampe Race Low Rupee Chest",
     "Graveyard Dampe Race High Rupee Chest",
-    "HF Lake Poe Chest",
+    "LH Poe Chest",
     "HF South Poe Chest",
     "HF East Poe Chest",
-    "HF Tunnel Ledge Chest",
+    "LLR Tunnel Ledge Chest",
     "HF Redead Grotto Chest",
     "Kak Windmill Roof Chest",
     "KF West Ledge Chest",
@@ -38,28 +36,16 @@ pub const PAIRED: [&str; 10] = [
 
 pub const SEEDED: [&str; 3] = ["ZR Open Grotto Chest", "Wasteland Chest", "Ganons Castle Spirit Trial Crystal Switch Chest"];
 
-pub const UNSURE: [&str; 7] = [
-    "Graveyard Dampe Race Low Rupee Chest",
-    "Graveyard Dampe Race High Rupee Chest",
-    "HF South Poe Chest",
-    "HF East Poe Chest",
-    "Kak Windmill Roof Chest",
-    "KF West Ledge Chest",
-    "ZF Scarecrow Ledge Chest",
-];
-
 pub fn gated(name: &str) -> bool {
     NEW.contains(&name) || PAIRED.contains(&name) || SEEDED.contains(&name)
 }
 
-pub fn keeps_out(d: &Data, name: &str, item: &str) -> bool {
-    UNSURE.contains(&name) && d.vanilla_of(name) != Some(item) && d.item(item).is_some_and(|i| i.adv)
-}
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::catalog::{Conf, Loc};
+    use crate::slice::data::Data;
     use crate::logic_items::ItemId;
     use crate::search::{explore, Search};
     use crate::settings::{Settings, Value};
@@ -125,7 +111,8 @@ mod tests {
     #[test]
     fn twin_hashes_are_edited_with_their_chest() {
         let d: Data = Data::load().unwrap();
-        for (n, h) in [("Kak Windmill Roof Chest", 13080955777249750889u64), ("GV Storms Grotto Lens Chest", 6205043616869463865u64)] {
+        // The west ledge chest stands in the Kokiri Forest and the Lost Woods scene files alike.
+        for (n, h) in [("Kak Windmill Roof Chest", 13080955777249750889u64), ("GV Storms Grotto Lens Chest", 6205043616869463865u64), ("KF West Ledge Chest", 17479747339356189279u64)] {
             let l: &Loc = d.cat.by_name(n).unwrap();
             assert_eq!(l.refs.len(), 2, "{n}");
             assert!(l.refs.iter().any(|r| r.hash == h), "{n}");
@@ -178,8 +165,25 @@ mod tests {
         for n in ["DMT Chest", "GC Maze Center Chest", "GC Maze Silver Chest", "SFM Time Block Grotto Chest", "DMC Upper Grotto Chest"] {
             assert!(!s.loc_access(w.loc(n).unwrap()), "{n}");
         }
-        assert!(s.loc_access(w.loc("HF Tunnel Ledge Chest").unwrap()));
         assert!(s.loc_access(w.loc("Kak Open Grotto Chest").unwrap()));
+    }
+
+    #[test]
+    fn the_tester_run_rules_bind() {
+        let d: Data = Data::load().unwrap();
+        let w: World = world(&d).unwrap();
+        let g: Vec<ItemId> = vec![w.item("Progressive Strength Upgrade").unwrap(); 3];
+        let s: Search = explore(&w, &without(&w, &d, &["Progressive Hookshot"]), &g);
+        for n in ["LLR Tunnel Ledge Chest", "LH Poe Chest"] {
+            assert!(!s.loc_access(w.loc(n).unwrap()), "{n}");
+        }
+        let s: Search = explore(&w, &without(&w, &d, &["Iron Boots"]), &g);
+        assert!(s.loc_access(w.loc("HF Tektite Grotto Freestanding PoH").unwrap()));
+        for (n, r) in [("HF Tektite Grotto Freestanding PoH", "Hyrule Field"), ("LLR Tunnel Ledge Chest", "LLR Tower"), ("LH Poe Chest", "Lake Hylia")] {
+            assert_eq!(w.regions[w.locs[w.loc(n).unwrap()].region].name, r, "{n}");
+        }
+        let s: Search = explore(&w, &without(&w, &d, &["Progressive Hookshot", "Boomerang", "Slingshot"]), &g);
+        assert!(!s.loc_access(w.loc("Dodongos Cavern GS Vines Above Stairs").unwrap()));
     }
 
     #[test]
@@ -193,7 +197,7 @@ mod tests {
     }
 
     #[test]
-    fn seeds_with_the_setting_on_win_and_keep_progression_off_the_unsure_chests() {
+    fn seeds_with_the_setting_on_win_and_move_the_new_chests() {
         let d: Data = Data::load().unwrap();
         let s: Settings = on();
         let p: Plan = plan(&s).unwrap();
@@ -204,9 +208,6 @@ mod tests {
             for (loc, item) in &g.seed_file.placements {
                 let l: LocId = w.loc(loc).unwrap();
                 assert!(allowed(&d, &w, &p, w.item(item).unwrap(), l), "{item} at {loc}");
-                if UNSURE.contains(&loc.as_str()) {
-                    assert!(d.vanilla_of(loc) == Some(item.as_str()) || !d.item(item).unwrap().adv, "{loc} holds {item}");
-                }
                 if gated(loc) && d.vanilla_of(loc) != Some(item.as_str()) {
                     moved += 1;
                 }

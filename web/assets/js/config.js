@@ -34,7 +34,7 @@ export function mod_target() {
   const base = state.paths.mod.trim();
   if (!base || !state.info) return "";
   const sep = state.info.sep;
-  const flat = ["hookshot", "longshot", "nx2navi"].includes(state.paths.host);
+  const flat = ["hookshot", "nx2navi"].includes(state.paths.host);
   const mid = flat ? "" : `${state.info.title_id}${sep}`;
   return `${base}${base.endsWith(sep) ? "" : sep}${mid}${state.paths.name}`;
 }
@@ -61,6 +61,8 @@ export const FIELDS = [
     tip: "The folder with your extracted game files, version 1.1.1 (the game with its 1.1.1 update installed), or the game packed as a .nup or .nx (Package…). Version 1.0.0 is not enough on its own: if a 1.0.0 game is picked, a second field for the 1.1.1 update appears below it. A package holding the base and its update is read as both. Games are only read, never changed. From a package, only the files the build reads (about 370 MB, or about 2.3 GB with music or sound shuffle) are unpacked for each build into the app's data folder and deleted afterwards." },
   { id: "mod", page: CONFIG, section: "Folders", label: "Mod folder", tip: "The folder your emulator or loader reads mods from. Generate writes the mod here." },
   { id: "name", page: CONFIG, section: "Folders", label: "Mod name", tip: "The name of the mod's own folder. Use 1 to 64 letters, digits, spaces and _ - ! . characters, with no spaces at the ends." },
+  { id: "delete_others", page: CONFIG, section: "Folders", label: "Delete all other seeds",
+    tip: "After Generate writes this mod, every other seed beside it in the mod folder is deleted: the folders that hold a Spoiler.txt and a romfs folder, which only randomizer seeds have. Other mods are left alone. Seeds built without a spoiler log are not found." },
   { id: "seed", page: CONFIG, section: "Seed", label: "Seed",
     tip: "Type a seed to make the same game again. Left empty, Generate picks a random seed. This box is never filled in for you. The seed that was used is in the spoiler log and on the Seed page." },
   { id: "spoiler_log", page: CONFIG, section: "Seed", label: "Include Spoiler Log",
@@ -85,10 +87,11 @@ function set_status(el, kind, title) {
 
 function row(f, terms, control, extra, badge) {
   const tip = tip_button(f.label, () => f.tip);
-  const head = f.id === "spoiler_log"
+  const check = f.id === "spoiler_log" || f.id === "delete_others";
+  const head = check
     ? h("div", { class: "wl" }, h("label", { class: "chk", for: `f_${f.id}` }, control, h("span", null, marked(f.label, terms))), tip)
     : h("div", { class: "wl" }, h("label", { for: `f_${f.id}` }, marked(f.label, terms)), tip, badge || null);
-  return h("div", { class: "w", "data-id": f.id }, head, f.id === "spoiler_log" ? null : control, extra);
+  return h("div", { class: "w", "data-id": f.id }, head, check ? null : control, extra);
 }
 
 function select(id, choices, value, onchange) {
@@ -284,6 +287,14 @@ export function field_el(f, terms = []) {
       touch();
     });
     return row(f, terms, inp);
+  }
+  if (f.id === "delete_others") {
+    const box = h("input", { type: "checkbox", id: "f_delete_others", checked: !!state.delete_others });
+    box.addEventListener("change", () => {
+      state.delete_others = box.checked;
+      touch();
+    });
+    return row(f, terms, box);
   }
   if (f.id === "spoiler_log") {
     const box = h("input", { type: "checkbox", id: "f_spoiler_log", checked: state.spoiler_log });

@@ -24,8 +24,17 @@ pub struct Spot {
     pub rule: String,
 }
 
+/// Rows kept as identifiers but never shuffled: spots the game never lets the player take
+/// (KF Child Rock 11 cannot be lifted, tester run 2026-11-21).
+pub fn retired_of(t: &str) -> Res<Vec<String>> {
+    let j: Json = json::parse(t)?;
+    Ok(j.get("retire").and_then(|v| v.as_arr()).unwrap_or(&[]).iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+}
+
 pub fn locs() -> Res<Vec<Loc>> {
-    let c: Catalog = Catalog::parse(CATALOG_JSON)?;
+    let mut c: Catalog = Catalog::parse(CATALOG_JSON)?;
+    let gone: Vec<String> = retired_of(CATALOG_JSON)?;
+    c.locs.retain(|l| !gone.contains(&l.name));
     for l in &c.locs {
         if !Kind::of(&l.kind).is_some_and(Kind::wild) {
             return Err(E::Msg(format!("rock catalog: {} has the kind {}, which is not rock or grass", l.name, l.kind)));
@@ -59,9 +68,13 @@ fn text<'a>(j: &'a Json, k: &str, at: &str) -> Res<&'a str> {
 pub fn spots_of(t: &str) -> Res<Vec<Spot>> {
     let j: Json = json::parse(t)?;
     let rows: &[Json] = j.get("locations").and_then(|v| v.as_arr()).ok_or(E::Format("rock catalog: no locations"))?;
+    let gone: Vec<String> = retired_of(t)?;
     let mut out: Vec<Spot> = Vec::with_capacity(rows.len());
     for r in rows {
         let name: &str = text(r, "name", "a row")?;
+        if gone.iter().any(|g| g == name) {
+            continue;
+        }
         let k: Kind = Kind::of(text(r, "kind", name)?).filter(|k| k.wild()).ok_or_else(|| E::Msg(format!("rock catalog: {name} is not rock or grass")))?;
         out.push(Spot { name: name.to_string(), region: text(r, "region", name)?.to_string(), rule: rule_of(k, text(r, "age", name)?) });
     }
@@ -143,6 +156,23 @@ mod tests {
     use crate::slice::support::{plan, Plan};
     use crate::world::{LocId, Placement, World};
 
+    #[test]
+    fn a_retired_row_is_never_a_spot_or_a_logic_location() {
+        let gone: Vec<String> = retired_of(CATALOG_JSON).unwrap();
+        assert!(gone.iter().any(|n| n == "KF Child Rock 11"));
+        let all: Catalog = Catalog::parse(CATALOG_JSON).unwrap();
+        let d: Data = Data::load().unwrap();
+        for n in &gone {
+            assert!(all.by_name(n).is_some(), "{n} names no row");
+            assert!(!locs().unwrap().iter().any(|l| &l.name == n), "{n}");
+            assert!(!spots().unwrap().iter().any(|s| &s.name == n), "{n}");
+            assert!(!d.pots.has(n), "{n}");
+        }
+        assert!(d.pots.has("KF Child Rock 12"));
+        let bare: String = CATALOG_JSON.replacen("\"retire\": [\"KF Child Rock 11\"]", "\"retire\": []", 1);
+        assert!(spots_of(&bare).unwrap().iter().any(|s| s.name == "KF Child Rock 11"));
+    }
+
     fn with(pairs: &[(&str, &str)]) -> Settings {
         let mut s: Settings = Settings::default();
         for (k, v) in pairs {
@@ -186,9 +216,10 @@ mod tests {
         }
         let rock = |a: &str, g: &str| n.get(&("rock".to_string(), a.to_string(), g.to_string())).copied().unwrap_or(0);
         let grass = |a: &str, g: &str| n.get(&("grass".to_string(), a.to_string(), g.to_string())).copied().unwrap_or(0);
-        assert_eq!(ls.iter().filter(|l| l.kind == "rock").count(), 134);
+        // 134 rows, KF Child Rock 11 retired (it cannot be lifted).
+        assert_eq!(ls.iter().filter(|l| l.kind == "rock").count(), 133);
         assert_eq!(ls.iter().filter(|l| l.kind == "grass").count(), 92);
-        assert_eq!((rock("Kokiri Forest", "child"), rock("Kokiri Forest", "adult")), (15, 10));
+        assert_eq!((rock("Kokiri Forest", "child"), rock("Kokiri Forest", "adult")), (14, 10));
         assert_eq!((rock("Death Mountain Crater", "child"), rock("Death Mountain Crater", "adult")), (14, 17));
         assert_eq!((rock("Death Mountain Trail", "child"), rock("Death Mountain Trail", "adult")), (6, 5));
         assert_eq!((rock("Desert Colossus", "child"), rock("Desert Colossus", "adult")), (13, 13));
@@ -276,8 +307,12 @@ mod tests {
             assert!(ok("Gold Skulltula Token", loc), "{loc}");
             assert!(ok("Piece of Heart", loc), "{loc}");
             assert!(ok("Megaton Hammer", loc), "{loc}");
-            assert!(!ok("Progressive Strength Upgrade", loc), "{loc}");
+            // Goron's Bracelet saves under its armor actor now, so every strength tier has a kit.
+            assert!(ok("Progressive Strength Upgrade", loc), "{loc}");
+            // Small keys keep to their own dungeon by default.
             assert!(!ok("Small Key (Forest Temple)", loc), "{loc}");
+            // An item with no pickup pack and no kit (the masks) still cannot lie under a rock or in grass.
+            assert_eq!(crate::pot_slice::rules::at(&d, loc, "Bunny Hood"), Some(false), "{loc}");
         }
     }
 

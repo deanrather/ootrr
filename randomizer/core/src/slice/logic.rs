@@ -319,11 +319,12 @@ mod tests {
         let cut: Search = explore(&w, &vanilla_without(&w, &d, &["Weird Egg"]), &[]);
         let skip: World = world_with(&d, &[("skip_child_zelda", "true")]).unwrap();
         let met: Search = explore(&skip, &vanilla_without(&skip, &d, &["Weird Egg"]), &[]);
-        for i in 1..=8 {
-            let n: String = format!("Market Potion Shop Item {i}");
-            assert!(seen(&all, &w, &n), "{n}");
-            assert!(!seen(&cut, &w, &n), "{n}");
-            assert!(seen(&met, &skip, &n), "{n}");
+        let shelves: Vec<&str> = w.locs.iter().map(|l| l.name.as_str()).filter(|n| crate::flow_extra::potion::shelf(n)).collect();
+        assert_eq!(shelves.len(), 8);
+        for n in shelves {
+            assert!(seen(&all, &w, n), "{n}");
+            assert!(!seen(&cut, &w, n), "{n}");
+            assert!(seen(&met, &skip, n), "{n}");
         }
     }
 

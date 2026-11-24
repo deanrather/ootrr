@@ -18,18 +18,6 @@ pub const NOTE: &str = "Chest size matches contents: chests holding progression 
 
 pub const AREAS: [&str; 2] = ["DropKeepAwayArea_TBox_A_01", "DropKeepAwayArea_TBox_A_02"];
 
-pub const ROOM: f32 = 1.5;
-
-pub const TILT: f32 = 0.06;
-
-pub const MARKS: [&str; 46] = [
-    "anchor", "area", "tag", "startpos", "mapicon", "locator", "eventrequest", "eventproxy", "logic", "spawner", "navi", "sensor", "trigger", "point", "camera", "sound",
-    "bgm", "se_", "light", "effect", "emitter", "fog", "env", "spot", "guide", "hint", "link", "rail", "path", "region", "water", "kill", "respawn", "check", "wind",
-    "dropkeepaway", "mgr", "manager", "director", "controller", "counter", "timer", "flag", "switch_hidden", "dummy", "debug",
-];
-
-pub const WALLS: [&str; 6] = ["land_", "dgn", "field", "fldobj_wall", "fldobj_airwall", "pushairwall"];
-
 #[derive(Clone, Debug, PartialEq)]
 pub struct Seen {
     pub hash: u64,
@@ -43,7 +31,6 @@ pub struct Seen {
 pub struct Moves {
     pub chests: BS<u64>,
     pub areas: BM<(String, [u32; 3]), &'static str>,
-    pub tight: BS<u64>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -224,84 +211,8 @@ pub fn seen(y: &Byml) -> Vec<Seen> {
         .collect()
 }
 
-pub fn tilted(rot: &[f32; 3]) -> bool {
-    [rot[0], rot[2]].iter().any(|x| {
-        let m: f32 = x.abs() % std::f32::consts::PI;
-        m >= TILT && std::f32::consts::PI - m >= TILT
-    })
-}
-
-/// Half extents (local X, local Z) of a chest's body, from the game's
-/// Obj_TBox_A_01__Body_0 / Obj_TBox_A_02__Body_0 shapes. (The DropKeepAwayArea boxes are
-/// padded and would call Mido's chests, 1.5 m apart, too tight.)
-pub const SMALL_HALF: [f32; 2] = [0.364, 0.283];
-pub const BIG_HALF: [f32; 2] = [0.64, 0.5065];
-
-/// Clearance kept between two chest footprints.
-pub const GAP: f32 = 0.05;
-
-pub fn half(big: bool) -> [f32; 2] {
-    if big { BIG_HALF } else { SMALL_HALF }
-}
-
-/// The chest's local X and Z axes on the ground plane (rotation applied as Rz * Ry * Rx; a
-/// chest that is not tilted only has X and Z at 0 or pi, where every Euler order agrees).
-pub fn axes(rot: &[f32; 3]) -> [[f32; 2]; 2] {
-    let (sx, cx) = rot[0].sin_cos();
-    let (sy, cy) = rot[1].sin_cos();
-    let (sz, cz) = rot[2].sin_cos();
-    // Columns of Rz * Ry * Rx for the local X and Z axes, keeping the world X and Z parts.
-    let x: [f32; 2] = [cz * cy, -sy];
-    let z: [f32; 2] = [cz * sy * cx + sz * sx, cy * cx];
-    [x, z]
-}
-
-/// Whether two rotated footprints overlap on the ground plane (separating axis test).
-pub fn overlap(a: &Seen, ah: [f32; 2], b: &Seen, bh: [f32; 2], gap: f32) -> bool {
-    let (aa, ba) = (axes(&a.rot), axes(&b.rot));
-    let d: [f32; 2] = [b.at[0] - a.at[0], b.at[2] - a.at[2]];
-    let dot = |u: [f32; 2], v: [f32; 2]| u[0] * v[0] + u[1] * v[1];
-    let reach = |ax: &[[f32; 2]; 2], h: [f32; 2], n: [f32; 2]| h[0] * dot(ax[0], n).abs() + h[1] * dot(ax[1], n).abs();
-    for n in aa.iter().chain(ba.iter()) {
-        let len: f32 = dot(*n, *n).sqrt();
-        if len < 1e-6 {
-            continue;
-        }
-        let n: [f32; 2] = [n[0] / len, n[1] / len];
-        if dot(d, n).abs() >= reach(&aa, ah, n) + reach(&ba, bh, n) + gap {
-            return false;
-        }
-    }
-    true
-}
-
-/// Whether `o` stands where `chest` would grow. Another chest blocks only when the two
-/// footprints overlap (`o_big`: the size that chest ends up with); anything else that is not
-/// a marker blocks inside ROOM.
-pub fn blocks(chest: &Seen, o: &Seen, o_big: bool) -> bool {
-    if o.hash == chest.hash {
-        return false;
-    }
-    let d: f32 = chest.at.iter().zip(o.at.iter()).map(|(a, b)| (a - b) * (a - b)).sum::<f32>().sqrt();
-    let g: String = o.gyaml.to_ascii_lowercase();
-    if g.starts_with("obj_tbox") {
-        return !g.contains("pedestal") && d > 0.05 && (chest.at[1] - o.at[1]).abs() < ROOM && overlap(chest, BIG_HALF, o, half(o_big), GAP);
-    }
-    if d >= ROOM {
-        return false;
-    }
-    !(MARKS.iter().any(|m| g.contains(m)) || g.ends_with("pos") || WALLS.iter().any(|w| g.starts_with(w)))
-}
-
-/// The size a neighbouring chest ends up with: what the build wants, else its model.
-pub fn ends_big(o: &Seen, w: &BM<u64, Want>) -> bool {
-    w.get(&o.hash).map(|x| x.big).unwrap_or_else(|| crate::progressive::Size::of_gyaml(&o.gyaml) == crate::progressive::Size::Big)
-}
-
-pub fn room(chest: &Seen, near: &[Seen], w: &BM<u64, Want>) -> bool {
-    !tilted(&chest.rot) && !near.iter().any(|o| blocks(chest, o, ends_big(o, w)))
-}
-
+/// Every wanted plain chest swaps model, however close it stands to other actors or walls:
+/// a grown chest may clip into its neighbours.
 pub fn moves(scenes: &BM<String, Vec<Seen>>, w: &BM<u64, Want>) -> Moves {
     let mut m: Moves = Moves::default();
     let mut spots: Vec<(u64, String, [u32; 3], bool)> = Vec::new();
@@ -316,10 +227,6 @@ pub fn moves(scenes: &BM<String, Vec<Seen>>, w: &BM<u64, Want>) -> Moves {
             if s.gyaml == t || (s.story && !want.strip) {
                 continue;
             }
-            if want.big && !room(s, list, w) {
-                m.tight.insert(s.hash);
-                continue;
-            }
             spots.push((s.hash, st.clone(), bits(&s.at), want.big));
         }
     }
@@ -329,9 +236,6 @@ pub fn moves(scenes: &BM<String, Vec<Seen>>, w: &BM<u64, Want>) -> Moves {
         spots.retain(|s| s.0 != ra && s.0 != rb);
     }
     for (h, st, at, big) in spots {
-        if m.tight.contains(&h) {
-            continue;
-        }
         m.chests.insert(h);
         m.areas.insert((st, at), area(big));
     }
@@ -407,8 +311,8 @@ pub fn resize(raw: &[u8], file: &str, w: &BM<u64, Want>, m: &Moves) -> Res<Optio
     Ok(Some((y.write()?, n)))
 }
 
-pub fn report(n: usize, tight: usize) -> String {
-    format!("{n} chests changed size to match their contents. {tight} chests stayed small because a big chest would not fit at their spot.")
+pub fn report(n: usize) -> String {
+    format!("{n} chests changed size to match their contents.")
 }
 
 #[cfg(test)]
@@ -564,65 +468,7 @@ mod tests {
     }
 
     #[test]
-    fn footprints_overlap_by_their_rotated_boxes() {
-        let a: Seen = at(1, "Obj_TBox_A_02", 0.0);
-        let mut b: Seen = at(2, "Obj_TBox_A_02", 1.5);
-        // Side by side along X: 0.64 + 0.64 + gap fits in 1.5.
-        assert!(!overlap(&a, BIG_HALF, &b, BIG_HALF, GAP));
-        // Turned a quarter, the neighbour's depth faces X: still fits.
-        b.rot = [0.0, std::f32::consts::FRAC_PI_2, 0.0];
-        assert!(!overlap(&a, BIG_HALF, &b, BIG_HALF, GAP));
-        // Turned 45 degrees, the corners reach 0.81 m along X each: they touch.
-        let mut c: Seen = at(3, "Obj_TBox_A_02", 1.4);
-        c.rot = [0.0, std::f32::consts::FRAC_PI_4, 0.0];
-        let mut d: Seen = a.clone();
-        d.rot = c.rot;
-        assert!(overlap(&d, BIG_HALF, &c, BIG_HALF, GAP));
-        // Flipped X and Z read as a turn about Y, not as a tilt.
-        let mut e: Seen = a.clone();
-        e.rot = [std::f32::consts::PI, 0.0, std::f32::consts::PI];
-        let ax = axes(&e.rot);
-        assert!((ax[0][0].abs() - 1.0).abs() < 1e-5 && (ax[1][1].abs() - 1.0).abs() < 1e-5);
-    }
-
-    #[test]
-    fn the_clearance_rule_skips_crowded_and_tilted_spots() {
-        let none: BM<u64, Want> = BM::new();
-        let c: Seen = at(1, "Obj_TBox_A_01", 0.0);
-        assert!(room(&c, &[c.clone()], &none));
-        for (g, x) in [("Obj_Pot_A_01", 1.0), ("Enemy_Beamos", 0.0), ("Obj_TBox_A_01", 1.0), ("Obj_TBox_A_02", 1.3), ("Obj_FireWall_A_01", 0.3)] {
-            let o: Seen = at(9, g, x);
-            assert!(blocks(&c, &o, ends_big(&o, &none)), "{g}");
-            assert!(!room(&c, &[o], &none), "{g}");
-        }
-        for (g, x) in [
-            ("Obj_Pot_A_01", 1.6),
-            ("Land_FireTemple_02_Wall_A_03", 0.4),
-            ("DropKeepAwayArea_TBox_A_01", 0.0),
-            ("DestinationAnchor", 0.0),
-            ("Obj_TBoxPedestal_A_01", 0.0),
-            ("PushAirWall_Box", 0.2),
-            ("StartPos", 0.5),
-            ("Obj_TBox_A_02", 0.0),
-            ("Obj_TBox_A_01", 1.2),
-        ] {
-            let o: Seen = at(9, g, x);
-            assert!(!blocks(&c, &o, ends_big(&o, &none)), "{g}");
-        }
-        // A neighbour that grows too needs the room of two big chests.
-        let o: Seen = at(9, "Obj_TBox_A_01", 1.2);
-        assert!(blocks(&c, &o, ends_big(&o, &BM::from([(9, Want { big: true, strip: false })]))));
-        let mut t: Seen = c.clone();
-        t.rot = [0.3, 0.0, 0.0];
-        assert!(tilted(&t.rot) && !room(&t, &[], &none));
-        t.rot = [std::f32::consts::PI, 1.2, -std::f32::consts::PI];
-        assert!(!tilted(&t.rot) && room(&t, &[], &none));
-        t.rot = [0.0, 2.0, 0.2];
-        assert!(tilted(&t.rot));
-    }
-
-    #[test]
-    fn moves_skip_tight_grows_keep_shrinks_and_pair_each_chest_with_its_area() {
+    fn moves_grow_crowded_spots_keep_story_chests_and_pair_each_chest_with_its_area() {
         let grow = Want { big: true, strip: false };
         let shrink = Want { big: false, strip: false };
         let pot: Seen = at(50, "Obj_Pot_A_01", 20.8);
@@ -634,9 +480,9 @@ mod tests {
         ]);
         let w: BM<u64, Want> = BM::from([(1, grow), (2, grow), (3, shrink), (4, grow), (5, grow), (6, grow)]);
         let m: Moves = moves(&scenes, &w);
-        assert_eq!(m.chests, BS::from([1, 3]));
-        assert_eq!(m.tight, BS::from([2, 5]));
-        assert_eq!(m.areas.len(), 2);
+        // 2 stands by a pot, 5 next to a Beamos: they grow anyway; 4 keeps its story event, 6 is special.
+        assert_eq!(m.chests, BS::from([1, 2, 3, 5]));
+        assert_eq!(m.areas.len(), 5, "5 sits in both scenes");
         assert_eq!(m.areas.get(&("a".to_string(), bits(&[0.0, 10.0, 0.0]))), Some(&"DropKeepAwayArea_TBox_A_02"));
         assert_eq!(m.areas.get(&("a".to_string(), bits(&[21.5, 10.0, 0.0]))), Some(&"DropKeepAwayArea_TBox_A_01"));
         let strip: BM<u64, Want> = BM::from([(4, Want { big: true, strip: true })]);
@@ -732,14 +578,10 @@ mod tests {
             }
         }
         let names = |s: &BS<u64>| -> BS<String> { d.cat.locs.iter().filter(|l| l.refs.iter().any(|r| s.contains(&r.hash))).map(|l| l.name.clone()).collect() };
-        eprintln!("grown {} shrunk {} tight {}", grow.chests.len(), shrink.chests.len(), grow.tight.len());
-        for n in names(&grow.tight) {
-            eprintln!("tight: {n}");
-        }
-        // Mido's four chests stand 1.5 m apart: all four fit as big chests.
-        assert!(!names(&grow.tight).iter().any(|n| n.starts_with("KF Midos")), "{:?}", names(&grow.tight));
+        eprintln!("grown {} shrunk {}", grow.chests.len(), shrink.chests.len());
+        assert!(names(&grow.chests).iter().any(|n| n.starts_with("KF Midos")), "{:?}", names(&grow.chests));
         assert_eq!(chests, areas);
         assert_eq!(grow.areas.len() + shrink.areas.len(), areas);
-        assert!(!grow.chests.is_empty() && !shrink.chests.is_empty() && !grow.tight.is_empty());
+        assert!(!grow.chests.is_empty() && !shrink.chests.is_empty());
     }
 }

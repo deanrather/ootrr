@@ -106,12 +106,54 @@ fn sales(d: &Data, seed: &SeedFile, m: Mode) -> Vec<Sale> {
 
 /// Sets one parameter of a scrub sale event. When Menu scrubs as one time sales (crate::scrubs_b)
 /// already turned the shared one time sale into a call with arguments, the value goes to the rows
+
+/// The events a sale event became when its item was wrapped into tier or bag checks
+/// (crate::flow_wrap): every event reachable from it, within a few steps, that carries `key`.
+pub fn wrapped_sales(f: &crate::bfevfl::Flow, at: usize, key: &str) -> Vec<usize> {
+    use crate::bfevfl::Kind;
+    let mut out: Vec<usize> = Vec::new();
+    let mut seen: Vec<usize> = Vec::new();
+    let mut todo: Vec<(usize, usize)> = vec![(at, 0)];
+    while let Some((i, depth)) = todo.pop() {
+        if i >= f.events.len() || seen.contains(&i) || depth > 6 {
+            continue;
+        }
+        seen.push(i);
+        let k: &Kind = &f.events[i].kind;
+        if i != at && k.params().is_some_and(|c| c.items.iter().any(|(n, _)| n == key)) {
+            out.push(i);
+            continue;
+        }
+        let next: Vec<u16> = match k {
+            Kind::Switch { cases, .. } | Kind::SubSwitch { cases, .. } => cases.iter().map(|c| c.ev).collect(),
+            Kind::Action { next, .. } | Kind::Sub { next, .. } | Kind::Join { next } => vec![*next],
+            Kind::Fork { join, forks } => forks.iter().copied().chain([*join]).collect(),
+            Kind::Label { .. } => Vec::new(),
+        };
+        todo.extend(next.into_iter().filter(|n| *n != crate::bfevfl::flow::NONE).map(|n| (usize::from(n), depth + 1)));
+    }
+    out
+}
+
 /// that pass that argument instead.
 fn set(f: &mut crate::bfevfl::Flow, index: usize, name: &str, key: &str, v: Val) -> Res<()> {
     let e: &mut Event = f.events.get_mut(index).ok_or_else(|| E::Msg(format!("scrub sales: event index {index} is out of range")))?;
     if e.name != name {
         return Err(E::Msg(format!("scrub sales: event {index} is named {} and not {name}, the game files differ", e.name)));
     }
+    if !e.kind.params().is_some_and(|c| c.items.iter().any(|(k, _)| k == key)) {
+        // A sale wrapped into tier or bag checks: set every copy of the sale.
+        let copies: Vec<usize> = wrapped_sales(f, index, key);
+        if copies.is_empty() {
+            return Err(E::Msg(format!("scrub sales: {name} has no {key}")));
+        }
+        for i in copies {
+            let n: String = f.events[i].name.clone();
+            set(f, i, &n, key, v.clone())?;
+        }
+        return Ok(());
+    }
+    let e: &mut Event = &mut f.events[index];
     let c: &mut Cont = e.kind.params_mut().ok_or_else(|| E::Msg(format!("scrub sales: {name} has no parameters")))?;
     let slot: &mut Val = c.items.iter_mut().find(|(k, _)| k == key).map(|(_, x)| x).ok_or_else(|| E::Msg(format!("scrub sales: {name} has no {key}")))?;
     match (slot, &v) {

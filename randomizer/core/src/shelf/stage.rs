@@ -179,22 +179,33 @@ fn keeper_files(c: &mut Ctx, jobs: &[Job]) -> Res<(Vec<File>, BM<String, String>
     Ok((out, refs))
 }
 
-fn banc_files(c: &mut Ctx, jobs: &[Job]) -> Res<Vec<File>> {
+/// How far each new shelf actor stands above the vanilla shelf spot: its model hangs that far
+/// below its origin (lift::below_of), while the shop's own goods start at theirs.
+fn seats(rf: &mut Romfs, made: &[Shelf]) -> Res<BM<String, f32>> {
+    let t: Byml = rf.read_byml(ACTOR_INFO)?;
+    Ok(made.iter().map(|s| (s.name.clone(), rows::find(&t, &s.look).and_then(crate::pickup_pack::lift::below_of).unwrap_or(0.0))).collect())
+}
+
+fn banc_files(c: &mut Ctx, jobs: &[Job], made: &[Shelf]) -> Res<Vec<File>> {
     let mut bancs: BS<String> = BS::new();
     for j in jobs {
         bancs.extend(j.bancs.iter().cloned());
     }
     let stock: Vec<Byml> = bancs.iter().map(|b| Byml::parse(&c.rf.read_zs(b)?)).collect::<Res<Vec<Byml>>>()?;
     let map: BM<String, String> = banc::board_map(&stock);
+    let lift: BM<String, f32> = seats(&mut c.rf, made)?;
     let mut hits: BM<(String, usize), usize> = BM::new();
     let mut out: Vec<File> = Vec::new();
-    for b in &bancs {
+    for (b, vanilla) in bancs.iter().zip(&stock) {
         let mut n: usize = 0;
         let file: File = c.file(b, |r: &[u8]| {
             let mut y: Byml = Byml::parse(r)?;
             for j in jobs.iter().filter(|j| j.bancs.contains(b)) {
                 for k in &j.keepers {
                     let h: usize = banc::swap(&mut y, k, j.slot, &j.shelf_actor());
+                    if let Some(dy) = lift.get(&j.shelf_actor()) {
+                        banc::seat(&mut y, vanilla, k, j.slot, *dy);
+                    }
                     if let Some(w) = map.get(&j.shelf_actor()) {
                         n += banc::boards(&mut y, k, j.slot, w);
                     }
@@ -283,6 +294,10 @@ fn dict(rf: &Romfs, path: &str) -> Res<Option<u32>> {
 }
 
 pub fn run(romfs: &P, base: Option<&P>, load: &P, mod_name: &str, host: Host, jobs: &[Job]) -> Res<Done> {
+    run_with(romfs, base, load, mod_name, host, jobs, &[])
+}
+
+pub fn run_with(romfs: &P, base: Option<&P>, load: &P, mod_name: &str, host: Host, jobs: &[Job], credits: &[hook::Credit]) -> Res<Done> {
     if jobs.is_empty() {
         return Err(E::Format("no shelf slot to write"));
     }
@@ -293,11 +308,19 @@ pub fn run(romfs: &P, base: Option<&P>, load: &P, mod_name: &str, host: Host, jo
     let mut files: Vec<File> = table_files(&mut c, &made)?;
     let (keepers, refs): (Vec<File>, BM<String, String>) = keeper_files(&mut c, jobs)?;
     files.extend(keepers);
-    files.extend(banc_files(&mut c, jobs)?);
+    files.extend(banc_files(&mut c, jobs, &made)?);
     files.extend(counter_file(&mut c, jobs)?);
     // Every shelf build lets a child buy a tunic, wherever the shuffle puts one.
     let sold: Vec<hook::Sold> = hook::plan(jobs);
-    files.push(c.file(hook::FLOW, |r: &[u8]| hook::edit(r, &sold, true))?);
+    let shared: Vec<Vec<String>> = hook::shared(jobs);
+    let keys: std::collections::BTreeSet<crate::dungeon_packs::Pack> = jobs
+        .iter()
+        .filter_map(|j| match &j.what {
+            What::Deal { item, .. } => crate::dungeon_packs::by_name(item),
+            _ => None,
+        })
+        .collect();
+    files.push(c.file(hook::FLOW, |r: &[u8]| crate::dungeon_packs::shop_file(&hook::edit_with(r, &sold, &shared, credits, true)?, &keys))?);
     files.extend(text_files(&mut c, &made)?);
     let mut note: String = String::new();
     let pk: Pack = Pack::create_for(load, TITLE_ID, mod_name, host)?;
@@ -359,7 +382,7 @@ mod tests {
             return;
         };
         let d: Data = Data::load().unwrap();
-        let js: Vec<Job> = jobs(&d, &["KF Shop Item 1=Boomerang@20", "GC Shop Item 6=Buy Bottle Bug@30", "Market Potion Shop Item 3=Buy Heart@5", "Kak Potion Shop Item 3=Buy Heart@5", "Market Bombchu Shop Item 3=Hover Boots@250"]);
+        let js: Vec<Job> = jobs(&d, &["KF Shop Right Side Bottom Left=Boomerang@20", "GC Shop Left Side Top Left=Buy Bottle Bug@30", "Market Potion Shop Left Side Top Left=Buy Heart@5", "Kak Potion Shop Left Side Top Left=Buy Heart@5", "Market Bombchu Shop Left Side Top Left=Hover Boots@250"]);
         let load: PB = std::env::temp_dir().join(format!("ootrr_shelf_stage_{}", std::process::id()));
         let _ = fs::remove_dir_all(&load);
         let done: Done = run(&root, None, &load, "shelf", Host::Hookshot, &js).unwrap();
@@ -372,10 +395,30 @@ mod tests {
         let f: String = goods::shop_ref(&es, "Npc_Kokiri_001_Shop_Child_ShortStock").unwrap();
         let g = goods::goods(&sarc::get(&es, &f).unwrap().data).unwrap();
         assert_eq!(g[6].get("StockNum"), Some(&crate::byml::Node::I32(1)));
+        // The Boomerang deal stands its model's depth below the origin above the vanilla spot.
+        let kf: &str = "Banc/KokiriForest/KokiriForest_Child_Static.bcett.byml.zs";
+        let y_of = |y: &Byml, g: &str| -> Vec<f32> {
+            let list = y.root.get("Actors").and_then(|l| l.as_arr()).unwrap();
+            list.iter().filter(|n| n.get("Gyaml").and_then(|v| v.as_str()) == Some(g)).filter_map(|n| match n.get("Translate")?.as_arr()?.get(1)? {
+                crate::byml::Node::F32(v) => Some(*v),
+                _ => None,
+            }).collect()
+        };
+        let built: Byml = Byml::parse(&rf.zs.decompress(&fs::read(back.join(kf)).unwrap()).unwrap()).unwrap();
+        let vanilla: Byml = Byml::parse(&rf.read_zs(kf).unwrap()).unwrap();
+        let t: Byml = rf.read_byml(ACTOR_INFO).unwrap();
+        let dy: f32 = rows::find(&t, "Item_Boomerang").and_then(crate::pickup_pack::lift::below_of).unwrap();
+        assert!(dy > 0.02, "{dy}");
+        let raised: Vec<f32> = y_of(&built, "Shop_OOTRR_Item_Boomerang_20");
+        let shield: Vec<f32> = y_of(&vanilla, "Shop_Weapon_Shield_Deku");
+        assert!(!raised.is_empty() && raised.len() <= shield.len(), "{raised:?} {shield:?}");
+        assert!(raised.iter().all(|r| shield.iter().any(|s| (r - (s + dy)).abs() < 1e-4)), "{raised:?} {shield:?} {dy}");
         assert!(g[6].get("Release").is_none_or(|r| r.get("SoldOutGameData").is_none() || r.get("IsCheckSoldOutGameData") != Some(&crate::byml::Node::Bool(true))));
-        let again: Done = run(&root, Some(&back), &load, "shelf", Host::Hookshot, &jobs(&d, &["ZD Shop Item 1=Iron Boots@60"])).unwrap();
+        // A second pass on a built mod adds a deal whose shop has one keeper: a shop with a keeper
+        // per age adds the shared sold out entry (hook::SYNC), which the first pass already wrote.
+        let again: Done = run(&root, Some(&back), &load, "shelf", Host::Hookshot, &jobs(&d, &["Market Bazaar Right Side Bottom Left=Iron Boots@60"])).unwrap();
         assert_eq!(again.root, done.root);
-        let both: Vec<Job> = jobs(&d, &["KF Shop Item 1=Boomerang@20", "ZD Shop Item 1=Iron Boots@60"]);
+        let both: Vec<Job> = jobs(&d, &["KF Shop Right Side Bottom Left=Boomerang@20", "Market Bazaar Right Side Bottom Left=Iron Boots@60"]);
         audit::run(&root, &back, &both).unwrap();
         let _ = fs::remove_dir_all(&load);
     }
@@ -386,7 +429,7 @@ mod tests {
             return;
         };
         let d: Data = Data::load().unwrap();
-        let js: Vec<Job> = jobs(&d, &["GC Shop Item 5=Item_Gauntlet_Goron@10", "GC Shop Item 6=Item_Gauntlet_Silver@10", "GC Shop Item 7=Item_Gauntlet_Gold@10"]);
+        let js: Vec<Job> = jobs(&d, &["GC Shop Left Side Bottom Right=Item_Gauntlet_Goron@10", "GC Shop Left Side Top Left=Item_Gauntlet_Silver@10", "GC Shop Left Side Top Right=Item_Gauntlet_Gold@10"]);
         let load: PB = std::env::temp_dir().join(format!("ootrr_shelf_strength_{}", std::process::id()));
         let _ = fs::remove_dir_all(&load);
         let done: Done = run(&root, None, &load, "strength", Host::Hookshot, &js).unwrap();
@@ -406,7 +449,7 @@ mod tests {
             return;
         };
         let d: Data = Data::load().unwrap();
-        let js: Vec<Job> = jobs(&d, &["Market Potion Shop Item 3=Buy Heart@5", "Kak Potion Shop Item 3=Buy Fish@50", "Kak Potion Shop Item 4=Hover Boots@40"]);
+        let js: Vec<Job> = jobs(&d, &["Market Potion Shop Left Side Top Left=Buy Heart@5", "Kak Potion Shop Left Side Top Left=Buy Fish@50", "Kak Potion Shop Left Side Top Right=Hover Boots@40"]);
         let load: PB = std::env::temp_dir().join(format!("ootrr_shelf_stage_two_{}", std::process::id()));
         let _ = fs::remove_dir_all(&load);
         let done: Done = run(&root, None, &load, "shelf", Host::Hookshot, &js).unwrap();
@@ -416,9 +459,9 @@ mod tests {
         assert!(lines.iter().any(|l| l.contains("0 problems")), "{lines:?}");
         let rst: Rst = Rst::parse(&Romfs::open(&root).unwrap().zs.decompress(&fs::read(back.join(TABLE_PATH)).unwrap()).unwrap()).unwrap();
         assert!(rst.get(split::OWN).is_some());
-        let again: Done = run(&root, Some(&back), &load, "shelf", Host::Hookshot, &jobs(&d, &["Kak Potion Shop Item 3=Buy Heart@5"])).unwrap();
+        let again: Done = run(&root, Some(&back), &load, "shelf", Host::Hookshot, &jobs(&d, &["Kak Potion Shop Left Side Top Left=Buy Heart@5"])).unwrap();
         assert_eq!(again.root, done.root);
-        audit::run(&root, &back, &jobs(&d, &["Kak Potion Shop Item 3=Buy Heart@5", "Market Potion Shop Item 3=Buy Heart@5"])).unwrap();
+        audit::run(&root, &back, &jobs(&d, &["Kak Potion Shop Left Side Top Left=Buy Heart@5", "Market Potion Shop Left Side Top Left=Buy Heart@5"])).unwrap();
         let _ = fs::remove_dir_all(&load);
     }
 

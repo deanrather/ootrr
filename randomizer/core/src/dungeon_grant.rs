@@ -126,6 +126,9 @@ pub struct Grants {
     pub skip: Vec<Kind>,
     pub sweep: Vec<Kind>,
     pub credits: BM<u64, (Kind, &'static str)>,
+    /// Chests whose dungeon item is credited after their story event instead
+    /// (crate::debug_names::stage_credit_chests): the sweep leaves them alone.
+    pub wrapped: std::collections::BTreeSet<u64>,
 }
 
 impl Grants {
@@ -168,6 +171,9 @@ pub fn mark(y: &mut Byml, file: &str, g: &Grants, m: &mut Marks) -> Res<usize> {
             continue;
         }
         let drop: String = text(dy, DROP).to_string();
+        if h.is_some_and(|x| g.wrapped.contains(&x)) {
+            continue;
+        }
         let got: Option<(Kind, &'static str)> = h.and_then(|h| g.credits.get(&h)).copied();
         let (k, d): (Kind, &'static str) = match got {
             Some((k, d)) => {
@@ -457,7 +463,7 @@ mod tests {
             chest(3, "Obj_TBox_A_02", "Item_Dungeon_Map", Some("FireTemple_GetMap")),
             chest(4, "Obj_TBox_A_01", "TBox_Rupee_Blue", None),
         ]);
-        let g: Grants = Grants { skip: vec![Kind::Boss], sweep: vec![Kind::Boss], credits: BM::from([(1, (Kind::Boss, "ShadowTemple"))]) };
+        let g: Grants = Grants { skip: vec![Kind::Boss], sweep: vec![Kind::Boss], credits: BM::from([(1, (Kind::Boss, "ShadowTemple"))]), wrapped: Default::default() };
         let mut m: Marks = Marks::default();
         assert_eq!(mark(&mut y, "Banc/FireTemple/FireTemple_Static.bcett.byml.zs", &g, &mut m).unwrap(), 2);
         assert_eq!(event(&y, 0), "OOTRR_Boss_ShadowTemple_Small");

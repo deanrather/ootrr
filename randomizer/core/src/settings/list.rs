@@ -90,7 +90,8 @@ fn ganon_key() -> Vec<Setting> {
         Setting::choice(18, "shuffle_ganon_bosskey", "keys", "Ganon's Boss Key", "dungeon")
             .tag(Tag::Core)
             .tip("Where Ganon's Castle Boss Key is, or what earns it.")
-            .opt(crate::lacs_key::VALUE, "LACS - Dungeon Rewards", "Zelda gives the key in the Light Arrows Cutscene, which plays once you hold a set number of Stones and Medallions together. The Light Arrows are shuffled into the item pool. Experimental, untested in the game."),
+            .opt(crate::lacs_key::VALUE, "LACS - Dungeon Rewards", "Zelda gives the key in the Light Arrows Cutscene, which plays once you hold a set number of Stones and Medallions together. The Light Arrows are shuffled into the item pool. Experimental, untested in the game.")
+            .opt(crate::medal_gate::LACS_MEDALLIONS_VALUE, "LACS - Medallions", "Zelda gives the key in the Light Arrows Cutscene, which plays once you hold a set number of Medallions. The Light Arrows are shuffled into the item pool. Experimental, untested in the game."),
     ));
     vec![
         k,
@@ -170,6 +171,7 @@ fn starting_items() -> Setting {
             ("three_bottles", "Three Empty Bottles"),
             ("four_bottles", "Four Empty Bottles"),
             ("hylian_shield", "Hylian Shield"),
+            ("bunny_hood", "Bunny Hood"),
         ])
 }
 
@@ -338,7 +340,7 @@ pub fn build() -> Schema {
         Setting::choice(7, "gerudo_fortress", "world", "Gerudo Fortress", "normal")
             .tip("How many carpenters must be rescued to open the Fortress.")
             .opt("normal", "Rescue all four", "Free all four carpenters.")
-            .opt("fast", "Rescue one", "Tested in game. Three carpenters start free. The Membership Card is vanilla and is granted when the last carpenter is rescued.")
+            .opt("fast", "Rescue one", "Tested in game. Three carpenters start free. The guard gives the Membership Card check when the last carpenter is rescued: the card itself, or a random item when the Membership Card is shuffled.")
             .opt("open", "Open", "Tested in game. Start with the Gerudo Membership Card and the bridge built. The Membership Card check is still in the game and randomized. It triggers when you interact with your first jail cell."),
     );
     s.push(
@@ -444,6 +446,7 @@ pub fn build() -> Schema {
     s.extend(ganon_key());
     s.extend(bridge());
     s.extend(crate::medal_gate::settings());
+    s.extend(crate::qol::settings());
     s.extend(crate::door_gate::settings());
     s.extend(crate::nocturne_gate::settings());
     s.extend(crate::prelude_gate::settings());
@@ -514,6 +517,12 @@ pub fn build() -> Schema {
             .when("shuffle_rewards", "supported"),
     );
     s.push(
+        Setting::toggle(171, "adult_trade_shuffle", "shuffle", "Shuffle adult trade items", false)
+            .tip("The eleven adult trade items (Pocket Egg to Claim Check) can be anywhere and the ten trade hand ins give only their shuffled item. You keep every trade item you find and hand any of them over whenever you like. Show a trade item where nobody takes it to put the next one you hold on the item button.")
+            .when("shuffle_rewards", "supported")
+            .when_on("shuffle_trade_checks"),
+    );
+    s.push(
         Setting::toggle(65, "shuffle_cows", "shuffle", "Link's House and Gerudo Valley cows", false)
             .tip("The cow in Link's House and the cow in Gerudo Valley each give one extra shuffled item the first time their milk scene starts, with or without a bottle. The milk stays vanilla and stays repeatable. The other cows have their own setting.")
             .when("shuffle_rewards", "supported"),
@@ -541,6 +550,11 @@ pub fn build() -> Schema {
     s.push(
         Setting::toggle(46, crate::flow_extra::potion::SETTING, "shuffle", "Market Potion Shop bottle and Red Potion", false)
             .tip("The Market Potion Shop keeper's free empty bottle and the Red Potion he pours as thanks for the escaped bug become two shuffled checks, and one more Bottle joins the pool. Both checks need a child who has met Zelda, by day, who carries an empty bottle, because while the free bottle holds another item he starts the bug tutorial only for a child with an empty bottle. His shelves still open after the tutorial.")
+            .when("shuffle_rewards", "supported"),
+    );
+    s.push(
+        Setting::toggle(crate::flow_extra::GERUDO_CARD_NUM, crate::flow_extra::GERUDO_CARD, "shuffle", "Gerudo Membership Card", true)
+            .tip("Whether the Gerudo Membership Card, which the guard gives for freeing the four carpenters, is shuffled. When on, the card can be anywhere and the guard gives a random item; when off, she gives the card. This also holds with Gerudo Fortress \"Rescue one\".")
             .when("shuffle_rewards", "supported"),
     );
     s.push(
@@ -694,7 +708,7 @@ pub fn build() -> Schema {
     s.push(
         Setting::choice(78, crate::qol::NAVI, "world", "Return with Navi", "everywhere")
             .wire_as(Value::s("off"))
-            .tip("Calling Navi with the D-pad asks whether to head back, like the original game restarting a saved file at the dungeon entrance, in Kokiri Forest or in the Temple of Time. Needs no item. The D-pad calls Navi from the start of a new game, and her room tutorial hints are replaced by the question; enemy hints while targeting stay. Boss rooms, miniboss rooms, the boss rush and the final battle never offer it, since leaving a fight that way left the save button disabled. Experimental, untested in the game.")
+            .tip("Calling Navi with the D-pad asks whether to head back, like the original game restarting a saved file at the dungeon entrance, in Kokiri Forest or in the Temple of Time. Needs no item. The D-pad calls Navi from the start of a new game, and her room tutorial hints are replaced by the question; enemy hints while targeting stay. Boss rooms, miniboss rooms, the boss rush and the final battle never offer it, since leaving a fight that way left the save button disabled. Navi also stays quiet while a minigame timer runs, such as the one in Dampe's race, since leaving the race that way kept its timer running. Experimental, untested in the game.")
             .opt("off", "Off", "Navi stays quiet when she has no hint.")
             .opt("dungeons", "Dungeons", "Inside a dungeon, Navi offers a trip back to the dungeon entrance.")
             .opt("everywhere", "Dungeons and overworld", "Also outside dungeons: back to Kokiri Forest as a child, or the Temple of Time as an adult."),
@@ -724,7 +738,7 @@ pub fn build() -> Schema {
     );
     s.push(
         Setting::toggle(73, "shuffle_treasure_reward", "shuffle", "Treasure Chest Game reward", false)
-            .tip("Whether the final reward of the Market Treasure Chest Game, a Piece of Heart, holds a random item. Only the first win gives it, later wins give the usual red rupee. The five rooms keep their keys and rupees. Only unique items that do nothing when found twice can be placed there, so no upgrades, ammo, bottles or keys."),
+            .tip("Whether the final reward of the Market Treasure Chest Game, a Piece of Heart, holds a random item. Only the first win gives it, later wins give the usual red rupee. The five rooms keep their keys and rupees. Any item can be placed there; an upgrade gives the tier the spoiler names."),
     );
     s.extend(crate::shops::plan::settings());
     s.push(

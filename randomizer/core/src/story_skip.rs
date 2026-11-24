@@ -27,7 +27,7 @@ use crate::staging::Out;
 use crate::start_state::Ops;
 
 pub const NOTE_DEKU: &str = "The Deku Tree is met at new game: its mouth is open, the Deku Tree quest is complete and the Forest Stone quest is where Link's first arrival inside the tree leaves it, so the meeting, the arrival scene and Navi's dungeon lesson are skipped.";
-pub const NOTE: &str = "Story cutscenes are skipped. Saria's bridge scenes are cut: crossing the bridge gives the check's item with a plain item get window. The Temple of Time's first entry and altar scenes are marked as played. The first Master Sword draw gives the sword and the item of Rauru's check and then plays the short scene of a later draw, without the sword pull, Ganondorf, Rauru or Sheik scenes. Zelda's escape at the drawbridge is cut, so the Ocarina of Time waits in the moat right away. The Light Arrows scene only plays the short scene that hands over its check, and it no longer takes out the Master Sword, so Link keeps his equipment. The owls that stop Link (Hyrule Field, Zora's River, the Lost Woods) are cut and marked as met; the Death Mountain and Lake Hylia owls still offer their flights when spoken to. The burning village and Sheik's flashback before the Nocturne are cut: the village loads once, already burned, straight into the Nocturne scene, and the scene no longer takes out the Master Sword. Sheik's song scenes go straight to the song: the talk and the three ocarina lessons before it and the talk after it are cut, and the song check is given as usual.";
+pub const NOTE: &str = "Story cutscenes are skipped. Saria's bridge scenes are cut: crossing the bridge gives the check's item with a plain item get window. The Temple of Time's first entry and altar scenes are marked as played. The first Master Sword draw gives the sword and the item of Rauru's check and then plays the short scene of a later draw, without the sword pull, Ganondorf, Rauru or Sheik scenes. Zelda's escape at the drawbridge is cut, so the Ocarina of Time waits in the moat right away. The Light Arrows scene only plays the short scene that hands over its check, and it no longer takes out the Master Sword, so Link keeps his equipment. The owls that stop Link (Hyrule Field, Zora's River, the Lost Woods) are cut and marked as met; the Death Mountain and Lake Hylia owls still offer their flights when spoken to. The burning village and Sheik's flashback before the Nocturne are cut: the village loads the way the game does, without either scene, into the Nocturne scene, and the scene no longer takes out the Master Sword. Sheik's song scenes go straight to the song: the talk and the three ocarina lessons before it and the talk after it are cut, and the song check is given as usual.";
 
 const TRUE: u32 = 0x8000_0001;
 const FALSE: u32 = 0;
@@ -342,6 +342,9 @@ fn ends(f: &Flow, start: usize) -> Res<u16> {
             k => {
                 // A Bow or Slingshot tier is followed by its bag adds (crate::starter_bags::line).
                 let n: u16 = crate::starter_bags::skip(f, next_of(k).ok_or(Error::Format("story skip: a gift event has no single next"))?);
+                // Ammo given to a player without its bag is followed by its extra rupees
+                // (crate::progressive::NO_BAG_EXTRA).
+                let n: u16 = crate::progressive::skip_extra_rupees(f, n);
                 if !seen.contains(&n) {
                     seen.push(n);
                 }
@@ -1759,6 +1762,100 @@ const RAURU_GIVE: &str = "OOTRRRauruGive";
 /// chain. That add becomes a fade in and the standard item get with what the check holds (with
 /// its tier checks or its dungeon credit), still before the transition to the adult temple.
 /// Runs after patch_draw.
+pub fn patch_sun_give(b: &mut Bf, g: &SceneGive) -> Res<()> {
+    let f: &mut Flow = flow_mut(b, crate::flow_extra::sun::FLOW)?;
+    let named = |f: &Flow, n: &str| -> Res<usize> {
+        let hits: Vec<usize> = (0..f.events.len()).filter(|&i| f.events[i].name == n).collect();
+        match hits.as_slice() {
+            [i] => Ok(*i),
+            _ => Err(Error::Msg(format!("lh sun: expected one {n} in {}, found {}", f.name, hits.len()))),
+        }
+    };
+    let step: usize = named(f, "Event1")?;
+    let done: usize = named(f, "Event2")?;
+    let steps = |f: &Flow, i: usize, want: &str| f.events[i].kind.params().and_then(|c| c.get("StepName")) == Some(&Val::Str(want.to_string()));
+    if !steps(f, step, "Step03") || !steps(f, done, "Complete") {
+        return Err(Error::Format("lh sun: Event1 and Event2 no longer move the Fire Arrows quest to Step03 and Complete"));
+    }
+    if next_of(&f.events[step].kind) != Some(NONE) {
+        return Err(Error::Format("lh sun: Event1 is no longer the end of FireArrow_Appear"));
+    }
+    set_next(&mut f.events[done].kind, NONE)?;
+    let at: u16 = item_get(f, "OOTRRSunGive", g, idx(done)?, &["FireArrow_Appear"])?;
+    set_next(&mut f.events[step].kind, at)
+}
+
+pub fn stage_sun_give(rf: &mut Romfs, late: &mut Vec<Out>, work: &std::path::Path, g: &SceneGive) -> Res<()> {
+    stage_late(rf, late, work, crate::flow_extra::sun::FLOW, |b| patch_sun_give(b, g))
+}
+
+/// The winning spin still plays the pot's Heart Piece scene (cut by patch_goron_pot_scene to
+/// the roulette and the camera reset, which stop the pot and end its spin; without them the pot
+/// kept spinning, ignored bombs and the HUD never came back). After the scene, the placed item
+/// is given once, while the drop flag is still unset.
+pub fn patch_goron_pot_give(b: &mut Bf, g: &SceneGive) -> Res<()> {
+    use crate::bfevfl::Case;
+    use crate::flow_extra::goron_pot as pot;
+    let f: &mut Flow = flow_mut(b, pot::FLOW)?;
+    guard(f, "OOTRRPot")?;
+    let scenes: Vec<usize> = (0..f.events.len()).filter(|&i| action(f, i).as_deref() == Some("EventSystemActor.EventTransition") && text(&f.events[i], "EventName") == Some(pot::SCENE)).collect();
+    let [scene] = scenes.as_slice() else {
+        return Err(Error::Msg(format!("goron pot: expected one {} scene in {}, found {}", pot::SCENE, pot::FLOW, scenes.len())));
+    };
+    let scene: usize = *scene;
+    let dropped: u16 = next_of(&f.events[scene].kind).filter(|n| *n != NONE).ok_or(Error::Format("goron pot: the Heart Piece scene ends the flow"))?;
+    if action(f, dropped as usize).as_deref() != Some("GameDataActor.EventTriggerSetGameDataBool") || text(&f.events[dropped as usize], "GameDataName") != Some(pot::DROPPED) {
+        return Err(Error::Format("goron pot: the Heart Piece scene is no longer followed by its drop flag"));
+    }
+    let taken: Kind = set_bool(f, pot::TAKEN, true)?;
+    let after: u16 = chain(f, "OOTRRPotTaken", vec![taken], dropped)?;
+    let give: u16 = item_get(f, "OOTRRPotGive", g, after, &[pot::ENTRY])?;
+    let (a, q): (u16, u16) = crate::start_state::query_slot(f, DATA_ACTOR, "EventQueryIsGameDataBool")?;
+    let check: u16 = idx(f.events.len())?;
+    // Case 0 is true: the item was already given.
+    f.events.push(Event {
+        name: "OOTRRPotCheck".to_string(),
+        kind: Kind::Switch {
+            actor: a,
+            query: q,
+            cases: vec![Case { val: 0, ev: NONE }, Case { val: 1, ev: give }],
+            params: Some(Cont { items: vec![item("GameDataName", Val::Str(pot::DROPPED.to_string())), item("Index", Val::Int(-1))] }),
+        },
+    });
+    set_next(&mut f.events[scene].kind, check)
+}
+
+/// Cuts the Heart Piece out of the pot's win scene: the roulette (which stops the pot on its face
+/// and resets its prize holder) runs straight into the after-drop camera reset, so the pot never
+/// lets the vanilla Heart Piece out of its holder slot.
+pub fn patch_goron_pot_scene(b: &mut Bf) -> Res<()> {
+    use crate::flow_extra::goron_pot as pot;
+    let f: &mut Flow = flow_mut(b, pot::SCENE)?;
+    let sub = |f: &Flow, entry: &str| -> Res<usize> {
+        let hits: Vec<usize> = (0..f.events.len()).filter(|&i| matches!(&f.events[i].kind, Kind::Sub { flow, entry: e, .. } if flow == pot::ROULETTE_FLOW && e == entry)).collect();
+        match hits.as_slice() {
+            [i] => Ok(*i),
+            _ => Err(Error::Msg(format!("goron pot: expected one {}:{entry} in {}, found {}", pot::ROULETTE_FLOW, pot::SCENE, hits.len()))),
+        }
+    };
+    let roulette: usize = sub(f, "RoulettePot")?;
+    let after: usize = sub(f, "AfterDrop")?;
+    let to: u16 = idx(after)?;
+    if next_of(&f.events[roulette].kind) == Some(to) {
+        return Err(Error::Msg(format!("goron pot: {} was already patched", pot::SCENE)));
+    }
+    if !(0..f.events.len()).any(|i| action(f, i).as_deref() == Some(pot::DROP_PRIZE)) {
+        return Err(Error::Msg(format!("goron pot: {} no longer drops the Heart Piece", pot::SCENE)));
+    }
+    set_next(&mut f.events[roulette].kind, to)?;
+    set_next(&mut f.events[after].kind, NONE)
+}
+
+pub fn stage_goron_pot_give(rf: &mut Romfs, late: &mut Vec<Out>, work: &std::path::Path, g: &SceneGive) -> Res<()> {
+    stage_late(rf, late, work, crate::flow_extra::goron_pot::SCENE, patch_goron_pot_scene)?;
+    stage_late(rf, late, work, crate::flow_extra::goron_pot::FLOW, |b| patch_goron_pot_give(b, g))
+}
+
 pub fn patch_rauru_give(b: &mut Bf, g: &SceneGive) -> Res<()> {
     let f: &mut Flow = flow_mut(b, DOOR_FLOW)?;
     let adds: Vec<usize> = (0..f.events.len())
@@ -1970,11 +2067,34 @@ pub fn patch_sheik(b: &mut Bf, c: &SheikCut) -> Res<()> {
     let f: &mut Flow = flow_mut(b, c.scene)?;
     guard(f, SHEIK_PREFIX)?;
     let grant: usize = find(f, c.grant)?;
-    if !matches!(&f.events[grant].kind, Kind::Sub { entry, .. } if entry == "GetPouchContentByActorName") {
-        return Err(Error::Msg(format!("story skip: {} in {} is not the song grant, the game files differ", c.grant, c.scene)));
-    }
+    // The grant may be wrapped: a dungeon item turns it into the get window and its credit
+    // (crate::gift_keys::edit_flow), an upgrade or ammo into tier and owner checks (flow_wrap).
+    // Every such form still runs into the message close.
     let close: usize = find_action(f, (c.close, "GameSystemActor.EventCloseMessageDialog"))?;
-    if next_of(&f.events[grant].kind) != Some(idx(close)?) {
+    let mut seen: Vec<u16> = Vec::new();
+    let mut todo: Vec<u16> = vec![idx(grant)?];
+    let mut reached: bool = false;
+    while let Some(i) = todo.pop() {
+        if i == NONE || seen.contains(&i) || seen.len() > 256 {
+            continue;
+        }
+        if i == idx(close)? {
+            reached = true;
+            continue;
+        }
+        seen.push(i);
+        if let Some(e) = f.events.get(i as usize) {
+            match &e.kind {
+                Kind::Switch { cases, .. } | Kind::SubSwitch { cases, .. } => todo.extend(cases.iter().map(|c| c.ev)),
+                Kind::Fork { join, forks } => {
+                    todo.extend(forks.iter().copied());
+                    todo.push(*join);
+                }
+                k => todo.extend(next_of(k)),
+            }
+        }
+    }
+    if !reached {
         return Err(Error::Msg(format!("story skip: the song grant of {} is not followed by its message close", c.scene)));
     }
     let start: usize = find(f, c.start)?;
@@ -2081,16 +2201,20 @@ pub fn stage_sheik(rf: &mut Romfs, have: Have) -> Res<Vec<Out>> {
 /// burns), then changes to KakarikoVillage_Adult booting KakarikoVillage_FlashbackScenes, whose only
 /// job is the timeline Dm_Kakariko_0040 (Sheik's flashback) and a change to
 /// KakarikoVillage_Adult_Alternative booting KakarikoVillage_MelodyGet_Shadow (the Nocturne scene
-/// and the Shadow quest writes). The cut: the sword request becomes the 0030 flag, the mute is
-/// skipped, the 0030 transition becomes the 0040 flag, and the preload and the banc change go
-/// straight to the Alternative village with the Nocturne boot (one load instead of two).
+/// and the Shadow quest writes). The arrival itself already runs in KakarikoVillage_Adult_Alternative
+/// (the exit from Hyrule Field loads it once Sequence_IsAlternative_KakarikoAdult holds), so both
+/// banc changes are kept: a change to the banc Link is already in never finishes, and Link froze at
+/// the entrance. The cut: the sword request becomes the 0030 flag, the mute is skipped, the 0030
+/// transition becomes the 0040 flag, and the flashback's own transition becomes the 0040 flag too.
 const BURN_SWORD: (&str, &str) = ("Event37", "Player_Event.EventTriggerEquipmentUserRequestCreateStaticEquipment");
 const BURN_LOG: (&str, &str) = ("Event484", "UISystemActor.EventTriggerSetIsNotClearMessageLog");
 const BURN_SCENE: (&str, &str) = ("Event70", "Dm_Kakariko_0030");
 const BURN_PRELOAD: (&str, &str) = ("Event327", "GameSystemActor.EventTriggerBancRequestBeforehandLoad");
 const BURN_CHANGE: (&str, &str) = ("Event329", "GameSystemActor.EventReserveBancChange");
-const BURN_PATH: &str = "Work/Banc/Scene/KakarikoVillage/KakarikoVillage_Adult_Alternative.bcett.json";
-const BURN_BANC: &str = "KakarikoVillage_Adult_Alternative";
+const BURN_FLASHBACK: (&str, &str) = ("Event50", "Dm_Kakariko_0040");
+const BURN_FLASHBACK_CHANGE: (&str, &str) = ("Event379", "GameSystemActor.EventReserveBancChange");
+const BURN_ARRIVE_BANC: &str = "KakarikoVillage_Adult_Alternative";
+const BURN_FLASHBACK_BOOT: &str = "KakarikoVillage_FlashbackScenes";
 const BURN_BOOT: &str = "KakarikoVillage_MelodyGet_Shadow";
 pub const BURN_PREFIX: &str = "OOTRRBurn";
 
@@ -2102,10 +2226,14 @@ pub fn patch_burning(b: &mut Bf) -> Res<()> {
     }
     let sword: usize = find_action(f, BURN_SWORD)?;
     let log: usize = find_action(f, BURN_LOG)?;
-    let preload: usize = find_action(f, BURN_PRELOAD)?;
+    find_action(f, BURN_PRELOAD)?;
     let change: usize = find_action(f, BURN_CHANGE)?;
-    if text(&f.events[change], "BootEventName") != Some("KakarikoVillage_FlashbackScenes") {
-        return Err(Error::Format("story skip: the burning village no longer boots the flashback, the game files differ"));
+    if text(&f.events[change], "BootEventName") != Some(BURN_FLASHBACK_BOOT) || text(&f.events[change], "NextBanc") == Some(BURN_ARRIVE_BANC) {
+        return Err(Error::Format("story skip: the burning village no longer changes to the plain village for the flashback, the game files differ"));
+    }
+    let onward: usize = find_action(f, BURN_FLASHBACK_CHANGE)?;
+    if text(&f.events[onward], "BootEventName") != Some(BURN_BOOT) {
+        return Err(Error::Format("story skip: the flashback no longer boots the Nocturne scene, the game files differ"));
     }
     let next: u16 = next_of(&f.events[sword].kind).ok_or(Error::Format("story skip: the sword request has no next"))?;
     let mut k: Kind = set_bool(f, &format!("HavePlayedEvent.{}", BURN_SCENE.1), true)?;
@@ -2116,9 +2244,7 @@ pub fn patch_burning(b: &mut Bf) -> Res<()> {
     // The flag of the flashback in place of the burning scene's transition.
     set_param(&mut f.events[scene].kind, "GameDataName", Val::Str("HavePlayedEvent.Dm_Kakariko_0040".to_string()))?;
     set_next(&mut f.events[log].kind, idx(scene)?)?;
-    set_param(&mut f.events[preload].kind, "BancPath", Val::Str(BURN_PATH.to_string()))?;
-    set_param(&mut f.events[change].kind, "NextBanc", Val::Str(BURN_BANC.to_string()))?;
-    set_param(&mut f.events[change].kind, "BootEventName", Val::Str(BURN_BOOT.to_string()))?;
+    transition_to_flag(f, BURN_PREFIX, BURN_FLASHBACK.0, BURN_FLASHBACK.1, None)?;
     Ok(())
 }
 
@@ -2236,6 +2362,79 @@ mod tests {
                 assert!(t.calls.contains(&(flow.as_str(), entry.as_str())), "{}: the scene calls {flow}:{entry}, which no longer runs", t.loc);
             }
         }
+    }
+
+    #[test]
+    fn the_goron_pot_win_plays_the_scene_then_gives_the_placed_item_once() {
+        use crate::bfevfl::Case;
+        use crate::flow_extra::goron_pot as pot;
+        let Some(root) = dump() else { return };
+        let mut rf: Romfs = Romfs::open(&root).unwrap();
+        let mut b: Bf = Bf::parse(&rf.read_zs(&format!("Event/EventFlow/{}.bfevfl.zs", pot::FLOW)).unwrap()).unwrap();
+        let g: SceneGive = SceneGive { actor: "Item_Bow".to_string(), family: None, key: None, line: None };
+        patch_goron_pot_give(&mut b, &g).unwrap();
+        let b: Bf = Bf::parse(&b.write().unwrap()).unwrap();
+        let f: &Flow = b.flows.iter().find(|x| x.name == pot::FLOW).unwrap();
+        // The scene still plays (it stops the pot and ends its spin), and the check follows it.
+        let scene: &Event = f.events.iter().find(|e| text(e, "EventName") == Some(pot::SCENE)).unwrap();
+        let check: u16 = next_of(&scene.kind).unwrap();
+        let switch: &Event = &f.events[check as usize];
+        assert!(matches!(switch.kind, Kind::Switch { .. }) && text(switch, "GameDataName") == Some(pot::DROPPED), "{switch:?}");
+        let Kind::Switch { cases, .. } = &switch.kind else { unreachable!() };
+        assert!(cases.contains(&Case { val: 0, ev: NONE }));
+        let give: u16 = cases.iter().find(|c| c.val == 1).unwrap().ev;
+        let Kind::Sub { next, params, flow, .. } = &f.events[give as usize].kind else { panic!("{:?}", f.events[give as usize]) };
+        assert_eq!(flow, ITEM_GET.0);
+        assert_eq!(params.as_ref().and_then(|c| c.get("ActorName")), Some(&Val::Str("Item_Bow".to_string())));
+        let mut at: u16 = *next;
+        let mut set: Vec<&str> = Vec::new();
+        while at != NONE {
+            let e: &Event = &f.events[at as usize];
+            if let Some(n) = text(e, "GameDataName") {
+                set.push(n);
+            }
+            at = next_of(&e.kind).unwrap_or(NONE);
+        }
+        assert!(set.ends_with(&[pot::TAKEN, pot::DROPPED]), "{set:?}");
+        let entry = f.entries.iter().find(|e| e.name == pot::ENTRY).unwrap();
+        assert!(entry.subs.contains(&give));
+        let mut again: Bf = b.clone();
+        assert!(patch_goron_pot_give(&mut again, &g).is_err());
+    }
+
+    #[test]
+    fn the_goron_pot_scene_keeps_the_roulette_but_never_drops_the_heart_piece() {
+        use crate::flow_extra::goron_pot as pot;
+        let Some(root) = dump() else { return };
+        let mut rf: Romfs = Romfs::open(&root).unwrap();
+        let mut b: Bf = Bf::parse(&rf.read_zs(&format!("Event/EventFlow/{}.bfevfl.zs", pot::SCENE)).unwrap()).unwrap();
+        patch_goron_pot_scene(&mut b).unwrap();
+        let b: Bf = Bf::parse(&b.write().unwrap()).unwrap();
+        let f: &Flow = b.flows.iter().find(|x| x.name == pot::SCENE).unwrap();
+        let mut seen: Vec<bool> = vec![false; f.events.len()];
+        let mut todo: Vec<u16> = f.entries.iter().map(|e| e.main).collect();
+        while let Some(at) = todo.pop() {
+            if at == NONE || seen[at as usize] {
+                continue;
+            }
+            seen[at as usize] = true;
+            match &f.events[at as usize].kind {
+                Kind::Switch { cases, .. } => todo.extend(cases.iter().map(|c| c.ev)),
+                Kind::Fork { forks, join } => {
+                    todo.extend(forks.iter().copied());
+                    todo.push(*join);
+                }
+                k => todo.extend(next_of(k)),
+            }
+        }
+        let runs = |want: &dyn Fn(usize) -> bool| (0..f.events.len()).any(|i| seen[i] && want(i));
+        let sub = |i: usize, entry: &str| matches!(&f.events[i].kind, Kind::Sub { flow, entry: e, .. } if flow == pot::ROULETTE_FLOW && e == entry);
+        assert!(runs(&|i| sub(i, "RoulettePot")));
+        assert!(runs(&|i| sub(i, "AfterDrop")));
+        assert!(!runs(&|i| action(f, i).as_deref() == Some(pot::DROP_PRIZE)));
+        assert!(!runs(&|i| action(f, i).is_some_and(|a| a.starts_with("Obj_Heart_Piece."))));
+        let mut again: Bf = b.clone();
+        assert!(patch_goron_pot_scene(&mut again).is_err());
     }
 
     #[test]
@@ -2642,7 +2841,7 @@ mod tests {
     }
 
     #[test]
-    fn the_real_burning_village_loads_once_into_the_nocturne() {
+    fn the_real_burning_village_skips_both_scenes_and_keeps_both_loads() {
         let Some(root) = dump() else {
             return;
         };
@@ -2660,9 +2859,15 @@ mod tests {
         }
         assert_eq!(w.last().unwrap(), "Player_Event.EventWaitCreationFinishedEquipment()");
         let change: usize = find(f, BURN_CHANGE.0).unwrap();
-        assert_eq!(text(&f.events[change], "NextBanc"), Some(BURN_BANC));
-        assert_eq!(text(&f.events[change], "BootEventName"), Some(BURN_BOOT));
-        assert_eq!(text(&f.events[find(f, BURN_PRELOAD.0).unwrap()], "BancPath"), Some(BURN_PATH));
+        assert_eq!(text(&f.events[change], "NextBanc"), Some("KakarikoVillage_Adult"));
+        assert_ne!(text(&f.events[change], "NextBanc"), Some(BURN_ARRIVE_BANC), "the arrival runs in the burned village, a change to it never finishes");
+        assert_eq!(text(&f.events[change], "BootEventName"), Some(BURN_FLASHBACK_BOOT));
+        let flashback: usize = f.entries.iter().find(|e| e.name == BURN_FLASHBACK_BOOT).unwrap().main as usize;
+        let w2: Vec<String> = walk_joins(f, flashback as u16, 40);
+        assert!(!w2.iter().any(|x| x.starts_with("EventSystemActor.EventTransition")), "{w2:?}");
+        assert!(w2.iter().any(|x| x == "GameDataActor.EventTriggerSetGameDataBool(HavePlayedEvent.Dm_Kakariko_0040)"), "{w2:?}");
+        let onward: usize = find(f, BURN_FLASHBACK_CHANGE.0).unwrap();
+        assert_eq!((text(&f.events[onward], "NextBanc"), text(&f.events[onward], "BootEventName")), (Some(BURN_ARRIVE_BANC), Some(BURN_BOOT)));
         Bf::parse(&b.write().unwrap()).unwrap();
     }
 

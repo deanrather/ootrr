@@ -142,7 +142,7 @@ mod tests {
             .filter(|s| s.get("unsupported").and_then(|x| x.as_bool()) == Some(true))
             .filter_map(|s| s.get("id").and_then(|x| x.as_str()))
             .collect();
-        for id in ["bridge_medallions", "ganon_bosskey_medallions", "triforce_hunt", "logic_rules"] {
+        for id in ["bridge_stones", "ganon_bosskey_medallions", "triforce_hunt", "logic_rules"] {
             assert!(marked.contains(&id), "{id}");
         }
         // The bridge applies Vanilla and Dungeon rewards (crate::rainbow_bridge).
@@ -153,11 +153,12 @@ mod tests {
             "shuffle_potion_shop",
             "bridge",
             "bridge_rewards",
+            "bridge_medallions",
             "gerudo_fortress",
         ] {
             assert!(!marked.contains(&id), "{id}");
         }
-        assert_eq!(marked.len(), 14);
+        assert_eq!(marked.len(), 13);
         for s in all {
             if let Some(u) = s.get("unsupported") {
                 assert_eq!(u.as_bool(), Some(true));

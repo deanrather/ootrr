@@ -296,7 +296,7 @@ pub fn jailed(own: &[u8], step: &[u8]) -> Res<Vec<u8>> {
     y.write()
 }
 
-fn merge_plain(rf: &Romfs, outs: &mut Vec<Out>, have: Have, path: &str, f: impl FnOnce(&[u8]) -> Res<Vec<u8>>) -> Res<()> {
+pub fn merge_plain(rf: &Romfs, outs: &mut Vec<Out>, have: Have, path: &str, f: impl FnOnce(&[u8]) -> Res<Vec<u8>>) -> Res<()> {
     match outs.iter_mut().find(|o| o.path == path) {
         Some(o) => {
             let b: Vec<u8> = f(&o.z)?;
