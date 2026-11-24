@@ -27,6 +27,18 @@ pub(crate) mod tests {
     // sticks). Event items are not handed out, they come from their events. Farore's Wind is
     // always left out, since its warp reaches any spot set earlier.
     pub(crate) fn reach(w: &World, d: &Data, skip: &[&str], at: &str) -> bool {
+        searched(w, d, skip, |w, s| match w.loc(at) {
+            Some(l) => s.loc_access(l),
+            None => s.region_reached(w.region(at).unwrap(), None),
+        })
+    }
+
+    // The same search, asked whether one age reaches a region.
+    pub(crate) fn reach_as(w: &World, d: &Data, skip: &[&str], region: &str, age: crate::rules::Age) -> bool {
+        searched(w, d, skip, |w, s| s.region_reached(w.region(region).unwrap(), Some(age)))
+    }
+
+    fn searched(w: &World, d: &Data, skip: &[&str], ask: impl Fn(&World, &Search) -> bool) -> bool {
         let mut names: Vec<&str> = skip.to_vec();
         names.push("Farores Wind");
         let gone: Vec<ItemId> = names.iter().map(|n| w.item(n).unwrap()).collect();
@@ -50,10 +62,7 @@ pub(crate) mod tests {
             }
         }
         let s: Search = explore(w, &p, &extra);
-        match w.loc(at) {
-            Some(l) => s.loc_access(l),
-            None => s.region_reached(w.region(at).unwrap(), None),
-        }
+        ask(w, &s)
     }
 
     pub(crate) fn region_of<'a>(w: &'a World, loc: &str) -> &'a str {
@@ -177,15 +186,19 @@ pub(crate) mod tests {
         assert!(!reach(&w, &d, &["Boomerang"], "Jabu Jabus Belly GS Near Boss"));
     }
 
-    // The remake entrance wants a strength upgrade at any age; a Bomb Bag alone does not open it.
+    // The remake entrance wants a strength upgrade from a child (a Bomb Bag alone does not open
+    // it); an adult gets in without one.
     #[test]
-    fn the_dodongo_entrance_wants_a_strength_upgrade() {
+    fn the_dodongo_entrance_wants_a_strength_upgrade_from_a_child() {
+        use crate::rules::Age;
         let d: Data = Data::load().unwrap();
         let w: World = build(&d);
         let door: &str = "Dodongos Cavern Beginning";
-        assert!(reach(&w, &d, &[], door));
-        assert!(!reach(&w, &d, &["Progressive Strength Upgrade"], door));
-        assert!(reach(&w, &d, &["Progressive Strength Upgrade"], "Death Mountain"));
+        let no_strength: [&str; 1] = ["Progressive Strength Upgrade"];
+        assert!(reach_as(&w, &d, &[], door, Age::Child));
+        assert!(!reach_as(&w, &d, &no_strength, door, Age::Child));
+        assert!(reach_as(&w, &d, &no_strength, door, Age::Adult));
+        assert!(reach(&w, &d, &no_strength, "Death Mountain"));
     }
 
     // An Armos is hurt only by explosives or the Hammer, and the child's first Spirit room
