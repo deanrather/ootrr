@@ -68,6 +68,11 @@ pub const TREES: [&str; 12] = [
 pub const DIFFICULTY_FILES: [&str; 2] = [crate::difficulty::lottery::FILE, crate::difficulty::elink::FILE];
 pub const DIFFICULTY_TREES: [&str; 3] = [crate::difficulty::extras::MORE_SCENES, crate::difficulty::ground::NAV_DIR, crate::difficulty::ground::STITCHED_DIR];
 
+/// Pickup actors take the pose file of their model when the game has one: `Model/Item_*_Animation.anim.bfres.zs`
+/// (75 files, about 1 MB).
+pub const POSE_HEAD: &str = "Model/Item_";
+pub const POSE_TAIL: &str = "_Animation.anim.bfres.zs";
+
 /// Music and sound effect shuffle list and size every sound bank and stream.
 pub const SOUND: &str = "Sound/Resource";
 
@@ -77,11 +82,12 @@ pub const SOUND: &str = "Sound/Resource";
 pub struct Unpack {
     pub files: BS<String>,
     pub trees: BS<String>,
+    pub shaped: Vec<(String, String)>,
 }
 
 impl Unpack {
     pub fn wants(&self, r: &str) -> bool {
-        self.files.contains(r) || self.trees.iter().any(|t| r.len() > t.len() && r.starts_with(t.as_str()) && r.as_bytes()[t.len()] == b'/')
+        self.files.contains(r) || self.trees.iter().any(|t| r.len() > t.len() && r.starts_with(t.as_str()) && r.as_bytes()[t.len()] == b'/') || self.shaped.iter().any(|(a, z)| r.starts_with(a.as_str()) && r.ends_with(z.as_str()))
     }
 }
 
@@ -89,6 +95,7 @@ pub fn unpack(d: &Data, sound: bool) -> Unpack {
     let mut files: BS<String> = list(d).into_iter().collect();
     files.extend(crate::colors::files());
     files.extend(crate::gerudo_card::MEMBERS.iter().map(|n| crate::gerudo_card::schedule_path(n)));
+    files.insert(crate::gerudo_card::schedule_path(crate::open_world::rolling_goron::OWN));
     files.extend(crate::open_world::fortress::CARPENTERS.iter().map(|n| crate::open_world::fortress::own_schedule(n)));
     if let Ok(p) = crate::title_logo::patch() {
         files.extend(crate::title_logo::touched(&p));
@@ -98,7 +105,7 @@ pub fn unpack(d: &Data, sound: bool) -> Unpack {
     if sound {
         trees.insert(SOUND.to_string());
     }
-    Unpack { files, trees }
+    Unpack { files, trees, shaped: vec![(POSE_HEAD.to_string(), POSE_TAIL.to_string())] }
 }
 
 pub fn missing(root: &P, d: &Data) -> Vec<String> {
@@ -153,6 +160,8 @@ mod tests {
         for f in [crate::difficulty::lottery::FILE, crate::difficulty::elink::FILE, "AoC1/Banc/BancBasedResource/StartPos.byml.zs", "Phive/NavMesh/DodongoCavern.Nin_Ounce_NVN2.bphnm.zs", "Phive/StitchedNavMesh/HyruleField_Child/X0_Z0.Nin_Ounce_NVN2.bphnm.zs"] {
             assert!(u.wants(f), "{f}");
         }
+        assert!(u.wants(&crate::gerudo_card::schedule_path(crate::open_world::rolling_goron::OWN)));
+        assert!(u.wants("Model/Item_Ocarina_Fairy_Animation.anim.bfres.zs") && !u.wants("Model/Item_Ocarina_Fairy.fmdb.bfres.zs") && !u.wants("Model/Animal_Cow_Animation.anim.bfres.zs"));
         assert!(!u.wants("Phive/Shape/x") && !u.wants("ELink2/other.zs"));
     }
 

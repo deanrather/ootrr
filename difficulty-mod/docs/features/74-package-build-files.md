@@ -23,7 +23,7 @@ Origin (history): 5bdcd62 (18 Nov, drop lottery), e387d73 (18 Nov, AoC1 in More 
 
 ## Fix
 
-`required::DIFFICULTY_FILES` (the lottery file and the ELink2 file) and `DIFFICULTY_TREES` (`AoC1` 83 KB, `Phive/NavMesh` 22.8 MB, `Phive/StitchedNavMesh` 9.3 MB) are added to the unpack set. About 33 MB more is unpacked. The default build's unpack set grows too, since the unpack set does not depend on settings.
+`required::DIFFICULTY_FILES` (the lottery file and the ELink2 file) and `DIFFICULTY_TREES` (`AoC1` 83 KB, `Phive/NavMesh` 22.8 MB, `Phive/StitchedNavMesh` 9.3 MB) are added to the unpack set. About 33 MB more is unpacked. The default build's unpack set grows too, since the unpack set does not depend on settings. After merging nightly dda8087 the same test failed for two more reads that nightly's changes brought: the Darunia Jr. adult schedule file (`open_world::rolling_goron::OWN`, added to the unpack set) and the pose file of a pickup's model (`Model/Item_*_Animation.anim.bfres.zs`, 75 files, about 1 MB, matched by `required::POSE_HEAD` and `POSE_TAIL` through `Unpack::shaped`; without it the Obj_Ocarina packs, ActorInfo and size table differed from the folder build). `a_package_build_unpacks_the_files_the_difficulty_settings_read` checks both.
 
 ## Tested
 
