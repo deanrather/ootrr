@@ -39,7 +39,61 @@ pub const REWARD_ITEMS: [&str; 9] = [
     "IsGet.Item_Medal_Spirit",
     "IsGet.Item_Medal_Shadow",
 ];
-const COUNTS: [&str; 10] = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
+pub const MEDALLION_ITEMS: [&str; 6] = [
+    "IsGet.Item_Medal_Light",
+    "IsGet.Item_Medal_Forest",
+    "IsGet.Item_Medal_Fire",
+    "IsGet.Item_Medal_Water",
+    "IsGet.Item_Medal_Spirit",
+    "IsGet.Item_Medal_Shadow",
+];
+pub const COUNTS: [&str; 10] = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
+pub const LACS_MEDALLIONS: &str = "lacs_medallions";
+pub const LACS_MEDALLIONS_VALUE: &str = "lacs_medallions";
+pub const LACS_MEDALLIONS_NUM: u16 = 160;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Goal {
+    Rewards(u8),
+    Medallions(u8),
+}
+
+impl Goal {
+    pub fn flags(&self) -> &'static [&'static str] {
+        match self {
+            Goal::Rewards(_) => &REWARD_ITEMS,
+            Goal::Medallions(_) => &MEDALLION_ITEMS,
+        }
+    }
+
+    pub fn n(&self) -> u8 {
+        match self {
+            Goal::Rewards(n) | Goal::Medallions(n) => (*n).min(self.flags().len() as u8),
+        }
+    }
+
+    pub fn kind(&self) -> &'static str {
+        match self {
+            Goal::Rewards(_) => "dungeons",
+            Goal::Medallions(_) => "medallions",
+        }
+    }
+
+    pub fn count(&self) -> &'static str {
+        COUNTS[usize::from(self.n())]
+    }
+
+    pub fn terms(&self, played: &str) -> Vec<(i32, String)> {
+        let mut t: Vec<(i32, String)> = at_least(self.flags(), usize::from(self.n())).unwrap_or_default();
+        let counted: bool = !t.is_empty();
+        t.push((0, played.to_string()));
+        t.push(op(NOT_OP));
+        if counted {
+            t.push(op(AND_OP));
+        }
+        t
+    }
+}
 
 const READ_EXP: &str = "HoldGameDataGetBoolExpSimple";
 const EXP_IN: &str = "GameDataNameBoolExp";
@@ -73,21 +127,28 @@ pub fn exps() -> Vec<Edit> {
 
 // Setting number 103 is a placeholder until the maintainer gives this branch a range.
 pub fn settings() -> Vec<crate::settings::Setting> {
-    vec![crate::settings::Setting::number(103, LACS_REWARDS, "keys", "Rewards for the Light Arrows Cutscene", 9, 1, 9)
-        .tip("How many Stones and Medallions together make the Light Arrows Cutscene play, which then gives Ganon's Boss Key. Any mix of the three Spiritual Stones and six Medallions counts.")
-        .when("shuffle_ganon_bosskey", crate::lacs_key::VALUE)]
+    vec![
+        crate::settings::Setting::number(103, LACS_REWARDS, "keys", "Rewards for the Light Arrows Cutscene", 9, 1, 9)
+            .tip("How many Stones and Medallions together make the Light Arrows Cutscene play, which then gives Ganon's Boss Key. Any mix of the three Spiritual Stones and six Medallions counts.")
+            .when("shuffle_ganon_bosskey", crate::lacs_key::VALUE),
+        crate::settings::Setting::number(LACS_MEDALLIONS_NUM, LACS_MEDALLIONS, "keys", "Medallions for the Light Arrows Cutscene", 6, 1, 6)
+            .tip("How many Medallions make the Light Arrows Cutscene play, which then gives Ganon's Boss Key. Any of the six Medallions count, the Spiritual Stones do not. Experimental, untested in the game.")
+            .when("shuffle_ganon_bosskey", LACS_MEDALLIONS_VALUE),
+    ]
 }
 
 /// Reads the Light Arrows cutscene count: Some(n) when Ganon's Boss Key is on the cutscene and
 /// the scene waits for n dungeon rewards.
-pub fn read_lacs(s: &crate::settings::Settings, ganon: crate::slice::support::Keep, bad: &mut Vec<String>) -> Option<u8> {
+pub fn read_lacs(s: &crate::settings::Settings, ganon: crate::slice::support::Keep, bad: &mut Vec<String>) -> Option<Goal> {
     if ganon != crate::slice::support::Keep::Lacs {
         return None;
     }
-    match s.int(LACS_REWARDS) {
-        Ok(n) if (1..=9).contains(&n) => Some(n as u8),
+    let medallions: bool = s.text("shuffle_ganon_bosskey").is_ok_and(|v| v == LACS_MEDALLIONS_VALUE);
+    let (key, top): (&str, i64) = if medallions { (LACS_MEDALLIONS, 6) } else { (LACS_REWARDS, 9) };
+    match s.int(key) {
+        Ok(n) if (1..=top).contains(&n) => Some(if medallions { Goal::Medallions(n as u8) } else { Goal::Rewards(n as u8) }),
         Ok(n) => {
-            bad.push(format!("{LACS_REWARDS} is {n}, which is not between 1 and 9"));
+            bad.push(format!("{key} is {n}, which is not between 1 and {top}"));
             None
         }
         Err(e) => {
@@ -99,7 +160,15 @@ pub fn read_lacs(s: &crate::settings::Settings, ganon: crate::slice::support::Ke
 
 /// Logic settings for the Light Arrows cutscene when it waits for n dungeon rewards.
 pub fn lacs_logic(n: u8) -> [(&'static str, &'static str); 2] {
-    [(LACS_SETTING, "dungeons"), (LACS_REWARDS, COUNTS[usize::from(n).min(9)])]
+    lacs_goal_logic(Goal::Rewards(n))
+}
+
+pub fn lacs_goal_logic(g: Goal) -> [(&'static str, &'static str); 2] {
+    let key: &str = match g {
+        Goal::Rewards(_) => LACS_REWARDS,
+        Goal::Medallions(_) => LACS_MEDALLIONS,
+    };
+    [(LACS_SETTING, g.kind()), (key, g.count())]
 }
 
 /// Postfix terms for "at least k of these flags". None stands for always true (k is 0).
@@ -140,24 +209,21 @@ pub fn at_least(flags: &[&str], k: usize) -> Option<Vec<(i32, String)>> {
 /// The Light Arrows scene formula for n of the nine dungeon rewards: at least n rewards held,
 /// and the scene not played yet (as the medallion gate does).
 pub fn lacs_terms(n: u8) -> Vec<(i32, String)> {
-    let mut t: Vec<(i32, String)> = at_least(&REWARD_ITEMS, usize::from(n).min(9)).unwrap_or_default();
-    let counted: bool = !t.is_empty();
-    t.push((0, LACS_PLAYED.to_string()));
-    t.push(op(NOT_OP));
-    if counted {
-        t.push(op(AND_OP));
-    }
-    t
+    Goal::Rewards(n).terms(LACS_PLAYED)
 }
 
 pub fn lacs_exp(n: u8) -> Edit {
-    Edit::Exp(LACS_EXP.to_string(), lacs_terms(n))
+    lacs_goal_exp(Goal::Rewards(n))
+}
+
+pub fn lacs_goal_exp(g: Goal) -> Edit {
+    Edit::Exp(LACS_EXP.to_string(), g.terms(LACS_PLAYED))
 }
 
 /// Swaps whatever formula the presets give the Light Arrows scene for the reward count.
-pub fn override_lacs(edits: &mut Vec<Edit>, n: u8) {
+pub fn override_lacs(edits: &mut Vec<Edit>, g: Goal) {
     edits.retain(|e| !matches!(e, Edit::Exp(name, _) if name == LACS_EXP));
-    edits.push(lacs_exp(n));
+    edits.push(lacs_goal_exp(g));
 }
 
 fn one(hits: Vec<usize>, what: &str) -> Res<usize> {
@@ -618,12 +684,12 @@ mod tests {
     #[test]
     fn the_reward_count_replaces_the_medallion_formula() {
         let mut e: Vec<Edit> = exps();
-        override_lacs(&mut e, 4);
+        override_lacs(&mut e, Goal::Rewards(4));
         assert_eq!(e.len(), 3);
         assert_eq!(e.iter().filter(|x| matches!(x, Edit::Exp(n, _) if n == LACS_EXP)).count(), 1);
         assert!(e.contains(&lacs_exp(4)));
         let mut none: Vec<Edit> = Vec::new();
-        override_lacs(&mut none, 9);
+        override_lacs(&mut none, Goal::Rewards(9));
         assert_eq!(none, vec![lacs_exp(9)]);
     }
 
@@ -636,7 +702,7 @@ mod tests {
         s.set("shuffle_ganon_bosskey", Value::s(crate::lacs_key::VALUE)).unwrap();
         s.set(LACS_REWARDS, Value::Int(5)).unwrap();
         let p = crate::slice::support::plan(&s).unwrap();
-        assert_eq!(p.lacs, Some(5));
+        assert_eq!(p.lacs, Some(Goal::Rewards(5)));
         assert!(p.logic().contains(&(LACS_SETTING, "dungeons")));
         assert!(p.logic().contains(&(LACS_REWARDS, "5")));
         assert!(p.notes.iter().any(|n| n == LACS_NOTE));

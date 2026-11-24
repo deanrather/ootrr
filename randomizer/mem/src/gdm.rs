@@ -100,6 +100,50 @@ fn master(g: &Game, base: u64) -> Res<Vec<u64>> {
     Ok(out)
 }
 
+fn bool_entry(g: &Game, base: u64, hash: u32) -> Res<u64> {
+    let t: &Table = &TABLES[0];
+    let bad = || E::Msg("the game data table could not be read".to_string());
+    let hd: Vec<u8> = g.read(base + t.off, 0x28).ok_or_else(bad)?;
+    let cnt: u32 = r32(&hd, 0x08);
+    let ents: u64 = r64(&hd, 0x10);
+    let ht: u64 = r64(&hd, 0x18);
+    let cap: u32 = r32(&hd, 0x24);
+    if cnt == 0 || cnt > MAX_CNT || cap < cnt || cap > MAX_CAP || ents < MIN_PTR || ht < MIN_PTR {
+        return Err(bad());
+    }
+    let hb: Vec<u8> = g.read(ht, cap as usize * 8).ok_or_else(bad)?;
+    let idx: u32 = (0..cap as usize)
+        .find(|i| r32(&hb, i * 8) == hash && r32(&hb, i * 8 + 4) < cnt)
+        .map(|i| r32(&hb, i * 8 + 4))
+        .ok_or_else(|| E::Msg(format!("the running game has no Bool flag with hash {hash:08x}, so this mod is not the one running")))?;
+    let at: u64 = ents + idx as u64 * t.stride as u64;
+    if g.u64_at(at) != Some(g.main + t.vt) {
+        return Err(bad());
+    }
+    Ok(at)
+}
+
+pub fn get_bool(g: &Game, hash: u32) -> Res<bool> {
+    let base: u64 = gdm(g)?;
+    let at: u64 = bool_entry(g, base, hash)?;
+    let Val::Byte(o) = TABLES[0].val else { return Err(E::Msg("the Bool table layout is unknown".to_string())) };
+    let b: Vec<u8> = g.read(at + o as u64, 1).ok_or_else(|| E::Msg("the flag could not be read".to_string()))?;
+    Ok(b[0] & 1 != 0)
+}
+
+pub fn set_bool(g: &Game, hash: u32, v: bool) -> Res<bool> {
+    let base: u64 = gdm(g)?;
+    let at: u64 = bool_entry(g, base, hash)?;
+    let Val::Byte(o) = TABLES[0].val else { return Err(E::Msg("the Bool table layout is unknown".to_string())) };
+    let pos: u64 = at + o as u64;
+    let cur: u8 = g.read(pos, 1).ok_or_else(|| E::Msg("the flag could not be read".to_string()))?[0];
+    let new: u8 = (cur & !1) | v as u8;
+    if new != cur && !g.write(pos, &[new]) {
+        return Err(E::Msg("the game refused the flag write (is it running as another user?)".to_string()));
+    }
+    Ok(cur & 1 != 0)
+}
+
 pub fn snap(g: &Game) -> Res<Snap> {
     let base: u64 = gdm(g)?;
     let mut rows: Vec<(u32, u32)> = Vec::new();

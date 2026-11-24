@@ -33,6 +33,10 @@ pub fn parse(a: &[String]) -> Res<(Spec, Opts, Layers)> {
                 l.magic = true;
                 1
             }
+            "--own" => {
+                l.own = true;
+                1
+            }
             "--tag" => {
                 let v: &str = arg(a, i + 1, "missing tag name")?;
                 if !l.tags.iter().any(|t| t == v) {
@@ -139,10 +143,10 @@ mod tests {
         let a: Vec<String> = args(&["r", "l", "m", "Item_Bottle_Letter", "--name", "Obj_Bottle_LetterLand", "--tag", "LetterBottle", "--tag", "LetterBottle"]);
         let (s, _, l): (Spec, Opts, Layers) = parse(&a).unwrap();
         assert_eq!(s.name, "Obj_Bottle_LetterLand");
-        assert_eq!(l, Layers { tags: vec!["LetterBottle".to_string()], ammo: false, magic: false, model: None, spin: false, lift: 0 });
+        assert_eq!(l, Layers { tags: vec!["LetterBottle".to_string()], ammo: false, magic: false, model: None, spin: false, lift: 0, own: false });
         let (_, _, l): (Spec, Opts, Layers) = parse(&args(&["r", "l", "m", "Item_Range_Bow", "--ammo"])).unwrap();
-        assert_eq!(l, Layers { tags: Vec::new(), ammo: true, magic: false, model: None, spin: false, lift: 0 });
+        assert_eq!(l, Layers { tags: Vec::new(), ammo: true, magic: false, model: None, spin: false, lift: 0, own: false });
         let (_, _, l): (Spec, Opts, Layers) = parse(&args(&["r", "l", "m", "Item_FairyBless_MP", "--magic"])).unwrap();
-        assert_eq!(l, Layers { tags: Vec::new(), ammo: false, magic: true, model: None, spin: false, lift: 0 });
+        assert_eq!(l, Layers { tags: Vec::new(), ammo: false, magic: true, model: None, spin: false, lift: 0, own: false });
     }
 }

@@ -1,6 +1,14 @@
 pub mod anju;
 pub mod blocks;
 pub mod chest_anim;
+pub mod dampe_dig;
+pub mod dampe_race;
+pub mod fishing;
+pub mod gear_cycle;
+pub mod night_skulls;
+pub mod scarecrow;
+pub mod skull_kid_session;
+pub mod tower_escape;
 pub mod bunny;
 pub mod navi_return;
 pub mod owl;
@@ -41,6 +49,14 @@ pub struct Opts {
     pub big_chests: bool,
     pub blocks: bool,
     pub owls: bool,
+    pub suns_skulls: bool,
+    pub any_fish: bool,
+    pub free_scarecrow: bool,
+    pub skip_escape: bool,
+    pub fast_session: bool,
+    pub one_race: bool,
+    pub first_dig: bool,
+    pub gear_cycle: bool,
 }
 
 pub type Have<'a> = &'a dyn Fn(&str) -> Option<Vec<u8>>;
@@ -57,6 +73,15 @@ impl Opts {
         }
         if self.poe {
             out.push((poe::LOGIC_KEY, "1"));
+        }
+        if self.suns_skulls {
+            out.push((night_skulls::LOGIC_SUNS, "true"));
+        }
+        if self.free_scarecrow {
+            out.push((scarecrow::LOGIC_KEY, scarecrow::LOGIC_ON));
+        }
+        if self.skip_escape {
+            out.push((tower_escape::SETTING, "true"));
         }
         out
     }
@@ -93,7 +118,35 @@ impl Opts {
         if self.owls {
             out.push(owl::NOTE.to_string());
         }
+        if self.suns_skulls {
+            out.push(night_skulls::NOTE_SUNS.to_string());
+        }
+        if self.any_fish {
+            out.push(fishing::NOTE.to_string());
+        }
+        if self.free_scarecrow {
+            out.push(scarecrow::NOTE.to_string());
+        }
+        if self.skip_escape {
+            out.push(tower_escape::NOTE.to_string());
+        }
+        if self.fast_session {
+            out.push(skull_kid_session::NOTE.to_string());
+        }
+        if self.one_race {
+            out.push(dampe_race::NOTE.to_string());
+        }
+        if self.first_dig {
+            out.push(dampe_dig::NOTE.to_string());
+        }
+        if self.gear_cycle {
+            out.push(gear_cycle::NOTE.to_string());
+        }
         out
+    }
+
+    pub fn maps(&self) -> bool {
+        self.skip_escape
     }
 }
 
@@ -122,6 +175,14 @@ pub fn read(s: &Settings, bad: &mut Vec<String>) -> Opts {
     let big_chests: bool = flag(chest_anim::SETTING);
     let blocks: bool = flag(blocks::SETTING);
     let owls: bool = flag(owl::SETTING);
+    let suns_skulls: bool = flag(night_skulls::SUNS);
+    let any_fish: bool = true;
+    let free_scarecrow: bool = flag(scarecrow::SETTING);
+    let skip_escape: bool = flag(tower_escape::SETTING);
+    let fast_session: bool = true;
+    let one_race: bool = true;
+    let first_dig: bool = true;
+    let gear_cycle: bool = true;
     let navi: navi_return::Mode = match s.text(NAVI) {
         Ok("off") => navi_return::Mode::Off,
         Ok("dungeons") => navi_return::Mode::Dungeons,
@@ -148,7 +209,19 @@ pub fn read(s: &Settings, bad: &mut Vec<String>) -> Opts {
             bunny::Mode::Off
         }
     };
-    Opts { skip, anju, poe, navi, bunny, big_chests, blocks, owls }
+    Opts { skip, anju, poe, navi, bunny, big_chests, blocks, owls, suns_skulls, any_fish, free_scarecrow, skip_escape, fast_session, one_race, first_dig, gear_cycle }
+}
+
+pub fn settings() -> Vec<crate::settings::Setting> {
+    use crate::settings::Setting;
+    vec![
+        Setting::toggle(night_skulls::SUNS_NUM, night_skulls::SUNS, "world", "Night Gold Skulltulas expect Sun's Song", false)
+            .tip("The logic only expects you to get a night Gold Skulltula once you can play Sun's Song, so no check is placed behind one before that. Like the OoTR trick option of the same name. Has no effect with Skulltulas by day."),
+        Setting::toggle(scarecrow::NUM, scarecrow::SETTING, "world", "Free Scarecrow's Song", false)
+            .tip("Start with Scarecrow's Song and an instant scarecrow: take out the Ocarina at one of Pierre's spots and he appears there, with no song to record or play. The logic counts the song as known, like the OoTR option of the same name. Tested in the game."),
+        Setting::toggle(tower_escape::NUM, tower_escape::SETTING, "goal", "Skip the tower escape", false)
+            .tip("After Ganondorf falls, Link goes straight to the field below the collapsing tower and the Ganon fight, with no escape run down the tower, so the logic no longer needs the Longshot to finish. Without this, the logic needs the Longshot for the escape. Tested in the game."),
+    ]
 }
 
 pub fn files() -> Vec<String> {
@@ -207,11 +280,34 @@ pub fn stage(rf: &mut Romfs, o: &Opts, have: Have) -> Res<Vec<Out>> {
     if o.owls {
         owl::stage(rf, have, &mut outs)?;
     }
+    if o.gear_cycle {
+        outs.extend(gear_cycle::stage(rf, have)?);
+        // On top of the Bunny Hood edit when that option changed the same packs.
+        for (file, _) in bunny::PACKS {
+            stack(rf, &mut outs, have, file, gear_cycle::patch_boots_hop)?;
+        }
+    }
     Ok(outs)
 }
 
+/// Edits `path` on top of an earlier edit of it in `outs`, keeping that edit's original size
+/// for the size table, or on top of the worked or game file when nothing edited it yet.
+fn stack(rf: &mut Romfs, outs: &mut Vec<Out>, have: Have, path: &str, f: impl FnOnce(&[u8]) -> Res<Vec<u8>>) -> Res<()> {
+    match outs.iter().position(|o| o.path == path) {
+        Some(i) => {
+            let id: Option<u32> = dict_id(&outs[i].z);
+            let raw: Vec<u8> = rf.zs.decompress(&outs[i].z)?;
+            let b: Vec<u8> = f(&raw)?;
+            outs[i].new = b.len();
+            outs[i].z = zs::compress_raw(&b, id)?;
+        }
+        None => outs.push(edit_zs(rf, have, path, f)?),
+    }
+    Ok(())
+}
+
 pub fn build(romfs: &P, load: &P, name: &str, o: &Opts) -> Res<String> {
-    if !o.any() {
+    if !o.any() && !o.gear_cycle {
         return Err(Error::Format("qol: nothing selected"));
     }
     let mut rf: Romfs = Romfs::open(romfs)?;
@@ -231,6 +327,12 @@ mod tests {
     use super::*;
     use crate::settings::Value;
 
+    fn always() -> Opts {
+        Opts { any_fish: true, fast_session: true, one_race: true, first_dig: true, gear_cycle: true, ..Opts::default() }
+    }
+
+    const ALWAYS_NOTES: usize = 5;
+
     /// The defaults with Return with Navi off, the one option on by default.
     fn quiet() -> Settings {
         let mut s: Settings = Settings::default();
@@ -243,13 +345,13 @@ mod tests {
         let mut bad: Vec<String> = Vec::new();
         let o: Opts = read(&Settings::default(), &mut bad);
         assert!(bad.is_empty());
-        assert_eq!(o, Opts { navi: navi_return::Mode::Everywhere, ..Opts::default() });
+        assert_eq!(o, Opts { navi: navi_return::Mode::Everywhere, ..always() });
         assert!(o.any());
         assert!(o.logic().is_empty());
-        assert_eq!(o.notes().len(), 1);
+        assert_eq!(o.notes().len(), 1 + ALWAYS_NOTES);
         let q: Opts = read(&quiet(), &mut bad);
-        assert_eq!(q, Opts::default());
-        assert!(!q.any() && q.notes().is_empty());
+        assert_eq!(q, always());
+        assert!(!q.any() && q.notes().len() == ALWAYS_NOTES);
     }
 
     #[test]
@@ -261,13 +363,13 @@ mod tests {
         let mut bad: Vec<String> = Vec::new();
         let o: Opts = read(&s, &mut bad);
         assert!(bad.is_empty());
-        assert_eq!(o, Opts { skip: Skip::Story, anju: true, poe: true, navi: navi_return::Mode::Off, bunny: bunny::Mode::Off, big_chests: false, blocks: false, owls: false });
+        assert_eq!(o, Opts { skip: Skip::Story, anju: true, poe: true, navi: navi_return::Mode::Off, bunny: bunny::Mode::Off, big_chests: false, blocks: false, owls: false, ..always() });
         s.set(BUNNY, Value::s("jump")).unwrap();
         assert_eq!(read(&s, &mut bad).bunny, bunny::Mode::Jump);
-        assert_eq!(read(&s, &mut bad).notes().len(), 4);
+        assert_eq!(read(&s, &mut bad).notes().len(), 4 + ALWAYS_NOTES);
         s.set(BUNNY, Value::s("off")).unwrap();
         assert_eq!(o.logic(), vec![("chicken_count", "1"), ("big_poe_count", "1")]);
-        assert_eq!(o.notes().len(), 3);
+        assert_eq!(o.notes().len(), 3 + ALWAYS_NOTES);
         s.set(SKIP, Value::s("all")).unwrap();
         assert_eq!(read(&s, &mut bad).skip, Skip::All);
     }
@@ -281,7 +383,8 @@ mod tests {
         let o: Opts = read(&s, &mut bad);
         assert!(bad.is_empty());
         assert!(o.big_chests && o.any());
-        assert_eq!(o.notes(), vec![chest_anim::NOTE.to_string()]);
+        assert_eq!(o.notes()[0], chest_anim::NOTE);
+        assert_eq!(o.notes().len(), 1 + ALWAYS_NOTES);
     }
 
     fn dump() -> Option<std::path::PathBuf> {
@@ -318,18 +421,18 @@ mod tests {
         use crate::slice::support::plan;
         let p: crate::slice::support::Plan = plan(&quiet()).unwrap();
         assert!(!p.qol.any());
-        assert_eq!(p.logic(), vec![(crate::open_world::EPONA, "1")]);
+        assert_eq!(p.logic(), [&crate::slice::support::OWN_KEYS[..], &[(crate::open_world::EPONA, "1"), crate::open_world::trade::LOGIC[0]]].concat());
         let base: usize = p.notes.len();
         assert_eq!(plan(&Settings::default()).unwrap().notes.len(), base + 1, "Return with Navi adds its note");
         for (k, v, key) in [(ANJU, Value::Bool(true), "chicken_count"), (POE, Value::Bool(true), "big_poe_count")] {
             let p: crate::slice::support::Plan = plan(&with(&[(NAVI, Value::s("off")), (k, v)])).unwrap();
             assert!(p.qol.any());
-            assert_eq!(p.logic(), vec![(key, "1"), (crate::open_world::EPONA, "1")]);
+            assert_eq!(p.logic(), [&crate::slice::support::OWN_KEYS[..], &[(key, "1"), (crate::open_world::EPONA, "1"), crate::open_world::trade::LOGIC[0]]].concat());
             assert_eq!(p.notes.len(), base + 1);
         }
         let p: crate::slice::support::Plan = plan(&with(&[(SKIP, Value::s("all"))])).unwrap();
         assert_eq!(p.qol.skip, Skip::All);
-        assert_eq!(p.logic(), vec![(crate::open_world::EPONA, "1")]);
+        assert_eq!(p.logic(), [&crate::slice::support::OWN_KEYS[..], &[(crate::open_world::EPONA, "1"), crate::open_world::trade::LOGIC[0]]].concat());
         assert!(Settings::default().set(SKIP, Value::s("everything")).is_err());
     }
 
@@ -383,17 +486,50 @@ mod tests {
     }
 
     #[test]
+    fn the_boots_hop_edit_stacks_on_the_bunny_hood_edit() {
+        let Some(root) = dump() else {
+            return;
+        };
+        let mut rf: Romfs = Romfs::open(&root).unwrap();
+        let o: Opts = Opts { bunny: bunny::Mode::Speed, ..always() };
+        let outs: Vec<Out> = stage(&mut rf, &o, &|_: &str| None).unwrap();
+        for p in [bunny::FILE, bunny::ADULT_FILE] {
+            let hits: Vec<&Out> = outs.iter().filter(|x| x.path == p).collect();
+            assert_eq!(hits.len(), 1, "{p} is staged once");
+            let es: Vec<crate::sarc::Entry> = crate::sarc::parse(&rf.zs.decompress(&hits[0].z).unwrap()).unwrap();
+            let game: Vec<u8> = rf.read_zs(p).unwrap();
+            let bunny_only: Vec<crate::sarc::Entry> = crate::sarc::parse(&bunny::patch_pack(&game, bunny::Mode::Speed).unwrap()).unwrap();
+            let hop_only: Vec<crate::sarc::Entry> = crate::sarc::parse(&gear_cycle::patch_boots_hop(&game).unwrap()).unwrap();
+            assert_eq!(crate::sarc::get(&es, bunny::WALK.file).unwrap().data, crate::sarc::get(&bunny_only, bunny::WALK.file).unwrap().data, "{p} keeps the Bunny Hood edit");
+            assert_eq!(crate::sarc::get(&es, gear_cycle::SCHEDULER).unwrap().data, crate::sarc::get(&hop_only, gear_cycle::SCHEDULER).unwrap().data, "{p} drops the hop");
+            assert_eq!(hits[0].old, game.len(), "{p} keeps the game size for the size table");
+        }
+        assert!(outs.iter().any(|x| x.path == gear_cycle::COUNTER_FILE));
+    }
+
+    #[test]
     fn default_builds_write_none_of_the_option_files() {
         let Some(root) = dump() else {
             return;
         };
         let out: std::path::PathBuf = built(&root, &with(&[("shuffle_rewards", Value::s("off")), (NAVI, Value::s("off"))]), "qol default", "OOTRR Qol Default Test");
-        for f in files().into_iter().filter(|f| !chest_anim::files().contains(&f.as_str())) {
+        let mut rf: Romfs = Romfs::open(&root).unwrap();
+        // The gear cycle is always on: the player packs always lose the boots-change hop, and
+        // nothing else in them changes without the Bunny Hood option.
+        let packs: [&str; 2] = [bunny::FILE, bunny::ADULT_FILE];
+        for f in files().into_iter().filter(|f| !chest_anim::files().contains(&f.as_str()) && !packs.contains(&f.as_str())) {
             assert!(!at(&out, &f).exists(), "{f}");
         }
+        for p in packs {
+            let built: Vec<crate::sarc::Entry> = crate::sarc::parse(&rf.zs.decompress(&std::fs::read(at(&out, p)).unwrap()).unwrap()).unwrap();
+            let game: Vec<crate::sarc::Entry> = crate::sarc::parse(&rf.read_zs(p).unwrap()).unwrap();
+            let hop: Vec<u8> = gear_cycle::patch_boots_hop(&rf.read_zs(p).unwrap()).unwrap();
+            let want: Vec<crate::sarc::Entry> = crate::sarc::parse(&hop).unwrap();
+            assert_eq!(crate::sarc::get(&built, gear_cycle::SCHEDULER).unwrap().data, crate::sarc::get(&want, gear_cycle::SCHEDULER).unwrap().data, "{p}");
+            assert_eq!(crate::sarc::get(&built, bunny::WALK.file).unwrap().data, crate::sarc::get(&game, bunny::WALK.file).unwrap().data, "{p}");
+        }
         let out: std::path::PathBuf = built(&root, &with(&[(NAVI, Value::s("off"))]), "qol default", "OOTRR Qol Rewards Default Test");
-        let mut rf: Romfs = Romfs::open(&root).unwrap();
-        for f in files() {
+        for f in files().into_iter().filter(|f| !packs.contains(&f.as_str())) {
             if f == poe::FILE && at(&out, &f).is_file() {
                 let z: Vec<u8> = std::fs::read(at(&out, &f)).unwrap();
                 let b: crate::bfevfl::Bf = crate::bfevfl::Bf::parse(&rf.zs.decompress(&z).unwrap()).unwrap();

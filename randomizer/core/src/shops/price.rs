@@ -6,6 +6,8 @@ pub const CHILD: i32 = 200;
 pub const ADULT: i32 = 500;
 pub const GIANT: i32 = 1000;
 pub const AFFORDABLE: i32 = 10;
+/// The top of the Cheap price range, as in the N64 randomizers' cheap shop prices.
+pub const CHEAP: i32 = 95;
 
 pub fn wallets(price: i32) -> u8 {
     if price > ADULT {

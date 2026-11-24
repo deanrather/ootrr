@@ -54,7 +54,7 @@ pub fn testmod(a: &[String]) -> Res<()> {
     let load: &str = arg(&rest, 1, "missing load_dir")?;
     let name: &str = arg(&rest, 2, "missing mod_name")?;
     if rest.len() < 4 {
-        return Err(Error::Format("give at least one Location=Item@price, for example \"KF Shop Item 1=Boomerang@20\""));
+        return Err(Error::Format("give at least one Location=Item@price, for example \"KF Shop Right Side Bottom Left=Boomerang@20\""));
     }
     let d: Data = Data::load()?;
     let jobs: Vec<Job> = rest[3..].iter().map(|x| ootrr_core::shops::jobs::parse(&d, x)).collect::<Res<Vec<Job>>>()?;

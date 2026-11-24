@@ -195,6 +195,8 @@ mod tests {
         let mut rf: Romfs = Romfs::open(&root).unwrap();
         let token: Vec<Entry> = token_pack(&mut rf).unwrap();
         let all: BS<String> = skull_table().unwrap().pickups.values().filter(|a| a.as_str() != TOKEN).cloned().collect();
+        // The Business Scrub Seed and the Fairy stay off the drops: their packs are not built on
+        // Obj_Item_Base, so no kit can be made of them.
         assert_eq!(all.len(), 17);
         let mut press: Vec<&str> = Vec::new();
         for a in &all {
@@ -266,15 +268,20 @@ mod tests {
         let kits: BS<&str> = actors(&ds);
         // Every seed also builds the song and Ocarina pickups the story skips hold up (crate::ocarina_hold).
         let scene: BS<String> = crate::ocarina_hold::wanted(&d, &seed).into_iter().map(|(_, p)| p.pack).filter(|p| !kits.contains(p.as_str())).collect();
-        // An item the seed lays on the ground brings its own pickup pack too (Obj_Range_Bow for a Bow).
+        // An item the seed lays on the ground brings its own pickup pack too (Obj_Range_Bow for a Bow),
+        // under the name the build gives it: a renamed pack (Obj_Token_GoldLand, Obj_Arrow_FireLand) or
+        // a dungeon item's own pickup (Obj_OOTRR_<Kind>_<Dungeon>) is not the item actor's default name.
         let base: Byml = Byml::parse(&rf.read_zs(TABLES[0]).unwrap()).unwrap();
-        let placed: BS<String> = seed
-            .placements
-            .values()
-            .filter_map(|i| d.item(i).and_then(|x| x.actor.as_deref()))
-            .map(crate::pickup_pack::default_name)
-            .filter(|n| !kits.contains(n.as_str()) && !scene.contains(n) && rows::find(&ys[0], n).is_some() && rows::find(&base, n).is_none())
+        let fixed: std::collections::BTreeMap<String, String> = crate::slice::tier_order::fixed_actors(&d, &seed).unwrap().assign;
+        let placed: BS<String> = crate::slice::seed_packs::need(&d, &seed, &fixed)
+            .unwrap()
+            .into_keys()
+            .filter(|n| !kits.contains(n.as_str()) && !scene.contains(n) && rows::find(&base, n).is_none())
             .collect();
+        let want: BS<String> = kits.iter().map(|a| a.to_string()).chain(scene.iter().cloned()).chain(placed.iter().cloned()).collect();
+        let shipped: std::collections::HashMap<&str, &Node> = rows::index(&base);
+        let added: BS<String> = ys[0].root.as_arr().unwrap().iter().filter_map(rows::id).filter(|n| !shipped.contains_key(n)).map(|n| n.to_string()).collect();
+        assert_eq!(added, want);
         assert_eq!(ys[0].root.as_arr().unwrap().len(), 8363 + kits.len() + scene.len() + placed.len());
         for a in &kits {
             let raw: Vec<u8> = rf.zs.decompress(&fs::read(romfs.join(pack_of(a))).unwrap()).unwrap();

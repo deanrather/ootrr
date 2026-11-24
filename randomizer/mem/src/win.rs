@@ -5,6 +5,7 @@ use std::path::PathBuf;
 
 const SNAP_PROCESS: u32 = 0x2;
 const ACCESS: u32 = 0x0410;
+const WRITE_ACCESS: u32 = 0x0400 | 0x0020 | 0x0008;
 const STILL_ACTIVE: u32 = 259;
 const BAD_HANDLE: isize = -1;
 
@@ -42,6 +43,7 @@ unsafe extern "system" {
     fn Process32NextW(h: isize, e: *mut Pe) -> i32;
     fn OpenProcess(access: u32, inherit: i32, pid: u32) -> isize;
     fn ReadProcessMemory(h: isize, at: *const c_void, buf: *mut c_void, n: usize, got: *mut usize) -> i32;
+    fn WriteProcessMemory(h: isize, at: *mut c_void, buf: *const c_void, n: usize, put: *mut usize) -> i32;
     fn VirtualQueryEx(h: isize, at: *const c_void, m: *mut Mbi, n: usize) -> usize;
     fn GetExitCodeProcess(h: isize, code: *mut u32) -> i32;
     fn QueryFullProcessImageNameW(h: isize, flags: u32, name: *mut u16, n: *mut u32) -> i32;
@@ -95,6 +97,17 @@ impl Proc {
         let mut got: usize = 0;
         let ok: i32 = unsafe { ReadProcessMemory(self.h, at as usize as *const c_void, b.as_mut_ptr() as *mut c_void, b.len(), &mut got) };
         ok != 0 && got == b.len()
+    }
+
+    pub fn write(&self, at: u64, b: &[u8]) -> bool {
+        let h: isize = unsafe { OpenProcess(WRITE_ACCESS, 0, self.pid) };
+        if h == 0 || h == BAD_HANDLE {
+            return false;
+        }
+        let mut put: usize = 0;
+        let ok: i32 = unsafe { WriteProcessMemory(h, at as usize as *mut c_void, b.as_ptr() as *const c_void, b.len(), &mut put) };
+        unsafe { CloseHandle(h) };
+        ok != 0 && put == b.len()
     }
 
     pub fn query(&self, at: u64) -> Option<Region> {

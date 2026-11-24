@@ -7,8 +7,7 @@
             "ZR Child Front River Wonderitem 1": "is_child",
             "ZR Child Front River Wonderitem 2": "is_child",
             "ZR Child Front River Wonderitem 3": "is_child",
-            "ZR Child Front River Wonderitem 4": "is_child",
-            "ZR GS Tree": "can_plant_bugs and can_child_attack"
+            "ZR Child Front River Wonderitem 4": "is_child"
 
         },
         "exits": {
@@ -22,6 +21,7 @@
         "hint": "ZORA_RIVER",
         "locations": {
             "ZR Magic Bean Salesman": "is_child",
+            "ZR GS Tree": "can_plant_bugs and can_child_attack",
             "ZR Frogs Ocarina Game": "
                 is_child and
                 can_play(Zeldas_Lullaby) and can_play(Eponas_Song) and can_play(Sarias_Song) and
@@ -72,9 +72,9 @@
             "ZR Child River Wonderitem 25": "is_child",
             "ZR Child River Wonderitem 26": "is_child",
             "ZR Child River Wonderitem 27": "is_child",
-            "ZR GS Ladder": "is_child and (at_night or gold_skulls_ignore_daytime) and can_child_attack",
-            "ZR GS Near Raised Grottos": "can_use(Hookshot) and (at_night or gold_skulls_ignore_daytime)",
-            "ZR GS Above Bridge": "can_use(Hookshot) and (at_night or gold_skulls_ignore_daytime)",
+            "ZR GS Ladder": "is_child and can_get_night_gs and can_child_attack",
+            "ZR GS Near Raised Grottos": "can_use(Hookshot) and can_get_night_gs",
+            "ZR GS Above Bridge": "can_use(Hookshot) and can_get_night_gs",
             "ZR Near Grottos Gossip Stone": "True",
             "ZR Near Domain Gossip Stone": "True",
             "Gossip Stone Fairy": "can_summon_gossip_fairy and has_bottle",

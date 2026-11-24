@@ -11,6 +11,10 @@ pub const HEAP: &str = "InstanceHeapSize";
 pub const RESPAWN: &str = "IsRespawn";
 pub const LAYER: &str = "MainRigidBodyLayer";
 pub const VARIATION: &str = "ModelVariationAnims";
+pub const ACTOR_NAME: &str = "ActorName";
+pub const DEAL: &str = "PouchSpecialDeal";
+pub const QUIET_DEAL: &str = "NotPushToPouch";
+pub const STOCK: &str = "PouchStockable";
 pub const HEAP_PEERS: [&str; 5] = ["Obj_Armor_Goron", "Obj_Arrow_Fire", "Obj_Bombchu", "Obj_Heart_Piece", "Obj_Shield_Deku"];
 pub const HEAP_MARGIN: i32 = 0x8000;
 const DROPPED: [&str; 3] = ["CalcPriority", "ELinkUserName", "SLinkUserName"];
@@ -114,6 +118,11 @@ pub fn pouch_row(item_row: &Node, name: &str) -> Node {
     r
 }
 
+pub fn quiet(r: &mut Node) {
+    r.set(DEAL, Node::Str(QUIET_DEAL.to_string()));
+    r.remove(STOCK);
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
@@ -200,5 +209,14 @@ pub(crate) mod tests {
         assert_eq!(r.get(VARIATION), item.get(VARIATION));
         assert_eq!(r.get("HoldAnimationType"), None);
         assert_eq!(id(&pouch_row(&item, "Obj_Test")), Some("Obj_Test"));
+    }
+
+    #[test]
+    fn a_quiet_row_stores_nothing_and_keeps_its_category() {
+        let mut r: Node = row("Obj_Key", &[(DEAL, s("SmallKey")), (STOCK, Node::Bool(true)), ("PouchCategory", s("KeyItem"))]);
+        quiet(&mut r);
+        assert_eq!(r.get(DEAL).and_then(|v| v.as_str()), Some(QUIET_DEAL));
+        assert_eq!(r.get(STOCK), None);
+        assert_eq!(r.get("PouchCategory").and_then(|v| v.as_str()), Some("KeyItem"));
     }
 }

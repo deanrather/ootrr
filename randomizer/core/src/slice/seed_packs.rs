@@ -70,10 +70,12 @@ pub fn need(d: &Data, seed: &SeedFile, fixed: &BM<String, String>) -> Res<BM<Str
         if d.vanilla_of(loc) == Some(item.as_str()) {
             continue;
         }
-        let Some(k) = kind_of(d, loc, item) else {
+        let shelf: bool = crate::shops::data::is_loc(loc) && crate::dungeon_packs::of(d, item).is_some();
+        let Some(k) = kind_of(d, loc, item).or(shelf.then_some(Kind::Free)) else {
             continue;
         };
-        let p: Pick = match resolve(d, item, fixed.get(loc).map(|s| s.as_str())) {
+        let found: Res<Pick> = if k.kit() { crate::slice::key_spots::resolve_kit(d, item, fixed.get(loc).map(|s| s.as_str())) } else { resolve(d, item, fixed.get(loc).map(|s| s.as_str())) };
+        let p: Pick = match found {
             Ok(p) => p,
             // A boss heart whose item has no pack keeps the chest it always had (crate::boss_heart).
             Err(_) if d.cat.by_name(loc).is_some_and(|l| l.kind == "bossheart") => continue,
@@ -101,7 +103,7 @@ fn opts(host: Host, base: Option<PB>, dry: bool) -> Opts {
 
 fn run_one(romfs: &P, load: &P, mod_name: &str, w: &Want, o: &Opts) -> Res<Done> {
     let (s, mut l): (Spec, Layers) = w.spec()?;
-    // Every pickup the seed places turns in place, off the floor, and glints.
+    // Every pickup the seed places turns in place, off the floor.
     l.spin = true;
     if w.kind.kit() {
         return kit::run_with(romfs, load, mod_name, &s, o, &[], &l);
@@ -264,8 +266,15 @@ mod tests {
         assert!(need(&d, &s, &BM::new()).is_err());
         let plain: SeedFile = seed(&[(free, "Rupees (5)"), (pot.as_str(), "Rupees (20)"), ("KF Midos Top Left Chest", "Bow")]);
         assert!(need(&d, &plain, &BM::new()).unwrap().keys().all(|k| scene.iter().any(|x| x == k)));
-        let bow: SeedFile = seed(&[(skull, "Bow")]);
-        assert!(need(&d, &bow, &[(skull.to_string(), "Item_Range_Bow".to_string())].into_iter().collect()).is_err());
+        // A kit cannot carry the Bow's ammo layer, so a skulltula drops the plain Bow kit (the
+        // starter bag hook adds the quiver after its get); a Bow on the ground keeps the ammo layer.
+        let bow: SeedFile = seed(&[(skull, "Bow"), (free, "Bow")]);
+        let wbow: BM<String, Want> = need(&d, &bow, &[(skull.to_string(), "Item_Range_Bow".to_string()), (free.to_string(), "Item_Range_Bow".to_string())].into_iter().collect()).unwrap();
+        assert_eq!(wbow["Obj_Range_Bow_GH"].kind, Kind::Skull);
+        let (ks, kl): (Spec, Layers) = wbow["Obj_Range_Bow_GH"].spec().unwrap();
+        assert_eq!((ks.name.as_str(), ks.item.as_str(), kl.ammo), ("Obj_Range_Bow_GH", "Item_Range_Bow", false));
+        assert_eq!(wbow["Obj_Range_Bow"].kind, Kind::Free);
+        assert!(wbow["Obj_Range_Bow"].spec().unwrap().1.ammo);
         let two: SeedFile = seed(&[(free, "Megaton Hammer"), (pot.as_str(), "Megaton Hammer")]);
         let both: BM<String, Want> = need(&d, &two, &BM::new()).unwrap();
         assert_eq!(both.keys().filter(|k| !scene.iter().any(|x| x == *k)).count(), 1);
@@ -324,7 +333,8 @@ mod tests {
         use crate::slice::support::{plan, Plan};
         use crate::world::{LocId, World};
         let p: Plan = plan(s).unwrap();
-        let w: World = crate::slice::logic::world_with(d, &p.logic()).unwrap();
+        let counted: Vec<(&str, &str)> = p.logic().into_iter().filter(|(k, _)| !k.ends_with("_key_layout")).collect();
+        let w: World = crate::slice::logic::world_with(d, &counted).unwrap();
         let pk: Chosen = pick(d, &w, &p);
         let (_, items): (Vec<String>, Vec<String>) = crate::slice::generate::plando_options(d, s).unwrap();
         let mut locs: Vec<LocId> = pk.free.clone();
@@ -411,6 +421,77 @@ mod tests {
             }
         }
         assert!(b.root.join("romfs").join(pack_of("Obj_Hammer")).is_file());
+        let _ = fs::remove_dir_all(&load);
+    }
+
+    #[test]
+    fn dungeon_items_on_the_ground_in_pots_and_on_shelves_build_as_their_own_dungeon_packs() {
+        use crate::slice::generate::{generate_data, GenOpts, Generated};
+        let Some(root) = real() else {
+            return;
+        };
+        let d: Data = Data::load().unwrap();
+        let mut s: Settings = wide();
+        for (k, v) in [("shuffle_smallkeys", "keysanity"), ("shuffle_bosskeys", "keysanity"), ("shuffle_mapcompass", "keysanity"), (crate::shops::plan::SETTING, "deals_4"), (crate::shops::plan::PRICES, "affordable")] {
+            s.set(k, crate::settings::Value::s(v)).unwrap();
+        }
+        let want: [(&str, crate::dungeon_packs::Spot); 5] = {
+            use crate::dungeon_packs::Spot::*;
+            [("Small Key (Fire Temple)", Ground), ("Boss Key (Water Temple)", Holder), ("Map (Ice Cavern)", Ground), ("Compass (Deku Tree)", Holder), ("Small Key (Forest Temple)", Shelf)]
+        };
+        let list: Vec<String> = {
+            let p = crate::slice::support::plan(&s).unwrap();
+            let w: crate::world::World = crate::slice::logic::world_with(&d, &p.logic()).unwrap();
+            let mut locs: Vec<crate::world::LocId> = crate::slice::pick::pick(&d, &w, &p).free;
+            locs.extend((0..w.locs.len()).filter(|l| crate::shops::data::is_loc(&w.locs[*l].name) && w.locs[*l].name.ends_with("Right Side Top Left")));
+            locs.sort_by(|a, b| w.locs[*a].name.cmp(&w.locs[*b].name));
+            let mut used: Vec<crate::world::LocId> = Vec::new();
+            let mut out: Vec<String> = Vec::new();
+            for (item, class) in want {
+                let it = w.item(item).unwrap();
+                let hit = locs.iter().copied().find(|l| {
+                    let n: &str = &w.locs[*l].name;
+                    !used.contains(l) && w.regions[w.locs[*l].region].dungeon.is_none() && crate::dungeon_packs::spot(&d, n) == Some(class) && crate::slice::generate::allowed(&d, &w, &p, it, *l)
+                });
+                let l = hit.unwrap_or_else(|| panic!("no {class:?} spot takes {item}"));
+                used.push(l);
+                out.push(format!("{}={item}", w.locs[l].name));
+            }
+            out
+        };
+        assert!(list.iter().any(|x| x.ends_with("=Small Key (Forest Temple)")), "{list:?}");
+        let o: GenOpts = GenOpts { spoiler: true, plando: list.iter().map(|x| crate::slice::plando::parse(x).unwrap()).collect(), ..GenOpts::default() };
+        let g: Generated = generate_data(&d, &s, "dungeon packs", &o).unwrap();
+        for x in &list {
+            let (l, i) = x.split_once('=').unwrap();
+            assert_eq!(g.seed_file.placements.get(l).map(|v| v.as_str()), Some(i));
+        }
+        let order: Verdict = fixed_actors(&d, &g.seed_file).unwrap();
+        let wants: BM<String, Want> = need(&d, &g.seed_file, &order.assign).unwrap();
+        for (_, i) in list.iter().filter_map(|x| x.split_once('=')) {
+            let name: String = crate::dungeon_packs::of(&d, i).unwrap().name();
+            assert!(wants.contains_key(&name), "{name} {:?}", wants.keys());
+        }
+        let load: PB = std::env::temp_dir().join(format!("ootrr_dungeon_packs_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&load);
+        let b: Built = crate::slice::edit::build_for(&g.seed_file, &root, &load, "dungeon packs", Host::Hookshot).unwrap();
+        let romfs: PB = b.root.join("romfs");
+        let mut rf: Romfs = Romfs::open(&root).unwrap();
+        let pouch: Byml = table(&mut rf, &romfs, POUCH_INFO).unwrap();
+        let actors: Byml = table(&mut rf, &romfs, ACTOR_INFO).unwrap();
+        for name in wants.keys().filter(|n| crate::dungeon_packs::by_name(n).is_some()) {
+            assert!(romfs.join(pack_of(name)).is_file(), "{name}");
+            let r = rows::find(&pouch, name).unwrap();
+            assert_eq!(r.get(rows::DEAL).and_then(|v| v.as_str()), Some(rows::QUIET_DEAL), "{name}");
+            assert_eq!(rows::find(&actors, name).unwrap().get(rows::ACTOR_NAME).and_then(|v| v.as_str()), Some(name.as_str()), "{name}");
+        }
+        for flow in ["Dm_SY_Get", "Dm_SY_Get_WithoutPlayer"] {
+            let raw: Vec<u8> = rf.zs.decompress(&fs::read(romfs.join(format!("Event/EventFlow/{flow}.bfevfl.zs"))).unwrap()).unwrap();
+            assert!(raw.windows(23).any(|w| w == b"Obj_SmallKey_FireTemple"), "{flow} does not credit the Fire Temple key");
+        }
+        let shop: Vec<u8> = rf.zs.decompress(&fs::read(romfs.join(crate::dungeon_packs::SHOP_FLOW)).unwrap()).unwrap();
+        assert!(shop.windows(25).any(|w| w == b"Obj_SmallKey_ForestTemple"), "the shop does not credit the Forest Temple key");
+        assert!(b.report.contains("Obj_SmallKey_ForestTemple"), "{}", b.report);
         let _ = fs::remove_dir_all(&load);
     }
 
@@ -546,13 +627,12 @@ mod tests {
         // their pickups (crate::ocarina_hold), so every seed builds those packs; a seed with no
         // other new item at a pickup spot builds only them.
         let scene = |g: &Generated| -> std::collections::BTreeSet<String> { crate::ocarina_hold::wanted(&d, &g.seed_file).into_iter().map(|(_, p)| p.pack).collect() };
-        // With chests and rewards off only the hearts are shuffled, and they keep their own spots.
         let mut s: Settings = Settings::default();
         s.set("shuffle_rewards", crate::settings::Value::s("off")).unwrap();
         s.set("shuffle_chests", crate::settings::Value::s("off")).unwrap();
         let g: Generated = generate_data(&d, &s, "wp4 plain", &GenOpts::default()).unwrap();
         let w: BM<String, Want> = need(&d, &g.seed_file, &crate::slice::tier_order::fixed_actors(&d, &g.seed_file).unwrap().assign).unwrap();
-        assert!(w.keys().all(|k| scene(&g).contains(k)), "{:?}", w.keys().collect::<Vec<&String>>());
+        assert!(w.keys().all(|k| scene(&g).contains(k) || k == "Obj_Bottle_LetterLand"), "{:?}", w.keys().collect::<Vec<&String>>());
         assert!(!scene(&g).is_empty());
         let load: PB = std::env::temp_dir().join(format!("ootrr_seed_packs_plain_{}", std::process::id()));
         let _ = fs::remove_dir_all(&load);

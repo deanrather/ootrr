@@ -21,12 +21,13 @@ pub const GORONS: [(&str, &str); 9] = [
     ("Room_23_Prefab_612a", "Npc_Goron_007_Adult_FireTemple_6279"),
 ];
 
-pub const CHESTS: [(&str, &str); 8] = [
+pub const CHESTS: [(&str, &str); 9] = [
     ("Room_02_Prefab_3004", "Obj_TBox_A_01_435b"),
     ("Room_04_Prefab_d826", "Obj_TBox_A_01_d31e"),
     ("Room_05_Prefab_5b8f", "Obj_TBox_A_01_c516"),
     ("Room_10_Prefab_b3bc", "Obj_TBox_A_01_ade4"),
     ("Room_11_Prefab_c20f", "Obj_TBox_A_01_58b1"),
+    ("Room_17_Prefab_a4ce", "Obj_TBox_A_03_30dc"),
     ("Room_20_Prefab_7421", "Obj_TBox_A_01_ac82"),
     ("Room_22_Prefab_e0c9", "Obj_TBox_A_01_221a"),
     ("Room_23_Prefab_efdf", "Obj_TBox_A_01_e720"),
@@ -94,6 +95,14 @@ pub fn stage(rf: &mut Romfs) -> Res<Vec<Out>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::byml::{Byml, Node};
+    use crate::settings::{Settings, Value};
+    use crate::slice::data::Data;
+    use std::path::{Path as P, PathBuf as PB};
+
+    const SCENE: &str = "Banc/FireTemple/FireTemple_Static.bcett.byml.zs";
+    const EVENTS: &str = "RSDB/EventSetting.Product.111.rstbl.byml.zs";
+    const BOSS_KEY: &str = "Fire Temple Boss Key Chest";
 
     fn romfs() -> Option<Romfs> {
         let p: std::path::PathBuf = ootrr_game::test_romfs::path();
@@ -117,7 +126,7 @@ mod tests {
             return;
         };
         let outs: Vec<Out> = stage(&mut rf).unwrap();
-        assert_eq!(outs.len(), 17);
+        assert_eq!(outs.len(), 18);
         for (room, goron) in GORONS {
             let mut a: Ainb = Ainb::parse(&rf.read(&path(room)).unwrap()).unwrap();
             assert_eq!(remove(&mut a, goron).unwrap(), 2, "{room}");
@@ -131,6 +140,85 @@ mod tests {
             let o: &Out = outs.iter().find(|o| o.path == path(room)).unwrap();
             let b: Ainb = Ainb::parse(&o.z).unwrap();
             assert_eq!(constant(&b, TBOX, chest, "Unlock"), Some(true), "{room}");
+        }
+    }
+
+    fn built(d: &Data, root: &P, pairs: &[(&str, Value)], seed: &str) -> PB {
+        let mut s: Settings = Settings::default();
+        for (k, v) in pairs {
+            s.set(k, v.clone()).unwrap();
+        }
+        let g = crate::slice::generate::generate_data(d, &s, seed, &crate::slice::GenOpts::default()).unwrap();
+        let load: PB = PB::from(env!("CARGO_MANIFEST_DIR")).join("../../target/fire_gorons_mods");
+        crate::slice::edit::build(&g.seed_file, root, &load, seed).unwrap().root.join("romfs")
+    }
+
+    fn file(rf: &Romfs, out: &P, r: &str) -> Vec<u8> {
+        let p: PB = r.split('/').fold(out.to_path_buf(), |a, x| a.join(x));
+        std::fs::read(&p).unwrap_or_else(|_| rf.read(r).unwrap())
+    }
+
+    fn table(rf: &mut Romfs, out: &P, r: &str) -> Byml {
+        let z: Vec<u8> = file(rf, out, r);
+        Byml::parse(&rf.zs.decompress(&z).unwrap()).unwrap()
+    }
+
+    fn module(logic: &str) -> String {
+        format!("Logic/{}b", logic.rsplit('/').next().unwrap_or(""))
+    }
+
+    fn reads_goron(a: &Ainb) -> bool {
+        a.find_els("HoldGameDataGetBoolSimple").into_iter().any(|i| a.in_str(i, "GameDataNameBool").is_some_and(|n| n.starts_with("Npc_Goron_") && n.ends_with("_Delete")))
+    }
+
+    fn openable(rf: &mut Romfs, out: &P, hash: u64, tag: &str) {
+        let y: Byml = table(rf, out, SCENE);
+        let acts: &[Node] = y.root.get("Actors").and_then(|a| a.as_arr()).unwrap();
+        let chest: &Node = acts.iter().find(|a| a.get("Hash") == Some(&Node::U64(hash))).unwrap();
+        assert_eq!(chest.get("Gyaml").and_then(|g| g.as_str()), Some("Obj_TBox_A_03"), "{tag}");
+        let mut bound: usize = 0;
+        for g in y.root.get("AiGroups").and_then(|a| a.as_arr()).unwrap() {
+            let Some(logic) = g.get("Logic").and_then(|l| l.as_str()).filter(|l| l.contains("/FireTemple_Level_")) else {
+                continue;
+            };
+            let a: Ainb = Ainb::parse(&file(rf, out, &module(logic))).unwrap();
+            let gorons: bool = reads_goron(&a);
+            for r in g.get("References").and_then(|r| r.as_arr()).unwrap_or(&[]) {
+                let Some(id) = r.get("Id").and_then(|v| v.as_str()) else {
+                    continue;
+                };
+                if named(&a, TBOX, id).is_err() {
+                    continue;
+                }
+                let mine: bool = r.get("Reference") == Some(&Node::U64(hash));
+                if mine {
+                    bound += 1;
+                }
+                if mine || gorons {
+                    assert_eq!(constant(&a, TBOX, id, "Unlock"), Some(true), "{tag}: {logic} {id}");
+                }
+            }
+        }
+        assert_eq!(bound, 1, "{tag}");
+        if let Some(e) = chest.get("Dynamic").and_then(|d| d.get("GetEventName")).and_then(|v| v.as_str()) {
+            let t: Byml = table(rf, out, EVENTS);
+            assert!(t.root.as_arr().unwrap().iter().any(|r| r.get("__RowId").and_then(|v| v.as_str()) == Some(e)), "{tag}: {e}");
+        }
+    }
+
+    #[test]
+    fn the_boss_key_chest_is_unlocked_in_full_builds() {
+        let Some(mut rf) = romfs() else {
+            return;
+        };
+        let d: Data = Data::load().unwrap();
+        let hash: u64 = d.cat.locs.iter().find(|l| l.name == BOSS_KEY).unwrap().refs[0].hash;
+        let named: [(&str, Value); 3] = [("shuffle_bosskeys", Value::s("vanilla")), (crate::chest_size::SETTING, Value::Bool(true)), (crate::debug_names::SETTING, Value::Bool(true))];
+        let cases: [(&str, &[(&str, Value)]); 2] = [("fire boss key chest default", &[]), ("fire boss key chest named", &named)];
+        for (seed, pairs) in cases {
+            let root: PB = rf.root.clone();
+            let out: PB = built(&d, &root, pairs, seed);
+            openable(&mut rf, &out, hash, seed);
         }
     }
 }

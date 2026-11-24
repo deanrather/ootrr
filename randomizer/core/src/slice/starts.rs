@@ -41,6 +41,12 @@ pub fn rebuild(d: &Data, seed: &SeedFile) -> Res<(World, Placement)> {
         Some(l) => crate::shops::logic::world(d, &p.logic(), l)?,
         None => world_with(d, &p.logic())?,
     };
+    if crate::slice::generate::settle_keys(d, &mut p, &w) {
+        w = match &lay {
+            Some(l) => crate::shops::logic::world(d, &p.logic(), l)?,
+            None => world_with(d, &p.logic())?,
+        };
+    }
     add(d, &p, &mut w, &seed.seed)?;
     crate::entr::restore(&mut w, &seed.entrances)?;
     let mut place: Placement = vanilla_place(&w, d)?;

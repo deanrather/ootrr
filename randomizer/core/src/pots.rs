@@ -86,6 +86,33 @@ pub fn one_time(y: &mut Byml, hashes: &[u64]) -> Res<usize> {
     Ok(n)
 }
 
+/// Gives each actor a permanent collected row: an existing row is made permanent as in
+/// `one_time`, and an actor with no row (Ruto's Letter, the Bottom of the Well key, whose own
+/// actors never save one) gets a new row, put in hash order since the table is sorted.
+pub fn add_kept(y: &mut Byml, hashes: &[u64]) -> Res<usize> {
+    let rows: &mut Vec<Node> = y
+        .root
+        .get_mut("Data")
+        .and_then(|d| d.get_mut(TABLE))
+        .and_then(|t| t.as_arr_mut())
+        .ok_or(Error::Format("pots: the flag list has no 64-bit key table"))?;
+    let mut n: usize = 0;
+    for h in hashes {
+        if let Some(r) = rows.iter_mut().find(|r| hash_of(r) == Some(*h)) {
+            kept(r);
+            n += 1;
+            continue;
+        }
+        let mut r: Node = rows.iter().find(|r| permanent(saved(r))).cloned().ok_or(Error::Format("pots: the flag list has no permanent row to copy"))?;
+        r.set("Hash", Node::U64(*h));
+        kept(&mut r);
+        let at: usize = rows.iter().position(|x| hash_of(x).is_some_and(|k| k > *h)).unwrap_or(rows.len());
+        rows.insert(at, r);
+        n += 1;
+    }
+    Ok(n)
+}
+
 pub struct Built {
     pub report: String,
     pub files: usize,
@@ -196,5 +223,18 @@ mod tests {
         assert!(!permanent(saved(&t[0])) && permanent(saved(&t[1])));
         assert_eq!(t[0].get("ResetTypeValue"), Some(&Node::I32(88)));
         assert!(one_time(&mut y, &[99]).is_err());
+    }
+
+    #[test]
+    fn a_new_kept_row_is_inserted_in_hash_order_and_an_old_one_made_permanent() {
+        let row = |h: u64, t: i32| Node::Map(vec![("Hash".to_string(), Node::U64(h)), ("ResetTypeValue".to_string(), Node::I32(t)), ("SaveFileIndex".to_string(), Node::I32(0))]);
+        let data: Node = Node::Map(vec![(TABLE.to_string(), Node::Arr(vec![row(5, 24), row(9, 88), row(20, 24)]))]);
+        let mut y: Byml = Byml { root: Node::Map(vec![("Data".to_string(), data)]), version: 2, big: false };
+        assert_eq!(add_kept(&mut y, &[12, 9, 30]).unwrap(), 3);
+        let t: &[Node] = y.root.get("Data").unwrap().get(TABLE).unwrap().as_arr().unwrap();
+        let hs: Vec<u64> = t.iter().filter_map(hash_of).collect();
+        assert_eq!(hs, vec![5, 9, 12, 20, 30]);
+        assert!(t.iter().all(|r| permanent(saved(r))));
+        assert_eq!(t[2].get("SaveFileIndex"), Some(&Node::I32(0)));
     }
 }

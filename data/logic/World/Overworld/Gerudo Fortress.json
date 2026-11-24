@@ -35,7 +35,7 @@
             "GF HBA Crate 13": "((is_adult and Gerudo_Membership_Card) or is_child) and can_break_crate",
             "GF Cow": "is_adult and Gerudo_Membership_Card and can_play(Eponas_Song)",
             "GF GS Archery Range": "
-                can_use(Hookshot) and Gerudo_Membership_Card and (at_night or gold_skulls_ignore_daytime)"
+                can_use(Hookshot) and Gerudo_Membership_Card and can_get_night_gs"
         },
         "exits": {
             "GV Fortress Side": "True",
@@ -116,7 +116,7 @@
         "scene": "Gerudo Fortress",
         "hint": "GERUDO_FORTRESS",
         "locations": {
-            "GF GS Top Floor": "is_adult and (at_night or gold_skulls_ignore_daytime)"
+            "GF GS Top Floor": "is_adult and can_get_night_gs"
         }
     },
     {

@@ -315,7 +315,7 @@
    "via": "drop",
    "age": "both",
    "region": "Ice Cavern Behind Ice Walls",
-   "rule": "True",
+   "rule": "Blue_Fire",
    "refs": [
     {
      "hash": "17314383705983097019",
@@ -327,7 +327,8 @@
    "ev": [
     "remake"
    ],
-   "grade": "guess"
+   "grade": "guess",
+   "basis": "room 6, the compass room: both pots sit in one red ice block (Obj_RedIce_A_06), melted in the video at 5:50"
   },
   {
    "name": "Ice Cavern Behind Ice Walls Remake Pot 2",
@@ -340,7 +341,7 @@
    "via": "drop",
    "age": "both",
    "region": "Ice Cavern Behind Ice Walls",
-   "rule": "True",
+   "rule": "Blue_Fire",
    "refs": [
     {
      "hash": "15011057361189787608",
@@ -352,7 +353,8 @@
    "ev": [
     "remake"
    ],
-   "grade": "guess"
+   "grade": "guess",
+   "basis": "room 6, the compass room: both pots sit in one red ice block (Obj_RedIce_A_06), melted in the video at 5:50"
   },
   {
    "name": "Shadow Temple Invisible Spikes Remake Pot 1",
@@ -489,7 +491,7 @@
    "folder": "SpiritTemple",
    "via": "drop",
    "age": "both",
-   "region": "Adult Spirit Temple Climb",
+   "region": "Spirit Temple Before Boss",
    "rule": "True",
    "refs": [
     {
@@ -503,7 +505,7 @@
     "remake"
    ],
    "grade": "guess",
-   "basis": "room 7 check Spirit Temple Statue Room Hand Chest, took the harder region (sphere 20) over Child Spirit Temple Climb (18), Spirit Temple Central Chamber (18)"
+   "basis": "room 7, on the boss door ledge"
   },
   {
    "name": "Adult Spirit Temple Climb Remake Pot 2",
@@ -515,7 +517,7 @@
    "folder": "SpiritTemple",
    "via": "drop",
    "age": "both",
-   "region": "Adult Spirit Temple Climb",
+   "region": "Spirit Temple Before Boss",
    "rule": "True",
    "refs": [
     {
@@ -529,7 +531,7 @@
     "remake"
    ],
    "grade": "guess",
-   "basis": "room 7 check Spirit Temple Statue Room Hand Chest, took the harder region (sphere 20) over Child Spirit Temple Climb (18), Spirit Temple Central Chamber (18)"
+   "basis": "room 7, on the boss door ledge"
   },
   {
    "name": "Adult Spirit Temple Climb Remake Pot 3",
@@ -1087,7 +1089,7 @@
    "folder": "SpiritTemple",
    "via": "drop",
    "age": "both",
-   "region": "Child Spirit Temple Beyond Metal Bridges",
+   "region": "Spirit Temple Beyond Anubis Room",
    "rule": "True",
    "refs": [
     {
@@ -1101,7 +1103,7 @@
     "remake"
    ],
    "grade": "guess",
-   "basis": "tracker guess Spirit Temple Child Anubis Pot 3, took the harder region (sphere 17)"
+   "basis": "room 22, the adult east rooms past the Anubis door, with the two Beyond Anubis pots"
   },
   {
    "name": "Child Spirit Temple Beyond Metal Bridges Remake Pot 2",
@@ -1295,7 +1297,7 @@
    "folder": "DodongoCavern",
    "via": "drop",
    "age": "both",
-   "region": "Dodongos Cavern Before Boss",
+   "region": "Dodongos Cavern Lower Right Side",
    "rule": "True",
    "refs": [
     {
@@ -1309,7 +1311,7 @@
     "remake"
    ],
    "grade": "guess",
-   "basis": "room 5 check Dodongos Cavern Last Block Pot 4, took the harder region (sphere 6) over Dodongos Cavern Before Upper Lizalfos (5), Dodongos Cavern Far Bridge (5), Dodongos Cavern Lower Right Side (5), Dodongos Cavern Torch Room (5)"
+   "basis": "room 5, a corner of the Lower Lizalfos room beside the fairy pot"
   },
   {
    "name": "Dodongos Cavern Before Boss Remake Pot 2",
@@ -1321,8 +1323,8 @@
    "folder": "DodongoCavern",
    "via": "drop",
    "age": "both",
-   "region": "Dodongos Cavern Before Boss",
-   "rule": "True",
+   "region": "Dodongos Cavern Upper Lizalfos",
+   "rule": "is_adult or Sticks or Slingshot or Bombs or Kokiri_Sword",
    "refs": [
     {
      "hash": "3215221221211819661",
@@ -1335,7 +1337,7 @@
     "remake"
    ],
    "grade": "guess",
-   "basis": "tracker guess Dodongos Cavern Last Block Pot 3, took the harder region (sphere 6) over Dodongos Cavern Far Bridge (5)"
+   "basis": "room 17, the double eye switch room on the Upper Lizalfos side of the fire walls"
   },
   {
    "name": "Dodongos Cavern Before Boss Remake Pot 3",
@@ -1347,7 +1349,7 @@
    "folder": "DodongoCavern",
    "via": "drop",
    "age": "both",
-   "region": "Dodongos Cavern Before Boss",
+   "region": "Dodongos Cavern Lower Right Side",
    "rule": "True",
    "refs": [
     {
@@ -1361,7 +1363,7 @@
     "remake"
    ],
    "grade": "guess",
-   "basis": "room 5 check Dodongos Cavern Last Block Pot 4, took the harder region (sphere 6) over Dodongos Cavern Before Upper Lizalfos (5), Dodongos Cavern Far Bridge (5), Dodongos Cavern Lower Right Side (5), Dodongos Cavern Torch Room (5)"
+   "basis": "room 5, a corner of the Lower Lizalfos room beside the fairy pot"
   },
   {
    "name": "Dodongos Cavern Before Boss Remake Pot 4",
@@ -1373,7 +1375,7 @@
    "folder": "DodongoCavern",
    "via": "drop",
    "age": "both",
-   "region": "Dodongos Cavern Before Boss",
+   "region": "Dodongos Cavern Torch Room",
    "rule": "True",
    "refs": [
     {
@@ -1387,7 +1389,7 @@
     "remake"
    ],
    "grade": "guess",
-   "basis": "tracker guess Dodongos Cavern Last Block Pot 2, took the harder region (sphere 6) over Dodongos Cavern Torch Room (5)"
+   "basis": "room 8, the Dodongo room with the timed candles"
   },
   {
    "name": "Dodongos Cavern Before Upper Lizalfos Remake Pot 1",
@@ -1477,7 +1479,7 @@
    "folder": "DodongoCavern",
    "via": "drop",
    "age": "both",
-   "region": "Dodongos Cavern Climb",
+   "region": "Dodongos Cavern Before Boss",
    "rule": "True",
    "refs": [
     {
@@ -1491,7 +1493,7 @@
     "remake"
    ],
    "grade": "guess",
-   "basis": "nearby check Dodongos Cavern Staircase Pot 3, took the harder region (sphere 5)"
+   "basis": "room 19, the block room past the Mouth"
   },
   {
    "name": "Dodongos Cavern Lower Right Side Remake Pot 1",
@@ -1503,7 +1505,7 @@
    "folder": "DodongoCavern",
    "via": "drop",
    "age": "both",
-   "region": "Dodongos Cavern Lower Right Side",
+   "region": "Dodongos Cavern Before Upper Lizalfos",
    "rule": "True",
    "refs": [
     {
@@ -1517,7 +1519,7 @@
     "remake"
    ],
    "grade": "guess",
-   "basis": "room 14 check Dodongos Cavern Right Side Pot 4, took the harder region (sphere 5)"
+   "basis": "room 14, the single eye switch room, the twin of Before Upper Lizalfos Remake Pot 1"
   },
   {
    "name": "Dodongos Cavern Mouth Remake Pot 1",
@@ -1919,7 +1921,7 @@
    "folder": "InsideGanonCastle",
    "via": "drop",
    "age": "both",
-   "region": "Ganons Castle Shadow Trial",
+   "region": "Ganons Castle Shadow Trial First Gap",
    "rule": "True",
    "refs": [
     {
@@ -1933,7 +1935,7 @@
     "remake"
    ],
    "grade": "guess",
-   "basis": "room 8 check Ganons Castle Shadow Trial Front Chest, took the harder region (sphere 32) over Ganons Castle Shadow Trial First Gap (32), Ganons Castle Shadow Trial Second Gap (32)"
+   "basis": "room 8, beside the two Like Like pots past the first gap"
   },
   {
    "name": "Ganons Castle Shadow Trial Remake Pot 2",
@@ -1945,7 +1947,7 @@
    "folder": "InsideGanonCastle",
    "via": "drop",
    "age": "both",
-   "region": "Ganons Castle Shadow Trial",
+   "region": "Ganons Castle Shadow Trial First Gap",
    "rule": "True",
    "refs": [
     {
@@ -1959,7 +1961,7 @@
     "remake"
    ],
    "grade": "guess",
-   "basis": "room 8 check Ganons Castle Shadow Trial Front Chest, took the harder region (sphere 32) over Ganons Castle Shadow Trial First Gap (32), Ganons Castle Shadow Trial Second Gap (32)"
+   "basis": "room 8, beside the two Like Like pots past the first gap"
   },
   {
    "name": "Ganons Castle Spirit Trial Second Room Front Remake Pot 1",
@@ -2907,7 +2909,7 @@
    "folder": "IceCavern",
    "via": "drop",
    "age": "both",
-   "region": "Ice Cavern Spinning Scythe Room",
+   "region": "Ice Cavern End",
    "rule": "True",
    "refs": [
     {
@@ -2921,7 +2923,7 @@
     "remake"
    ],
    "grade": "guess",
-   "basis": "tracker guess Ice Cavern Spinning Scythe Pot 3, took the harder region (sphere 12)"
+   "basis": "room 11, the last room beside the second blue fire, past the White Wolfos (seen in the Trophy Tom video at 12:36)"
   },
   {
    "name": "Ice Cavern Spinning Scythe Room Remake Pot 2",
@@ -2933,8 +2935,8 @@
    "folder": "IceCavern",
    "via": "drop",
    "age": "both",
-   "region": "Ice Cavern Spinning Scythe Room",
-   "rule": "True",
+   "region": "Ice Cavern Beginning",
+   "rule": "Blue_Fire",
    "refs": [
     {
      "hash": "15712947819189423505",
@@ -2947,7 +2949,7 @@
     "remake"
    ],
    "grade": "guess",
-   "basis": "nearby check Ice Cavern Hall Pot 2, nearby check Ice Cavern Hall Pot 1, took the harder region (sphere 12)"
+   "basis": "room 1, the Freezard room before the gate, frozen in red ice (Obj_RedIce_A_01 on the pot)"
   },
   {
    "name": "Jabu Jabus Belly Before Boss Remake Crate 1",
@@ -2985,7 +2987,7 @@
    "folder": "InsideJabuJabuBelly",
    "via": "drop",
    "age": "both",
-   "region": "Jabu Jabus Belly Main",
+   "region": "Jabu Jabus Belly Before Boss",
    "rule": "can_break_crate",
    "refs": [
     {
@@ -2999,7 +3001,7 @@
     "remake"
    ],
    "grade": "guess",
-   "basis": "nearby check Jabu Jabus Belly Basement Switch Room Pot 1, took the harder region (sphere 9)"
+   "basis": "room 17, the ledge above the first room on the way from Big Octo to the boss door, with the switch crate"
   },
   {
    "name": "Kak Backyard Adult Remake Pot 1",
@@ -3817,7 +3819,7 @@
    "folder": "DodongoCavern",
    "via": "drop",
    "age": "both",
-   "region": "King Dodongo Boss Room",
+   "region": "Dodongos Cavern Before Boss",
    "rule": "True",
    "refs": [
     {
@@ -3831,7 +3833,7 @@
     "remake"
    ],
    "grade": "guess",
-   "basis": "nearby check Dodongos Cavern King Dodongo Heart, took the harder region (sphere 6)"
+   "basis": "room 19, the block room past the Mouth, by the door to the boss floor"
   },
   {
    "name": "LH Lab Adult Remake Crate 1",
@@ -4597,7 +4599,7 @@
    "folder": "SpiritTemple",
    "via": "drop",
    "age": "both",
-   "region": "Spirit Temple Anubis Room",
+   "region": "Spirit Temple Big Mirror Room",
    "rule": "True",
    "refs": [
     {
@@ -4611,7 +4613,7 @@
     "remake"
    ],
    "grade": "guess",
-   "basis": "nearby check Spirit Temple Beamos Hall Pot, took the harder region (sphere 21)"
+   "basis": "room 27, on the Boss Key path past the fifth locked door, seen in the walkthrough video"
   },
   {
    "name": "Spirit Temple Beyond Anubis Room Remake Pot 1",

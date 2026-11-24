@@ -44,7 +44,6 @@ pub struct Table {
     pub keep: Vec<String>,
     pub bottle: Vec<String>,
     pub bombs: Vec<String>,
-    pub deal_items: Vec<String>,
     pub rupees: Vec<(String, u64)>,
     pub pin: Vec<(String, String)>,
     pub stack: Vec<(String, String)>,
@@ -143,7 +142,6 @@ pub fn parse(t: &str) -> Res<Table> {
         keep: strs(&j, "keep")?,
         bottle: strs(&j, "bottle")?,
         bombs: strs(&j, "bombs")?,
-        deal_items: strs(&j, "deal_items")?,
         rupees,
         pin,
         stack,
@@ -223,8 +221,8 @@ mod tests {
         let t: &Table = table().unwrap();
         assert_eq!(t.shops.len(), 8);
         assert_eq!(t.slots.len(), 64);
-        assert!(is_loc("KF Shop Item 1"));
-        assert!(is_loc("ZD Shop Item 8"));
+        assert!(is_loc("KF Shop Right Side Bottom Left"));
+        assert!(is_loc("ZD Shop Left Side Top Left"));
         assert!(!is_loc("Market Mask Shop Item 1"));
         assert!(!is_loc("KF Shop Wonderitem"));
         let units: std::collections::BTreeSet<String> = t.slots.iter().map(|s| t.unit(s)).collect();
@@ -246,10 +244,6 @@ mod tests {
         }
         for n in t.keep.iter().chain(t.bottle.iter()).chain(t.bombs.iter()) {
             assert!(d.item(n).is_some() || t.items.iter().any(|i| &i.name == n), "{n}");
-        }
-        for n in &t.deal_items {
-            let i = d.item(n).unwrap();
-            assert!(i.actor.is_some() && i.tiers.is_empty() && i.kind == "Item", "{n}");
         }
         for (n, _) in &t.rupees {
             assert!(d.item(n).is_some_and(|i| i.actor.is_some()), "{n}");
@@ -278,7 +272,7 @@ mod tests {
     #[test]
     fn broken_tables_are_refused() {
         assert!(parse("{\"format\":2}").is_err());
-        let short: String = SHOPS_JSON.replacen("\"deal_order\": [6, 0, 7, 2, 3, 1, 4, 5]", "\"deal_order\": [6, 0]", 1);
+        let short: String = SHOPS_JSON.replacen("\"deal_order\": [4, 5, 6, 7, 0, 1, 2, 3]", "\"deal_order\": [6, 0]", 1);
         assert!(parse(&short).is_err());
     }
 }

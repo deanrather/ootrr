@@ -45,7 +45,7 @@
         {"kind": "bool", "name": "GerudoFortress_IsAfterHelpCarpenter_Npc_Hylia_014_Adult", "value": true},
         {"kind": "bool", "name": "GerudoFortress_IsAfterHelpCarpenter_Npc_Hylia_015_Adult", "value": true}
       ],
-      "note": "Tested in game. Three carpenters start free and the last one still needs rescuing. The Membership Card is vanilla and is granted by the game when the last carpenter is freed."
+      "note": "Tested in game. Three carpenters start free and the last one still needs rescuing. The guard gives the Membership Card check when the last carpenter is freed; it holds the card unless the card is shuffled."
     },
     {
       "setting": "gerudo_fortress",

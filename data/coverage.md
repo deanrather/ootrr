@@ -259,7 +259,6 @@ Shops, songs, bosses, cutscenes, events, hints, event-reward NPCs, Wonderitems, 
 - **GoronCity / chest** (ambiguous: 4 oot vs 6 remake candidates): GC Maze Left Chest, GC Maze Center Chest, GC Maze Right Chest
 - **GoronCity / crate** (no remake counterpart in group): GC Boulder Maze Crate
 - **GoronCity / freestanding** (no remake counterpart in group): GC Spinning Pot Bomb Drop 1, GC Spinning Pot Bomb Drop 2, GC Spinning Pot Bomb Drop 3, GC Spinning Pot Rupee Drop 1, GC Spinning Pot Rupee Drop 2, GC Spinning Pot Rupee Drop 3, GC Spinning Pot PoH Drop Rupee 1, GC Spinning Pot PoH Drop Rupee 2
-- **GoronCity / heart** (ambiguous: 4 oot vs 6 remake candidates): GC Pot Freestanding PoH
 - **GoronCity / pot** (ambiguous: 2 oot vs 1 remake candidates of the same item class): GC Darunia Pot 2, GC Upper Staircase Pot 2
 - **GoronCity / pot** (ambiguous: 3 oot vs 1 remake candidates of the same item class): GC Darunia Pot 1, GC Darunia Pot 3, GC Lower Staircase Pot 1
 - **GoronCity / pot** (no remake counterpart in group): GC Medigoron Pot, GC Lower Staircase Pot 2, GC Upper Staircase Pot 1, GC Upper Staircase Pot 3

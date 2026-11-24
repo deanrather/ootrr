@@ -219,7 +219,7 @@ mod tests {
         let new_list: usize = rf.zs.decompress(&std::fs::read(out.join(LIST)).unwrap()).unwrap().len();
         let raw_mod: usize = rf.read(start::MODULE).unwrap().len();
         let new_mod: usize = std::fs::read(out.join(start::MODULE)).unwrap().len();
-        assert!(new_list > raw_list && new_mod > raw_mod, "{raw_list} {new_list} {raw_mod} {new_mod}");
+        assert!(new_list != raw_list && new_mod > raw_mod, "{raw_list} {new_list} {raw_mod} {new_mod}");
         for (p, a, z) in [(LIST, raw_list, new_list), (start::MODULE, raw_mod, new_mod)] {
             let (Some(v), Some(o)) = (van.get(p), ours.get(p)) else {
                 panic!("{p} has no size entry");

@@ -5,10 +5,11 @@
         "hint": "HYRULE_FIELD",
         "locations": {
             "HF Redead Grotto Chest": "can_open_storm_grotto and can_kill_redead",
-            "HF Tunnel Ledge Chest": "is_child",
             "HF East Poe Chest": "is_adult",
             "HF South Poe Chest": "is_adult",
-            "HF Lake Poe Chest": "is_adult",
+            # The remake has no tektite grotto: this is a locked chest in the cliff rocks
+            # near the cow grotto hole, opened as an adult (tester run, 0.8.2).
+            "HF Tektite Grotto Freestanding PoH": "is_adult",
             "HF Ocarina of Time Item": "is_child and (door_of_time_escape == 'moat' or story_stones) and Ocarina",
             "Song from Ocarina of Time": "is_child and (door_of_time_escape == 'moat' or story_stones) and Ocarina",
             "Big Poe Kill": "can_ride_epona and Bow and has_bottle and Hookshot",
@@ -31,8 +32,7 @@
             "HF Cow Grotto": "(is_child or Megaton_Hammer) and can_open_bomb_grotto",
             "HF Near Market Grotto": "here(can_blast_or_smash)",
             "HF Fairy Grotto": "here(can_blast_or_smash)",
-            "HF Near Kak Grotto": "can_open_bomb_grotto",
-            "HF Tektite Grotto": "can_open_bomb_grotto"
+            "HF Near Kak Grotto": "can_open_bomb_grotto"
         }
     }
 ]

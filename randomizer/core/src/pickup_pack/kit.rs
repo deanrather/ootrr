@@ -250,9 +250,8 @@ pub fn plan_with(packs: &[Vec<Entry>], s: &Spec, l: &Layers) -> Res<Plan> {
     let first: Made = if from_pickup {
         child(&p, s, &own)?
     } else {
-        if let Some(f) = select(&p, &s.item)?.iter().find(|f| !p.get(f).is_some_and(is_byml)) {
-            return Err(E::Msg(format!("{f} is not a parameter file, an item whose pack carries graph or binary files needs a hand made template")));
-        }
+        // The kit's own files are checked once selected (below): a graph file of the item's own
+        // pack, such as the dungeon map's AI, is never reached through the thin template.
         make_with(&p, s, l)?
     };
     let m: Made = with_kit(&p, first, hangs(&s.name))?;
@@ -630,8 +629,8 @@ pub fn run_with(romfs: &P, load: &P, mod_name: &str, s: &Spec, o: &Opts, drops: 
         return Err(E::Format("pickup kit: a kit pickup is only for skulltula drops, at a placed spot it would write the saved rows of no skulltula"));
     }
     let o: &Opts = &Opts { base: base_dir(o)?, ..o.clone() };
-    let plain: Layers = l.clone();
     let mut rf: Romfs = Romfs::open(romfs)?;
+    let plain: Layers = crate::pickup_pack::model::layers(&mut rf, l)?;
     if rf.root.join(pack_of(&s.name)).is_file() {
         return Err(E::Msg(format!("the game already ships {}, use that actor", s.name)));
     }
@@ -648,7 +647,7 @@ pub fn run_with(romfs: &P, load: &P, mod_name: &str, s: &Spec, o: &Opts, drops: 
         }
         packs.push(sarc::parse(&rf.read_zs(&pack_of(m))?)?);
     }
-    let lifted: Layers = crate::pickup_pack::lift::layers(&mut rf, &s.item, l)?;
+    let lifted: Layers = crate::pickup_pack::lift::layers(&mut rf, &s.item, &plain)?;
     let l: &Layers = &lifted;
     let pl: Plan = plan_with(&packs, s, l)?;
     let (mut rst, modded): (Rst, bool) = size_table(&mut rf, o)?;

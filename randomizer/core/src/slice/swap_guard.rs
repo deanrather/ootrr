@@ -1,7 +1,6 @@
-use crate::error::{Error as E, Res};
+use crate::error::Res;
 use crate::pickup_persist::{check_rows, check_swaps_with, rows, Extra};
 use crate::romfs::Romfs;
-use crate::slice::copies::fits;
 use crate::slice::data::Data;
 use crate::slice::edit::Target;
 use crate::slice::pickups::on_ground;
@@ -14,10 +13,8 @@ pub fn check(rf: &mut Romfs, d: &Data, ts: &[Target], extra: &Extra) -> Res<()> 
     if added.is_empty() {
         return Ok(());
     }
-    if let Some(t) = added.iter().find(|t| !fits(d, &t.name, &t.new_item)) {
-        return Err(E::Msg(format!("{} exists once per age, so {} placed there could be taken twice", t.name, t.new_item)));
-    }
-    let spots: Vec<(u64, &str)> = added.iter().map(|t| (t.hash, t.new_actor.as_str())).collect();
+    // The build adds the row of these spots itself (pickups::NEW_ROWS).
+    let spots: Vec<(u64, &str)> = added.iter().filter(|t| !crate::slice::pickups::needs_row(&t.name)).map(|t| (t.hash, t.new_actor.as_str())).collect();
     check_rows(&rows(rf)?, &spots)
 }
 
@@ -130,6 +127,55 @@ mod tests {
     }
 
     #[test]
+    fn a_keysanity_build_swaps_the_well_key_and_the_letter_and_adds_their_rows() {
+        let Some(root) = real() else {
+            return;
+        };
+        let d: Data = Data::load().unwrap();
+        let mut s: Settings = Settings::default();
+        s.set(SETTING, Value::s("all")).unwrap();
+        s.set("shuffle_chests", Value::s("all")).unwrap();
+        s.set("shuffle_smallkeys", Value::s("keysanity")).unwrap();
+        let g: Generated = generate_data(&d, &s, "well key build", &GenOpts::default()).unwrap();
+        let mut seed: SeedFile = g.seed_file;
+        let spots: [(&str, &str, &str); 2] = [
+            (crate::slice::pickups::KEY_SPOTS[0], "Rupees (20)", "Obj_Rupee_Red"),
+            ("LH Underwater Item", "Rupees (50)", "Obj_Rupee_Purple"),
+        ];
+        for (at, item, _) in spots {
+            let from: String = seed.placements.iter().find(|(l, i)| i.as_str() == item && !spots.iter().any(|x| x.0 == l.as_str())).map(|(l, _)| l.clone()).unwrap();
+            let old: String = seed.placements.get(at).cloned().unwrap();
+            seed.placements.insert(at.to_string(), item.to_string());
+            seed.placements.insert(from, old);
+        }
+        let load: PB = std::env::temp_dir().join(format!("ootrr_swap_guard_well_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&load);
+        let b: Built = build_with(&seed, &root, &load, "well", Host::Eden, &widen(&root, &d, &seed, &Extra::default())).unwrap();
+        let out: PB = b.root.join("romfs");
+        let mut rf: Romfs = Romfs::open(&root).unwrap();
+        let list: Byml = Byml::parse(&rf.zs.decompress(&fs::read(out.join(crate::chest_slot::LIST)).unwrap()).unwrap()).unwrap();
+        let saved: HM<u64, (i64, i64)> = crate::pickup_persist::rows_of(&list).unwrap();
+        let before: HM<u64, (i64, i64)> = rows(&mut rf).unwrap();
+        let jar: bool = seed.placements.get(crate::slice::pickups::JAR_SPOT).is_some_and(|i| d.vanilla_of(crate::slice::pickups::JAR_SPOT) != Some(i.as_str()));
+        assert_eq!(saved.len(), before.len() + 3 + usize::from(jar));
+        assert!(crate::pickup_persist::kept(&saved, crate::qol::dampe_race::HEART));
+        let order: Vec<u64> = list.root.get("Data").unwrap().get(crate::pots::TABLE).unwrap().as_arr().unwrap().iter().filter_map(crate::placement::hash_of).collect();
+        assert!(order.windows(2).all(|w| w[0] < w[1]));
+        for (at, _, actor) in spots {
+            let l: &Loc = d.cat.by_name(at).unwrap();
+            for r in &l.refs {
+                assert!(crate::pickup_persist::kept(&saved, r.hash), "{at}");
+                assert!(!before.contains_key(&r.hash), "{at}");
+                for f in &r.files {
+                    let y: Byml = Byml::parse(&rf.zs.decompress(&fs::read(out.join(f)).unwrap()).unwrap()).unwrap();
+                    assert_eq!(current(&y, r.hash).as_deref(), Some(actor), "{at} {f}");
+                }
+            }
+        }
+        let _ = fs::remove_dir_all(&load);
+    }
+
+    #[test]
     fn the_hookshot_pack_passes_on_a_single_spot_with_the_tier_the_order_names() {
         let Some(root) = real() else {
             return;
@@ -169,9 +215,7 @@ mod tests {
         for t in two.iter_mut() {
             t.new_item = "Piece of Heart".to_string();
         }
-        let e: String = check(&mut rf, &d, &two, &good).unwrap_err().to_string();
-        assert!(e.contains("once per age"), "{e}");
-        assert!(fits(&d, TWIN, "Megaton Hammer"));
+        check(&mut rf, &d, &two, &good).unwrap();
         let mut moved: Vec<Target> = ts.clone();
         moved[0].hash = 1;
         let e: String = check(&mut rf, &d, &moved, &good).unwrap_err().to_string();

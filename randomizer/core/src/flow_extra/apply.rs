@@ -26,6 +26,11 @@ pub fn ops_for(changes: &[Change]) -> Res<BM<String, Vec<Op>>> {
             continue;
         }
         seen.push(&c.location);
+        // Adult trade shuffle replaces a trade spot's gifts like any NPC gift (role grant): its
+        // clone edit is for the unshuffled chain only.
+        if crate::flow_extra::trade::is(&c.location) && c.role != crate::flow_extra::trade::ROLE {
+            continue;
+        }
         let Some(s) = x.by_name(&c.location) else {
             continue;
         };

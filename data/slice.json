@@ -398,6 +398,10 @@
       "state": "eligible"
     },
     {
+      "name": "Gerudo Training Ground Hammer Room Clear Chest",
+      "state": "eligible"
+    },
+    {
       "name": "Gerudo Training Ground Hammer Room Switch Chest",
       "state": "eligible"
     },
@@ -419,6 +423,10 @@
     },
     {
       "name": "Gerudo Training Ground Hidden Ceiling Chest",
+      "state": "eligible"
+    },
+    {
+      "name": "Gerudo Training Ground Lobby Left Chest",
       "state": "eligible"
     },
     {
@@ -486,10 +494,6 @@
       "state": "eligible"
     },
     {
-      "name": "HF Lake Poe Chest",
-      "state": "eligible"
-    },
-    {
       "name": "HF Open Grotto Chest",
       "state": "eligible"
     },
@@ -499,10 +503,6 @@
     },
     {
       "name": "HF South Poe Chest",
-      "state": "eligible"
-    },
-    {
-      "name": "HF Tunnel Ledge Chest",
       "state": "eligible"
     },
     {
@@ -571,6 +571,14 @@
     },
     {
       "name": "Kak Windmill Roof Chest",
+      "state": "eligible"
+    },
+    {
+      "name": "LH Poe Chest",
+      "state": "eligible"
+    },
+    {
+      "name": "LLR Tunnel Ledge Chest",
       "state": "eligible"
     },
     {

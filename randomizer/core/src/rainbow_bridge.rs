@@ -15,6 +15,7 @@
 use crate::ainb::Ainb;
 use crate::bfevfl::{Bf, Case, Cont, Event, Flow, Kind, Val};
 use crate::error::{Error, Res};
+use crate::medal_gate::Goal;
 use crate::romfs::Romfs;
 use crate::settings::Settings;
 use crate::staging::Out;
@@ -22,39 +23,39 @@ use crate::start_defaults::Edit;
 
 pub const SETTING: &str = "bridge";
 pub const REWARDS: &str = "bridge_rewards";
+pub const MEDALLIONS: &str = "bridge_medallions";
 pub const VALUE: &str = "dungeons";
+pub const MEDALLIONS_VALUE: &str = "medallions";
 pub const MODULE: &str = "Logic/GanonCastle_Level_Field_00_Prefab_14ba.logic.module.ainb";
 pub const READY_EXP: &str = "Defeat_Ganon_IsAfter_Ready_Exp";
 pub const BRIDGE_EXP: &str = "Defeat_Ganon_IsAfter_Step03_Exp";
 pub const PLAYED: &str = "HavePlayedEvent.GanonCastle_Adult_Field_Rainbow";
 pub const NOTE: &str = "The Rainbow Bridge to Ganon's Castle appears once you hold the set number of Stones and Medallions together, with or without the Light Arrows Cutscene. The bridge's logic module reads a rewritten computed flag (Defeat_Ganon_IsAfter_Step03_Exp) in place of the quest step, and the Light Arrows scene no longer moves the Defeat_Ganon quest back once the bridge is built. Experimental and untested in the game.";
-const COUNTS: [&str; 10] = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
 const READ_EXP: &str = "HoldGameDataGetBoolExpSimple";
 const EXP_IN: &str = "GameDataNameBoolExp";
 const STR: usize = 3;
-const NOT_OP: i32 = 5;
-const AND_OP: i32 = 3;
 const LACS_FLOW: &str = "AllSage";
 /// AllSage's last write after the Light Arrows scene: Defeat_Ganon to Step01.
 const STEP01: (&str, &str) = ("Event11", "ChallengeSystemActor.EventExecuteProgressChallengeStep");
 
-/// Some(n) when the bridge waits for n dungeon rewards. Vanilla keeps the game's own condition.
-pub fn read(s: &Settings, bad: &mut Vec<String>) -> Option<u8> {
-    match s.text(SETTING) {
-        Ok("vanilla") => None,
-        Ok(VALUE) => match s.int(REWARDS) {
-            Ok(n) if (0..=9).contains(&n) => Some(n as u8),
-            Ok(n) => {
-                bad.push(format!("{REWARDS} is {n}, which is not between 0 and 9"));
-                None
-            }
-            Err(e) => {
-                bad.push(e.to_string());
-                None
-            }
-        },
+pub fn read(s: &Settings, bad: &mut Vec<String>) -> Option<Goal> {
+    let (key, top, make): (&str, i64, fn(u8) -> Goal) = match s.text(SETTING) {
+        Ok("vanilla") => return None,
+        Ok(VALUE) => (REWARDS, 9, Goal::Rewards),
+        Ok(MEDALLIONS_VALUE) => (MEDALLIONS, 6, Goal::Medallions),
         Ok(v) => {
-            bad.push(format!("{SETTING} is {v}, which this build cannot apply yet (only vanilla and dungeons work)"));
+            bad.push(format!("{SETTING} is {v}, which this build cannot apply yet (only vanilla, medallions and dungeons work)"));
+            return None;
+        }
+        Err(e) => {
+            bad.push(e.to_string());
+            return None;
+        }
+    };
+    match s.int(key) {
+        Ok(n) if (0..=top).contains(&n) => Some(make(n as u8)),
+        Ok(n) => {
+            bad.push(format!("{key} is {n}, which is not between 0 and {top}"));
             None
         }
         Err(e) => {
@@ -64,24 +65,20 @@ pub fn read(s: &Settings, bad: &mut Vec<String>) -> Option<u8> {
     }
 }
 
-pub fn logic(n: u8) -> [(&'static str, &'static str); 2] {
-    [(SETTING, VALUE), (REWARDS, COUNTS[usize::from(n).min(9)])]
+pub fn logic(g: Goal) -> [(&'static str, &'static str); 2] {
+    let key: &str = match g {
+        Goal::Rewards(_) => REWARDS,
+        Goal::Medallions(_) => MEDALLIONS,
+    };
+    [(SETTING, g.kind()), (key, g.count())]
 }
 
-/// At least `n` of the nine rewards, and the bridge event not played yet.
-pub fn terms(n: u8) -> Vec<(i32, String)> {
-    let mut t: Vec<(i32, String)> = crate::medal_gate::at_least(&crate::medal_gate::REWARD_ITEMS, usize::from(n).min(9)).unwrap_or_default();
-    let counted: bool = !t.is_empty();
-    t.push((0, PLAYED.to_string()));
-    t.push((NOT_OP, String::new()));
-    if counted {
-        t.push((AND_OP, String::new()));
-    }
-    t
+pub fn terms(g: Goal) -> Vec<(i32, String)> {
+    g.terms(PLAYED)
 }
 
-pub fn exp(n: u8) -> Edit {
-    Edit::Exp(BRIDGE_EXP.to_string(), terms(n))
+pub fn exp(g: Goal) -> Edit {
+    Edit::Exp(BRIDGE_EXP.to_string(), terms(g))
 }
 
 /// The bridge module reads BRIDGE_EXP where it read the quest step formula.

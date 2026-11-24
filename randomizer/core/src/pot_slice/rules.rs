@@ -9,7 +9,7 @@ pub fn at(d: &Data, name: &str, item: &str) -> Option<bool> {
     if d.pots.has(name) {
         let known: bool = pickup::of(item).is_some() || crate::slice::key_spots::placeable(d, item, crate::slice::key_spots::Spot::Pot);
         let kind: bool = d.pots.kind_of(name).is_some();
-        return Some(known && kind && crate::slice::copies::fits(d, name, item));
+        return Some(known && kind);
     }
     None
 }
@@ -61,7 +61,7 @@ mod tests {
     }
 
     #[test]
-    fn pots_take_only_shipped_pickups_and_pot_junk_stays_out_of_chests() {
+    fn pots_take_any_item_with_a_pickup() {
         let d: Data = Data::load().unwrap();
         let w: World = world(&d).unwrap();
         let pot: &str = "KF House of Twins Pot 1";
@@ -73,10 +73,10 @@ mod tests {
         assert_eq!(probe(&d, &w, "Gold Skulltula Token", "Dodongos Cavern Right Side Pot 1"), Some(true));
         assert_eq!(probe(&d, &w, "Heart Container", "Dodongos Cavern Right Side Pot 1"), Some(true));
         assert_eq!(probe(&d, &w, "Recovery Heart", pot), Some(true));
-        assert_eq!(probe(&d, &w, "Progressive Strength Upgrade", pot), Some(false));
-        assert_eq!(probe(&d, &w, "Piece of Heart", pot), Some(false));
-        assert_eq!(probe(&d, &w, "Ocarina", pot), Some(false));
-        assert_eq!(probe(&d, &w, "Small Key (Forest Temple)", pot), Some(false));
+        assert_eq!(probe(&d, &w, "Progressive Strength Upgrade", pot), Some(true));
+        assert_eq!(probe(&d, &w, "Piece of Heart", pot), Some(true));
+        assert_eq!(probe(&d, &w, "Ocarina", pot), Some(true));
+        assert_eq!(probe(&d, &w, "Small Key (Forest Temple)", pot), Some(true));
         assert_eq!(probe(&d, &w, "Deku Nuts (5)", chest), None);
         assert_eq!(probe(&d, &w, "Fairy Drop", chest), Some(false));
         assert_eq!(probe(&d, &w, "Progressive Hookshot", chest), None);
@@ -107,6 +107,8 @@ mod tests {
         let mut moved: usize = 0;
         for (chests, pots) in [("all", "all"), ("off", "all"), ("all", "dungeons")] {
             let s: Settings = with(&[("shuffle_chests", chests), ("shuffle_pots", pots), ("shuffle_crates", "all")]);
+            let p: Plan = plan(&s).unwrap();
+            let w: World = world_with(&d, &p.logic()).unwrap();
             for n in 0..3 {
                 let g: Generated = generate_data(&d, &s, &format!("pots {chests} {pots} {n}"), &GenOpts::default()).unwrap();
                 assert!(beatable(&d, &s, &g), "{chests} {pots} {n}");
@@ -117,14 +119,13 @@ mod tests {
                         let ok: bool = pickup::of(item).is_some() || crate::slice::key_spots::placeable(&d, item, crate::slice::key_spots::Spot::Pot);
                         assert!(ok, "{loc} holds {item}");
                         assert!(d.pots.kind_of(loc).is_some(), "{loc} holds {item} but is no holder kind this build knows");
-                        assert!(crate::slice::copies::fits(&d, loc, item), "{loc} holds {item}");
                         if d.vanilla_of(loc) != Some(item.as_str()) {
                             moved += 1;
                         }
-                    } else {
-                        // A freestanding spot (Pieces of Heart are always shuffled) can take a pot's ground pickup.
-                        let ground: bool = d.cat.by_name(loc).is_some_and(crate::slice::pickups::is_world);
-                        assert!(ground || !d.pots.only.contains(item), "{loc} holds {item}");
+                    } else if d.pots.only.contains(item) {
+                        // Pot junk may leave the pots now (any item may go to any shuffled spot), but only
+                        // to a spot the build has a form for it at.
+                        assert!(crate::slice::generate::buildable(&d, &w, &p, w.item(item).unwrap(), w.loc(loc).unwrap()), "{loc} holds {item}");
                     }
                 }
                 assert!(here > 20, "{here}");
@@ -174,7 +175,7 @@ mod tests {
     }
 
     #[test]
-    fn a_beehive_takes_refills_and_gear_but_no_counted_item() {
+    fn a_beehive_takes_any_item_with_a_pickup() {
         let d: Data = Data::load().unwrap();
         let w: World = world(&d).unwrap();
         let hive: &str = "Kak Hole Beehive 3";
@@ -185,11 +186,11 @@ mod tests {
         assert_eq!(probe(&d, &w, "Arrows (10)", hive), Some(true));
         assert_eq!(probe(&d, &w, "Fire Arrows", hive), Some(true));
         assert_eq!(probe(&d, &w, "Megaton Hammer", hive), Some(true));
-        assert_eq!(probe(&d, &w, "Gold Skulltula Token", hive), Some(false));
-        assert_eq!(probe(&d, &w, "Piece of Heart", hive), Some(false));
-        assert_eq!(probe(&d, &w, "Heart Container", hive), Some(false));
-        assert_eq!(probe(&d, &w, "Small Key (Forest Temple)", hive), Some(false));
-        assert_eq!(probe(&d, &w, "Progressive Hookshot", hive), Some(false));
+        assert_eq!(probe(&d, &w, "Gold Skulltula Token", hive), Some(true));
+        assert_eq!(probe(&d, &w, "Piece of Heart", hive), Some(true));
+        assert_eq!(probe(&d, &w, "Heart Container", hive), Some(true));
+        assert_eq!(probe(&d, &w, "Small Key (Forest Temple)", hive), Some(true));
+        assert_eq!(probe(&d, &w, "Progressive Hookshot", hive), Some(true));
     }
 
     #[test]

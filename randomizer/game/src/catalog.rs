@@ -70,6 +70,7 @@ pub struct Catalog {
     pub locs: Vec<Loc>,
     pub gap_oot: Vec<GapOot>,
     pub gap_rem: Vec<GapRem>,
+    ix: HM<String, usize>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -185,7 +186,9 @@ impl Catalog {
                 cands: strs(e, "cands")?,
             });
         }
-        Ok(Catalog { locs, gap_oot, gap_rem })
+        let mut c: Catalog = Catalog { locs, gap_oot, gap_rem, ix: HM::new() };
+        c.reindex();
+        Ok(c)
     }
 
     pub fn load(p: &P) -> Res<Catalog> {
@@ -193,7 +196,26 @@ impl Catalog {
         Catalog::parse(&s)
     }
 
+    pub fn reindex(&mut self) {
+        self.ix.clear();
+        for (i, l) in self.locs.iter().enumerate() {
+            self.ix.entry(l.name.clone()).or_insert(i);
+        }
+    }
+
+    pub fn push(&mut self, l: Loc) {
+        self.ix.entry(l.name.clone()).or_insert(self.locs.len());
+        self.locs.push(l);
+    }
+
     pub fn by_name(&self, n: &str) -> Option<&Loc> {
+        if self.ix.len() == self.locs.len() {
+            match self.ix.get(n).map(|i| &self.locs[*i]) {
+                Some(l) if l.name == n => return Some(l),
+                None => return None,
+                Some(_) => {}
+            }
+        }
         self.locs.iter().find(|l| l.name == n)
     }
 

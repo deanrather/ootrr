@@ -2,7 +2,7 @@ use std::collections::{BTreeMap as BM, BTreeSet as BS};
 
 use crate::boss_heart::{heart_ids, swap, CHEST, HEART};
 use crate::byml::Byml;
-use crate::dungeon_credit::{place as place_key, sweep};
+use crate::dungeon_credit::place as place_key;
 use crate::error::{Error as E, Res};
 use crate::progressive::{guard_family, guarded, route, Size};
 use crate::special;
@@ -25,13 +25,10 @@ pub struct Edited {
 }
 
 pub fn edit_file(file: &str, raw: &[u8], ts: &[Target]) -> Res<Option<Edited>> {
-    edit_file_with(file, raw, ts, false, &BS::new(), &BM::new())
+    edit_file_with(file, raw, ts, false, &BS::new(), &BM::new(), &BS::new())
 }
 
-/// `small` lists boss heart hashes that become a small chest (chest size matches contents).
-/// `lifts` raises a freestanding spot swapped to one of those pickup actors by that many metres,
-/// so its item model clears the ground (crate::pickup_pack::lift).
-pub fn edit_file_with(file: &str, raw: &[u8], ts: &[Target], keys: bool, small: &BS<u64>, lifts: &BM<String, f32>) -> Res<Option<Edited>> {
+pub fn edit_file_with(file: &str, raw: &[u8], ts: &[Target], keys: bool, small: &BS<u64>, lifts: &BM<String, f32>, wrapped: &BS<u64>) -> Res<Option<Edited>> {
     let mut y: Byml = Byml::parse(raw)?;
     let mut hits: Vec<(usize, Found)> = Vec::new();
     let mut used: Vec<(String, Size)> = Vec::new();
@@ -91,7 +88,7 @@ pub fn edit_file_with(file: &str, raw: &[u8], ts: &[Target], keys: bool, small: 
             hits.push((i, f));
         }
     }
-    let swept: usize = if keys { sweep(&mut y, file)? } else { 0 };
+    let swept: usize = if keys { crate::dungeon_credit::sweep_except(&mut y, file, wrapped)? } else { 0 };
     if hits.is_empty() && swept == 0 {
         return Ok(None);
     }

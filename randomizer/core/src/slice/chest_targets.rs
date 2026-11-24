@@ -56,6 +56,22 @@ fn vanilla_actor(d: &Data, loc: &str) -> Res<String> {
         .ok_or_else(|| E::Msg(format!("{loc} is not in the catalog")))
 }
 
+/// The drop of an upgrade chain chest: the viewed tier, unless that tier sets off the chest
+/// pre-grant (pregrant::clashes), then the first tier that does not.
+pub fn view_drop(f: &str, view: Option<&str>) -> Res<&'static str> {
+    let t: &[&'static str] = crate::progressive::tiers(f)?;
+    if let Some(k) = view.and_then(|v| t.iter().position(|x| *x == v)) {
+        if !crate::pregrant::clashes(f, k)? {
+            return Ok(t[k]);
+        }
+    }
+    crate::pregrant::chest_drop(f)
+}
+
+pub fn chest_drop(f: &str, view: Option<&str>) -> Res<String> {
+    Ok(crate::ocarina_hold::chest_form(view_drop(f, view)?))
+}
+
 pub fn is_sale(d: &Data, loc: &str) -> bool {
     d.flow.by_name(loc).is_some() && d.cat.by_name(loc).is_none_or(|c| c.kind == "scrub" || (c.kind == "cow" && crate::flow_extra::cows::is(loc)))
 }
@@ -89,7 +105,8 @@ pub(crate) fn actors_for(d: &Data, seed: &SeedFile) -> Res<BM<String, String>> {
             dests.entry(item.clone()).or_default().push(loc.clone());
         }
     }
-    let stripped: bool = crate::start_items::pool::active(&plan(&seed.settings()?.settings)?);
+    let pl: crate::slice::support::Plan = plan(&seed.settings()?.settings)?;
+    let stripped: bool = crate::start_items::pool::active(&pl);
     let mut out: BM<String, String> = BM::new();
     for (item, locs) in &dests {
         let mut acts: Vec<String> = pool.get(item).cloned().unwrap_or_default();
@@ -97,6 +114,9 @@ pub(crate) fn actors_for(d: &Data, seed: &SeedFile) -> Res<BM<String, String>> {
         adjust(d, item, net, &mut acts);
         if stripped {
             crate::start_items::pool::fit_actors(d, item, locs.len(), &mut acts);
+        }
+        if pl.rewards.trade_items {
+            crate::open_world::trade_shuffle::fit_actors(d, item, locs.len(), &mut acts);
         }
         if acts.len() != locs.len() {
             return Err(E::Msg(format!(
@@ -131,6 +151,7 @@ pub(crate) fn targets_with(d: &Data, seed: &SeedFile, roam: bool, fixed: &BM<Str
     let mut flows: Vec<Choice> = Vec::new();
     let mut same: usize = 0;
     let given: BM<String, String> = actors_for(d, seed)?;
+    let views: BM<String, String> = crate::slice::tier_order::chest_views(d, seed)?;
     let wrapped: BM<String, &'static str> = flow_wraps(d, seed);
     for (loc, item) in &seed.placements {
         if crate::pot_slice::targets::is_loc(d, loc) || crate::slice::skulls::is_skull(d, loc) || crate::shops::seed::skip(loc) || crate::slice::silver::is_item(item) {
@@ -183,12 +204,19 @@ pub(crate) fn targets_with(d: &Data, seed: &SeedFile, roam: bool, fixed: &BM<Str
             if new.actor.is_none() {
                 return Err(E::Msg(format!("{item} has no remake item actor and cannot be placed")));
             }
-            let new_actor: String = given.get(loc).cloned().ok_or_else(|| E::Msg(format!("{loc} was given no item actor")))?;
+            let new_actor: String = fixed.get(loc).or_else(|| given.get(loc)).cloned().ok_or_else(|| E::Msg(format!("{loc} was given no item actor")))?;
             if new_actor == l.item {
                 same += 1;
                 continue;
             }
             let vanilla: &str = d.vanilla_of(loc).ok_or_else(|| E::Msg(format!("{loc} has no vanilla item")))?;
+            // A small key in the boss heart's chest is credited to its dungeon like any chest key.
+            let key: Option<&'static str> = if roam && new.kind == "SmallKey" {
+                let name: &str = new.dungeon.as_deref().unwrap_or("");
+                Some(key_dungeon(name).ok_or_else(|| E::Msg(format!("{item} cannot be placed in a chest, no key count belongs to it")))?)
+            } else {
+                None
+            };
             for r in &l.refs {
                 out.push(Target {
                     name: loc.clone(),
@@ -200,7 +228,7 @@ pub(crate) fn targets_with(d: &Data, seed: &SeedFile, roam: bool, fixed: &BM<Str
                     new_actor: new_actor.clone(),
                     ev: None,
                     family: None,
-                    key: None,
+                    key,
                     heart_chest: true,
                 });
             }
@@ -222,12 +250,18 @@ pub(crate) fn targets_with(d: &Data, seed: &SeedFile, roam: bool, fixed: &BM<Str
         }
         let family: Option<&'static str> = d
             .family(item)
-            .filter(|f| !needs_every_holder(f) || d.holders(f).iter().all(|h| seed.placements.contains_key(*h) || d.wrappable(h)));
+            .filter(|f| !needs_every_holder(f) || d.holders(f).iter().all(|h| seed.placements.contains_key(*h) || d.wrappable(h)))
+            .filter(|_| loc != crate::slice::treasure::LOC);
         let new_actor: String = match family {
-            Some(f) => crate::pregrant::chest_drop(f)?.to_string(),
+            // The chest raises its drop actor, so it holds the tier the player most likely gets
+            // there (tier_order::chest_views); the chain grants the right tier either way.
+            Some(f) => chest_drop(f, views.get(loc.as_str()).map(|s| s.as_str()))?,
             None => fixed.get(loc).or_else(|| given.get(loc)).cloned().ok_or_else(|| E::Msg(format!("{loc} was given no item actor")))?,
         };
-        let key: Option<&'static str> = if roam && new.kind == "SmallKey" {
+        // A story chest or the Treasure Chest Game prize keeps its event; its key is credited
+        // after it (crate::debug_names::stage_credit_chests).
+        let story: bool = loc == crate::slice::treasure::LOC || d.cat.by_name(loc).is_some_and(|l| l.refs.iter().any(|r| d.events.keep.contains(&r.hash)));
+        let key: Option<&'static str> = if roam && new.kind == "SmallKey" && !story {
             let name: &str = new.dungeon.as_deref().unwrap_or("");
             Some(key_dungeon(name).ok_or_else(|| E::Msg(format!("{item} cannot be placed in a chest, no key count belongs to it")))?)
         } else {

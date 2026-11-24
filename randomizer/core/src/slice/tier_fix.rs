@@ -111,40 +111,27 @@ mod tests {
     }
 
     #[test]
-    fn an_out_of_order_hookshot_at_a_freestanding_spot_is_repaired_by_swaps_and_the_seed_stays_beatable() {
+    fn a_hookshot_at_any_freestanding_spot_is_never_out_of_order_and_shows_the_first_tier() {
         let d: Data = Data::load().unwrap();
-        let s: Settings = with(&[("shuffle_chests", "all"), ("shuffle_freestanding_items", "all")]);
+        let s: Settings = with(&[("shuffle_chests", "all"), ("shuffle_freestanding_items", "all"), ("shuffle_smallkeys", "vanilla")]);
         let p: Plan = plan(&s).unwrap();
         let w: World = world_with(&d, &p.logic()).unwrap();
         let pk: Pick = pick(&d, &w, &p);
-        assert!(active(&d, &w, &pk.free));
         let hook: ItemId = w.item("Progressive Hookshot").unwrap();
-        let mut g: Placement = vanilla_place(&w, &d).unwrap();
+        let g: Placement = vanilla_place(&w, &d).unwrap();
         let ok = |i: ItemId, l: LocId| allowed(&d, &w, &p, i, l);
-        let mut pots: Vec<LocId> = pk.free.iter().copied().filter(|l| d.cat.by_name(&w.locs[*l].name).is_some_and(crate::slice::pickups::is_world) && ok(hook, *l)).collect();
-        pots.sort_by(|a, b| w.locs[*a].name.cmp(&w.locs[*b].name));
-        let dampe: LocId = w.loc("Water Temple Longshot Chest").unwrap();
-        let mut seen: bool = false;
-        for pot in pots {
+        let spots: Vec<LocId> = pk.free.iter().copied().filter(|l| d.cat.by_name(&w.locs[*l].name).is_some_and(crate::slice::pickups::is_world) && ok(hook, *l)).collect();
+        assert!(!spots.is_empty());
+        let longshot: LocId = w.loc("Water Temple Longshot Chest").unwrap();
+        for spot in spots {
             let mut t: Placement = g.clone();
-            let was: ItemId = t.get(pot).unwrap();
-            t.put(pot, hook);
-            t.put(dampe, was);
-            if explore(&w, &t, &[]).won() && !verdict(&d, &w, &t, &pk.free).unwrap().bad.is_empty() {
-                g = t;
-                seen = true;
-                break;
-            }
+            let was: ItemId = t.get(spot).unwrap();
+            t.put(spot, hook);
+            t.put(longshot, was);
+            let v = verdict(&d, &w, &t, &pk.free).unwrap();
+            assert!(v.bad.is_empty(), "{:?}", v.bad);
+            assert_eq!(v.assign.get(&w.locs[spot].name).map(|x| x.as_str()), Some("Item_Hookshot"), "{}", w.locs[spot].name);
         }
-        assert!(seen, "no freestanding spot gave an out of order hookshot");
-        let c: Ctx = Ctx { d: &d, w: &w, free: &pk.free, keep: &[], ok: &ok };
-        let fixed: Placement = repair(&c, &g, &mut Rng::from_text("repair test")).unwrap().expect("a repair");
-        assert!(verdict(&d, &w, &fixed, &pk.free).unwrap().bad.is_empty());
-        assert!(explore(&w, &fixed, &[]).won());
-        let again: Placement = repair(&c, &g, &mut Rng::from_text("repair test")).unwrap().unwrap();
-        assert_eq!(again.item, fixed.item);
-        let all: Ctx = Ctx { keep: &pk.free, ..c };
-        assert!(repair(&all, &g, &mut Rng::from_text("x")).unwrap().is_none());
     }
 
     #[test]

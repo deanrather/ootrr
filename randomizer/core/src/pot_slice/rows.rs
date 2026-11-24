@@ -2,12 +2,22 @@ use crate::byml::Byml;
 use crate::chest_slot::LIST;
 use crate::error::Res;
 use crate::flow_locations::dict_id;
-use crate::pots::one_time;
+use crate::pots::{add_kept, one_time};
 use crate::romfs::Romfs;
 use crate::staging::{rewrite, Out};
 use crate::zs;
 
 pub fn stage(rf: &mut Romfs, more: &mut Vec<Out>, hashes: &[u64]) -> Res<()> {
+    edit(rf, more, hashes, one_time)
+}
+
+/// Permanent rows for ground spots whose actor saved none (pickups::NEW_ROWS), added when the
+/// build swaps the actor for another pickup.
+pub fn stage_new(rf: &mut Romfs, more: &mut Vec<Out>, hashes: &[u64]) -> Res<()> {
+    edit(rf, more, hashes, add_kept)
+}
+
+fn edit(rf: &mut Romfs, more: &mut Vec<Out>, hashes: &[u64], f: fn(&mut Byml, &[u64]) -> Res<usize>) -> Res<()> {
     if hashes.is_empty() {
         return Ok(());
     }
@@ -16,7 +26,7 @@ pub fn stage(rf: &mut Romfs, more: &mut Vec<Out>, hashes: &[u64]) -> Res<()> {
             let id: Option<u32> = dict_id(&more[i].z);
             let raw: Vec<u8> = rf.zs.decompress(&more[i].z)?;
             let mut y: Byml = Byml::parse(&raw)?;
-            one_time(&mut y, hashes)?;
+            f(&mut y, hashes)?;
             let out: Vec<u8> = y.write()?;
             more[i].new = out.len();
             more[i].z = zs::compress_raw(&out, id)?;
@@ -24,7 +34,7 @@ pub fn stage(rf: &mut Romfs, more: &mut Vec<Out>, hashes: &[u64]) -> Res<()> {
         None => {
             let o: Out = rewrite(rf, LIST, |raw| {
                 let mut y: Byml = Byml::parse(raw)?;
-                one_time(&mut y, hashes)?;
+                f(&mut y, hashes)?;
                 y.write()
             })?;
             more.push(o);

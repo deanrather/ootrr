@@ -4,8 +4,8 @@
         "scene": "Lost Woods",
         "hint": "LOST_WOODS",
         "events": {
-            "Odd Mushroom Access": "is_adult and (('Cojiro Access' and not adult_trade_shuffle) or Cojiro)",
-            "Poachers Saw Access": "is_adult and (('Odd Potion Access' and not adult_trade_shuffle) or Odd_Potion)"
+            "Odd Mushroom Access": "is_adult and (('Cojiro Access' and not adult_trade_shuffle) or (Cojiro and 'Adult Trade Takers'))",
+            "Poachers Saw Access": "is_adult and (('Odd Potion Access' and not adult_trade_shuffle) or (Odd_Potion and 'Adult Trade Takers'))"
         },
         "locations": {
             "LW Skull Kid": "is_child and can_play(Sarias_Song)",
@@ -27,6 +27,7 @@
             "LW Near Ocarina Game Wonderitem 2": "is_child",
             "LW Near Ocarina Game Wonderitem 3": "is_child",
             "LW GS Bean Patch Near Bridge": "can_plant_bugs and can_child_attack",
+            "KF West Ledge Chest": "is_adult and here(can_plant_bean)",
             "LW Gossip Stone": "True",
             "Gossip Stone Fairy": "can_summon_gossip_fairy_without_suns and has_bottle",
             "Bean Plant Fairy": "is_child and can_plant_bean and can_play(Song_of_Storms) and has_bottle",
@@ -60,8 +61,7 @@
                     (logic_lost_woods_gs_bean and Hookshot and
                         (Longshot or Bow or has_bombchus or can_use(Dins_Fire))))",
             "LW GS Bean Patch Near Theater": "
-                can_plant_bugs and
-                (can_child_attack or (shuffle_scrubs == 'off' and Deku_Shield))",
+                can_plant_bugs and can_child_attack",
             "Butterfly Fairy": "can_use(Sticks) and has_bottle"
         },
         "exits": {

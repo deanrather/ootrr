@@ -53,8 +53,8 @@ def notes(version: str, since: str, url: str) -> str:
     c = changes(since)
     heading = "Changes since the last nightly" if is_ancestor(since) else f"Latest {len(c)} changes"
     return "\n".join([
-        f"Nightly build {version} of OOTRR, built from [{head[:10]}](https://github.com/{repo}/commit/{head}) on main. "
-        f"Its source is on the [nightly/{version}](https://github.com/{repo}/tree/nightly/{version}) branch.",
+        f"Nightly build {version} of OOTRR, built from [{head[:10]}](https://github.com/{repo}/commit/{head}) on the nightly branch. "
+        f"Its source is on the [nightly-builds/{version}](https://github.com/{repo}/tree/nightly-builds/{version}) branch.",
         "",
         "This release is replaced by the next nightly. The Source code downloads GitHub adds below only hold a placeholder, "
         "so get the source from the branch above.",

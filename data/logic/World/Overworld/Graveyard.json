@@ -9,7 +9,7 @@
                 (logic_graveyard_poh and can_use(Boomerang))",
             "Graveyard Freestanding PoH Crate": "(is_adult and can_break_crate and (here(can_plant_bean) or Longshot))",
             "Graveyard Dampe Gravedigging Tour": "is_child and at_dampe_time",
-            "Graveyard GS Wall": "can_use(Boomerang) and (at_night or gold_skulls_ignore_daytime)",
+            "Graveyard GS Wall": "can_use(Boomerang) and can_get_night_gs",
             "Graveyard GS Bean Patch": "can_plant_bugs and can_child_attack",
             "Butterfly Fairy": "can_use(Sticks) and at_day and has_bottle",
             "Bean Plant Fairy": "is_child and can_plant_bean and can_play(Song_of_Storms) and has_bottle",
@@ -61,13 +61,13 @@
         "region_name": "Graveyard Dampes Grave",
         "scene": "Windmill and Dampes Grave",
         "events": {
-            "Dampes Windmill Access": "is_adult and can_play(Song_of_Time)"
+            "Dampes Windmill Access": "True"
         },
         "locations": {
             "Graveyard Dampe Race High Rupee Chest": "is_adult",
             "Graveyard Dampe Race Low Rupee Chest": "is_adult",
             "Graveyard Dampe Race Hookshot Chest": "True",
-            "Graveyard Dampe Race Freestanding PoH": "is_adult or logic_child_dampe_race_poh",
+            "Graveyard Dampe Race Freestanding PoH": "True",
             "Graveyard Dampe Race Rupee 1": "True",
             "Graveyard Dampe Race Rupee 2": "True",
             "Graveyard Dampe Race Rupee 3": "True",

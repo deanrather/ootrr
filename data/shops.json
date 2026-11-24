@@ -7,7 +7,7 @@
       "files": ["Npc_Kokiri_001_Shop_Child", "Npc_Kokiri_001_Shop_Child_ShortStock"],
       "keepers": ["Npc_Kokiri_001_Shop_Adult", "Npc_Kokiri_001_Shop_Child", "Npc_Kokiri_001_Shop_Child_ShortStock"],
       "bancs": ["Banc/KokiriForest/KokiriForest_Adult_Static.bcett.byml.zs", "Banc/KokiriForest/KokiriForest_Child_Static.bcett.byml.zs"],
-      "deal_order": [6, 0, 7, 2, 3, 1, 4, 5],
+      "deal_order": [4, 5, 6, 7, 0, 1, 2, 3],
       "deals": true,
       "price_cap": 200
     },
@@ -16,7 +16,7 @@
       "files": ["Npc_Hylia_018_Shop"],
       "keepers": ["Npc_Hylia_018_Shop_Child"],
       "bancs": ["Banc/Market/Market_Child_Static.bcett.byml.zs"],
-      "deal_order": [6, 0, 1, 7, 5, 2, 3, 4],
+      "deal_order": [4, 5, 6, 7, 0, 1, 2, 3],
       "deals": true,
       "once": true
     },
@@ -25,7 +25,7 @@
       "files": ["Npc_Hylia_018_Shop_Adult"],
       "keepers": ["Npc_Hylia_018_Shop_Adult"],
       "bancs": ["Banc/KakarikoVillage/KakarikoVillage_Adult_Alternative_Static.bcett.byml.zs", "Banc/KakarikoVillage/KakarikoVillage_Adult_Static.bcett.byml.zs"],
-      "deal_order": [6, 0, 1, 7, 5, 2, 3, 4],
+      "deal_order": [4, 5, 6, 7, 0, 1, 2, 3],
       "deals": true,
       "once": true
     },
@@ -34,7 +34,7 @@
       "files": ["Npc_Hylia_020_Shop"],
       "keepers": ["Npc_Hylia_020_Shop_Child"],
       "bancs": ["Banc/Market/Market_Child_Static.bcett.byml.zs"],
-      "deal_order": [3, 0, 1, 2, 4, 5, 6, 7],
+      "deal_order": [4, 5, 6, 7, 0, 1, 2, 3],
       "deals": true,
       "once": true
     },
@@ -43,7 +43,7 @@
       "files": ["Npc_Hylia_020_Shop_Adult"],
       "keepers": ["Npc_Hylia_020_Shop_Adult"],
       "bancs": ["Banc/KakarikoVillage/KakarikoVillage_Adult_Alternative_Static.bcett.byml.zs", "Banc/KakarikoVillage/KakarikoVillage_Adult_Static.bcett.byml.zs"],
-      "deal_order": [3, 0, 1, 2, 4, 5, 6, 7],
+      "deal_order": [4, 5, 6, 7, 0, 1, 2, 3],
       "deals": true,
       "once": true
     },
@@ -52,7 +52,7 @@
       "files": ["Npc_Hylia_021_Shop"],
       "keepers": ["Npc_Hylia_021_Shop_Child"],
       "bancs": ["Banc/Market/Market_Child_Static.bcett.byml.zs"],
-      "deal_order": [0, 1, 2, 3, 4, 5, 6, 7],
+      "deal_order": [4, 5, 6, 7, 0, 1, 2, 3],
       "deals": true,
       "once": true
     },
@@ -61,7 +61,7 @@
       "files": ["Npc_Goron_011_Shop_Child"],
       "keepers": ["Npc_Goron_011_Shop_Adult", "Npc_Goron_011_Shop_Child"],
       "bancs": ["Banc/GoronCity/GoronCity_Adult_Static.bcett.byml.zs", "Banc/GoronCity/GoronCity_Child_Static.bcett.byml.zs"],
-      "deal_order": [3, 0, 1, 2, 4, 5, 6, 7],
+      "deal_order": [4, 5, 6, 7, 0, 1, 2, 3],
       "deals": true
     },
     {
@@ -69,13 +69,13 @@
       "files": ["Npc_Zora_011_Shop"],
       "keepers": ["Npc_Zora_011_Shop_Adult", "Npc_Zora_011_Shop_Child"],
       "bancs": ["Banc/ZoraDomain/ZoraDomain_Adult_Alternative_Static.bcett.byml.zs", "Banc/ZoraDomain/ZoraDomain_Adult_Static.bcett.byml.zs", "Banc/ZoraDomain/ZoraDomain_Child_Static.bcett.byml.zs"],
-      "deal_order": [3, 0, 1, 2, 4, 5, 6, 7],
+      "deal_order": [4, 5, 6, 7, 0, 1, 2, 3],
       "deals": true
     }
   ],
   "slots": [
     {
-      "name": "KF Shop Item 8",
+      "name": "KF Shop Left Side Top Left",
       "shop": "KF Shop",
       "slot": 0,
       "actor": "Shop_Heart",
@@ -85,7 +85,7 @@
       "target": "shop:Npc_Kokiri_001_Shop_Child.0"
     },
     {
-      "name": "KF Shop Item 6",
+      "name": "KF Shop Left Side Top Right",
       "shop": "KF Shop",
       "slot": 1,
       "actor": "Shop_DekuSeedBundle_02",
@@ -95,7 +95,7 @@
       "target": "shop:Npc_Kokiri_001_Shop_Child.1"
     },
     {
-      "name": "KF Shop Item 2",
+      "name": "KF Shop Left Side Bottom Left",
       "shop": "KF Shop",
       "slot": 2,
       "actor": "Shop_DekuNutBundle_01",
@@ -105,7 +105,7 @@
       "target": "shop:Npc_Kokiri_001_Shop_Child.2"
     },
     {
-      "name": "KF Shop Item 3",
+      "name": "KF Shop Left Side Bottom Right",
       "shop": "KF Shop",
       "slot": 3,
       "actor": "Shop_DekuNutBundle_02",
@@ -115,7 +115,7 @@
       "target": "shop:Npc_Kokiri_001_Shop_Child.3"
     },
     {
-      "name": "KF Shop Item 5",
+      "name": "KF Shop Right Side Top Left",
       "shop": "KF Shop",
       "slot": 4,
       "actor": "Shop_DekuSeedBundle_01",
@@ -125,7 +125,7 @@
       "target": "shop:Npc_Kokiri_001_Shop_Child.4"
     },
     {
-      "name": "KF Shop Item 7",
+      "name": "KF Shop Right Side Top Right",
       "shop": "KF Shop",
       "slot": 5,
       "actor": "Shop_DekuStickBundle_Medium",
@@ -135,7 +135,7 @@
       "target": "shop:Npc_Kokiri_001_Shop_Child.5"
     },
     {
-      "name": "KF Shop Item 1",
+      "name": "KF Shop Right Side Bottom Left",
       "shop": "KF Shop",
       "slot": 6,
       "actor": "Shop_Weapon_Shield_Deku",
@@ -145,7 +145,7 @@
       "target": "shop:Npc_Kokiri_001_Shop_Child.6"
     },
     {
-      "name": "KF Shop Item 4",
+      "name": "KF Shop Right Side Bottom Right",
       "shop": "KF Shop",
       "slot": 7,
       "actor": "Shop_DekuStick",
@@ -155,7 +155,7 @@
       "target": "shop:Npc_Kokiri_001_Shop_Child.7"
     },
     {
-      "name": "Market Bazaar Item 4",
+      "name": "Market Bazaar Left Side Top Left",
       "shop": "Market Bazaar",
       "slot": 0,
       "actor": "Shop_Heart",
@@ -165,7 +165,7 @@
       "target": "shop:Npc_Hylia_018_Shop_Child.0"
     },
     {
-      "name": "Market Bazaar Item 6",
+      "name": "Market Bazaar Left Side Top Right",
       "shop": "Market Bazaar",
       "slot": 1,
       "actor": "Shop_MagicJar_Small",
@@ -175,7 +175,7 @@
       "target": "shop:Npc_Hylia_018_Shop_Child.1"
     },
     {
-      "name": "Market Bazaar Item 8",
+      "name": "Market Bazaar Left Side Bottom Left",
       "shop": "Market Bazaar",
       "slot": 2,
       "actor": "Shop_DekuSeedBundle_02",
@@ -185,7 +185,7 @@
       "target": "shop:Npc_Hylia_018_Shop_Child.2"
     },
     {
-      "name": "Market Bazaar Item 5",
+      "name": "Market Bazaar Left Side Bottom Right",
       "shop": "Market Bazaar",
       "slot": 3,
       "actor": "Shop_ArrowBundle_01",
@@ -195,7 +195,7 @@
       "target": "shop:Npc_Hylia_018_Shop_Child.3"
     },
     {
-      "name": "Market Bazaar Item 2",
+      "name": "Market Bazaar Right Side Top Left",
       "shop": "Market Bazaar",
       "slot": 4,
       "actor": "Shop_BombBundle_01",
@@ -205,7 +205,7 @@
       "target": "shop:Npc_Hylia_018_Shop_Child.4"
     },
     {
-      "name": "Market Bazaar Item 3",
+      "name": "Market Bazaar Right Side Top Right",
       "shop": "Market Bazaar",
       "slot": 5,
       "actor": "Shop_DekuNutBundle_01",
@@ -215,7 +215,7 @@
       "target": "shop:Npc_Hylia_018_Shop_Child.5"
     },
     {
-      "name": "Market Bazaar Item 1",
+      "name": "Market Bazaar Right Side Bottom Left",
       "shop": "Market Bazaar",
       "slot": 6,
       "actor": "Shop_Weapon_Shield_Hylian",
@@ -225,7 +225,7 @@
       "target": "shop:Npc_Hylia_018_Shop_Child.6"
     },
     {
-      "name": "Market Bazaar Item 7",
+      "name": "Market Bazaar Right Side Bottom Right",
       "shop": "Market Bazaar",
       "slot": 7,
       "actor": "Shop_DekuStick",
@@ -235,7 +235,7 @@
       "target": "shop:Npc_Hylia_018_Shop_Child.7"
     },
     {
-      "name": "Kak Bazaar Item 4",
+      "name": "Kak Bazaar Left Side Top Left",
       "shop": "Kak Bazaar",
       "slot": 0,
       "actor": "Shop_Heart",
@@ -245,7 +245,7 @@
       "target": "shop:Npc_Hylia_018_Shop_Adult.0"
     },
     {
-      "name": "Kak Bazaar Item 6",
+      "name": "Kak Bazaar Left Side Top Right",
       "shop": "Kak Bazaar",
       "slot": 1,
       "actor": "Shop_MagicJar_Small",
@@ -255,7 +255,7 @@
       "target": "shop:Npc_Hylia_018_Shop_Adult.1"
     },
     {
-      "name": "Kak Bazaar Item 8",
+      "name": "Kak Bazaar Left Side Bottom Left",
       "shop": "Kak Bazaar",
       "slot": 2,
       "actor": "Shop_DekuSeedBundle_02",
@@ -265,7 +265,7 @@
       "target": "shop:Npc_Hylia_018_Shop_Adult.2"
     },
     {
-      "name": "Kak Bazaar Item 5",
+      "name": "Kak Bazaar Left Side Bottom Right",
       "shop": "Kak Bazaar",
       "slot": 3,
       "actor": "Shop_ArrowBundle_01",
@@ -275,7 +275,7 @@
       "target": "shop:Npc_Hylia_018_Shop_Adult.3"
     },
     {
-      "name": "Kak Bazaar Item 2",
+      "name": "Kak Bazaar Right Side Top Left",
       "shop": "Kak Bazaar",
       "slot": 4,
       "actor": "Shop_BombBundle_01",
@@ -285,7 +285,7 @@
       "target": "shop:Npc_Hylia_018_Shop_Adult.4"
     },
     {
-      "name": "Kak Bazaar Item 3",
+      "name": "Kak Bazaar Right Side Top Right",
       "shop": "Kak Bazaar",
       "slot": 5,
       "actor": "Shop_DekuNutBundle_01",
@@ -295,7 +295,7 @@
       "target": "shop:Npc_Hylia_018_Shop_Adult.5"
     },
     {
-      "name": "Kak Bazaar Item 1",
+      "name": "Kak Bazaar Right Side Bottom Left",
       "shop": "Kak Bazaar",
       "slot": 6,
       "actor": "Shop_Weapon_Shield_Hylian",
@@ -305,7 +305,7 @@
       "target": "shop:Npc_Hylia_018_Shop_Adult.6"
     },
     {
-      "name": "Kak Bazaar Item 7",
+      "name": "Kak Bazaar Right Side Bottom Right",
       "shop": "Kak Bazaar",
       "slot": 7,
       "actor": "Shop_DekuStick",
@@ -315,7 +315,7 @@
       "target": "shop:Npc_Hylia_018_Shop_Adult.7"
     },
     {
-      "name": "Market Potion Shop Item 3",
+      "name": "Market Potion Shop Left Side Top Left",
       "shop": "Market Potion Shop",
       "slot": 0,
       "actor": "Shop_Bottle_RedPotion",
@@ -325,7 +325,7 @@
       "target": "shop:Npc_Hylia_020_Shop_Child.0"
     },
     {
-      "name": "Market Potion Shop Item 1",
+      "name": "Market Potion Shop Left Side Top Right",
       "shop": "Market Potion Shop",
       "slot": 1,
       "actor": "Shop_Bottle_GreenPotion",
@@ -335,7 +335,7 @@
       "target": "shop:Npc_Hylia_020_Shop_Child.1"
     },
     {
-      "name": "Market Potion Shop Item 5",
+      "name": "Market Potion Shop Left Side Bottom Left",
       "shop": "Market Potion Shop",
       "slot": 2,
       "actor": "Shop_Bottle_HalfMilk",
@@ -345,7 +345,7 @@
       "target": "shop:Npc_Hylia_020_Shop_Child.2"
     },
     {
-      "name": "Market Potion Shop Item 4",
+      "name": "Market Potion Shop Left Side Bottom Right",
       "shop": "Market Potion Shop",
       "slot": 3,
       "actor": "Shop_Bottle_Fairy",
@@ -355,7 +355,7 @@
       "target": "shop:Npc_Hylia_020_Shop_Child.3"
     },
     {
-      "name": "Market Potion Shop Item 2",
+      "name": "Market Potion Shop Right Side Top Left",
       "shop": "Market Potion Shop",
       "slot": 4,
       "actor": "Shop_Bottle_BlueFire",
@@ -365,7 +365,7 @@
       "target": "shop:Npc_Hylia_020_Shop_Child.4"
     },
     {
-      "name": "Market Potion Shop Item 7",
+      "name": "Market Potion Shop Right Side Top Right",
       "shop": "Market Potion Shop",
       "slot": 5,
       "actor": "Shop_Bottle_Poe",
@@ -375,7 +375,7 @@
       "target": "shop:Npc_Hylia_020_Shop_Child.5"
     },
     {
-      "name": "Market Potion Shop Item 6",
+      "name": "Market Potion Shop Right Side Bottom Left",
       "shop": "Market Potion Shop",
       "slot": 6,
       "actor": "Shop_Bottle_Bug",
@@ -385,7 +385,7 @@
       "target": "shop:Npc_Hylia_020_Shop_Child.6"
     },
     {
-      "name": "Market Potion Shop Item 8",
+      "name": "Market Potion Shop Right Side Bottom Right",
       "shop": "Market Potion Shop",
       "slot": 7,
       "actor": "Shop_Bottle_Fish",
@@ -395,7 +395,7 @@
       "target": "shop:Npc_Hylia_020_Shop_Child.7"
     },
     {
-      "name": "Kak Potion Shop Item 3",
+      "name": "Kak Potion Shop Left Side Top Left",
       "shop": "Kak Potion Shop",
       "slot": 0,
       "actor": "Shop_Bottle_RedPotion",
@@ -405,7 +405,7 @@
       "target": "shop:Npc_Hylia_020_Shop_Adult.0"
     },
     {
-      "name": "Kak Potion Shop Item 4",
+      "name": "Kak Potion Shop Left Side Top Right",
       "shop": "Kak Potion Shop",
       "slot": 1,
       "actor": "Shop_Bottle_GreenPotion",
@@ -415,7 +415,7 @@
       "target": "shop:Npc_Hylia_020_Shop_Adult.1"
     },
     {
-      "name": "Kak Potion Shop Item 1",
+      "name": "Kak Potion Shop Left Side Bottom Left",
       "shop": "Kak Potion Shop",
       "slot": 2,
       "actor": "Shop_Bottle_HalfMilk",
@@ -425,7 +425,7 @@
       "target": "shop:Npc_Hylia_020_Shop_Adult.2"
     },
     {
-      "name": "Kak Potion Shop Item 8",
+      "name": "Kak Potion Shop Left Side Bottom Right",
       "shop": "Kak Potion Shop",
       "slot": 3,
       "actor": "Shop_Bottle_Fairy",
@@ -435,7 +435,7 @@
       "target": "shop:Npc_Hylia_020_Shop_Adult.3"
     },
     {
-      "name": "Kak Potion Shop Item 5",
+      "name": "Kak Potion Shop Right Side Top Left",
       "shop": "Kak Potion Shop",
       "slot": 4,
       "actor": "Shop_Bottle_BlueFire",
@@ -445,7 +445,7 @@
       "target": "shop:Npc_Hylia_020_Shop_Adult.4"
     },
     {
-      "name": "Kak Potion Shop Item 7",
+      "name": "Kak Potion Shop Right Side Top Right",
       "shop": "Kak Potion Shop",
       "slot": 5,
       "actor": "Shop_Bottle_Poe",
@@ -455,7 +455,7 @@
       "target": "shop:Npc_Hylia_020_Shop_Adult.5"
     },
     {
-      "name": "Kak Potion Shop Item 6",
+      "name": "Kak Potion Shop Right Side Bottom Left",
       "shop": "Kak Potion Shop",
       "slot": 6,
       "actor": "Shop_Bottle_Bug",
@@ -465,7 +465,7 @@
       "target": "shop:Npc_Hylia_020_Shop_Adult.6"
     },
     {
-      "name": "Kak Potion Shop Item 2",
+      "name": "Kak Potion Shop Right Side Bottom Right",
       "shop": "Kak Potion Shop",
       "slot": 7,
       "actor": "Shop_Bottle_Fish",
@@ -475,7 +475,7 @@
       "target": "shop:Npc_Hylia_020_Shop_Adult.7"
     },
     {
-      "name": "Market Bombchu Shop Item 3",
+      "name": "Market Bombchu Shop Left Side Top Left",
       "shop": "Market Bombchu Shop",
       "slot": 0,
       "actor": "Shop_BombchuBundle_03",
@@ -485,7 +485,7 @@
       "target": "shop:Npc_Hylia_021_Shop_Child.0"
     },
     {
-      "name": "Market Bombchu Shop Item 4",
+      "name": "Market Bombchu Shop Left Side Top Right",
       "shop": "Market Bombchu Shop",
       "slot": 1,
       "actor": "Shop_BombchuBundle_04",
@@ -495,7 +495,7 @@
       "target": "shop:Npc_Hylia_021_Shop_Child.1"
     },
     {
-      "name": "Market Bombchu Shop Item 1",
+      "name": "Market Bombchu Shop Left Side Bottom Left",
       "shop": "Market Bombchu Shop",
       "slot": 2,
       "actor": "Shop_BombchuBundle_05",
@@ -505,7 +505,7 @@
       "target": "shop:Npc_Hylia_021_Shop_Child.2"
     },
     {
-      "name": "Market Bombchu Shop Item 6",
+      "name": "Market Bombchu Shop Left Side Bottom Right",
       "shop": "Market Bombchu Shop",
       "slot": 3,
       "actor": "Shop_BombchuBundle_06",
@@ -515,7 +515,7 @@
       "target": "shop:Npc_Hylia_021_Shop_Child.3"
     },
     {
-      "name": "Market Bombchu Shop Item 2",
+      "name": "Market Bombchu Shop Right Side Top Left",
       "shop": "Market Bombchu Shop",
       "slot": 4,
       "actor": "Shop_BombchuBundle_01",
@@ -525,7 +525,7 @@
       "target": "shop:Npc_Hylia_021_Shop_Child.4"
     },
     {
-      "name": "Market Bombchu Shop Item 7",
+      "name": "Market Bombchu Shop Right Side Top Right",
       "shop": "Market Bombchu Shop",
       "slot": 5,
       "actor": "Shop_BombchuBundle_07",
@@ -535,7 +535,7 @@
       "target": "shop:Npc_Hylia_021_Shop_Child.5"
     },
     {
-      "name": "Market Bombchu Shop Item 5",
+      "name": "Market Bombchu Shop Right Side Bottom Left",
       "shop": "Market Bombchu Shop",
       "slot": 6,
       "actor": "Shop_BombchuBundle_02",
@@ -545,7 +545,7 @@
       "target": "shop:Npc_Hylia_021_Shop_Child.6"
     },
     {
-      "name": "Market Bombchu Shop Item 8",
+      "name": "Market Bombchu Shop Right Side Bottom Right",
       "shop": "Market Bombchu Shop",
       "slot": 7,
       "actor": "Shop_BombchuBundle_08",
@@ -555,7 +555,7 @@
       "target": "shop:Npc_Hylia_021_Shop_Child.7"
     },
     {
-      "name": "GC Shop Item 6",
+      "name": "GC Shop Left Side Top Left",
       "shop": "GC Shop",
       "slot": 0,
       "actor": "Shop_Heart",
@@ -565,7 +565,7 @@
       "target": "shop:Npc_Goron_011_Shop_Child.0"
     },
     {
-      "name": "GC Shop Item 7",
+      "name": "GC Shop Left Side Top Right",
       "shop": "GC Shop",
       "slot": 1,
       "actor": "Shop_Bottle_RedPotion",
@@ -575,7 +575,7 @@
       "target": "shop:Npc_Goron_011_Shop_Child.1"
     },
     {
-      "name": "GC Shop Item 8",
+      "name": "GC Shop Left Side Bottom Left",
       "shop": "GC Shop",
       "slot": 2,
       "actor": "Shop_Bottle_Bug",
@@ -585,7 +585,7 @@
       "target": "shop:Npc_Goron_011_Shop_Child.2"
     },
     {
-      "name": "GC Shop Item 5",
+      "name": "GC Shop Left Side Bottom Right",
       "shop": "GC Shop",
       "slot": 3,
       "actor": "Shop_Armor_Goron",
@@ -595,7 +595,7 @@
       "target": "shop:Npc_Goron_011_Shop_Child.3"
     },
     {
-      "name": "GC Shop Item 1",
+      "name": "GC Shop Right Side Top Left",
       "shop": "GC Shop",
       "slot": 4,
       "actor": "Shop_BombBundle_01",
@@ -605,7 +605,7 @@
       "target": "shop:Npc_Goron_011_Shop_Child.4"
     },
     {
-      "name": "GC Shop Item 2",
+      "name": "GC Shop Right Side Top Right",
       "shop": "GC Shop",
       "slot": 5,
       "actor": "Shop_BombBundle_02",
@@ -615,7 +615,7 @@
       "target": "shop:Npc_Goron_011_Shop_Child.5"
     },
     {
-      "name": "GC Shop Item 3",
+      "name": "GC Shop Right Side Bottom Left",
       "shop": "GC Shop",
       "slot": 6,
       "actor": "Shop_BombBundle_03",
@@ -625,7 +625,7 @@
       "target": "shop:Npc_Goron_011_Shop_Child.6"
     },
     {
-      "name": "GC Shop Item 4",
+      "name": "GC Shop Right Side Bottom Right",
       "shop": "GC Shop",
       "slot": 7,
       "actor": "Shop_BombBundle_04",
@@ -635,7 +635,7 @@
       "target": "shop:Npc_Goron_011_Shop_Child.7"
     },
     {
-      "name": "ZD Shop Item 8",
+      "name": "ZD Shop Left Side Top Left",
       "shop": "ZD Shop",
       "slot": 0,
       "actor": "Shop_Bottle_RedPotion",
@@ -645,7 +645,7 @@
       "target": "shop:Npc_Zora_011_Shop_Child.0"
     },
     {
-      "name": "ZD Shop Item 3",
+      "name": "ZD Shop Left Side Top Right",
       "shop": "ZD Shop",
       "slot": 1,
       "actor": "Shop_Bottle_GreenPotion",
@@ -655,7 +655,7 @@
       "target": "shop:Npc_Zora_011_Shop_Child.1"
     },
     {
-      "name": "ZD Shop Item 5",
+      "name": "ZD Shop Left Side Bottom Left",
       "shop": "ZD Shop",
       "slot": 2,
       "actor": "Shop_Bottle_Bug",
@@ -665,7 +665,7 @@
       "target": "shop:Npc_Zora_011_Shop_Child.2"
     },
     {
-      "name": "ZD Shop Item 1",
+      "name": "ZD Shop Left Side Bottom Right",
       "shop": "ZD Shop",
       "slot": 3,
       "actor": "Shop_Armor_Zora",
@@ -675,7 +675,7 @@
       "target": "shop:Npc_Zora_011_Shop_Child.3"
     },
     {
-      "name": "ZD Shop Item 2",
+      "name": "ZD Shop Right Side Top Left",
       "shop": "ZD Shop",
       "slot": 4,
       "actor": "Shop_ArrowBundle_01",
@@ -685,7 +685,7 @@
       "target": "shop:Npc_Zora_011_Shop_Child.4"
     },
     {
-      "name": "ZD Shop Item 4",
+      "name": "ZD Shop Right Side Top Right",
       "shop": "ZD Shop",
       "slot": 5,
       "actor": "Shop_ArrowBundle_02",
@@ -695,7 +695,7 @@
       "target": "shop:Npc_Zora_011_Shop_Child.5"
     },
     {
-      "name": "ZD Shop Item 7",
+      "name": "ZD Shop Right Side Bottom Left",
       "shop": "ZD Shop",
       "slot": 6,
       "actor": "Shop_Bottle_Fish",
@@ -705,7 +705,7 @@
       "target": "shop:Npc_Zora_011_Shop_Child.6"
     },
     {
-      "name": "ZD Shop Item 6",
+      "name": "ZD Shop Right Side Bottom Right",
       "shop": "ZD Shop",
       "slot": 7,
       "actor": "Shop_ArrowBundle_03",
@@ -756,7 +756,6 @@
   "keep": ["Buy Deku Shield", "Buy Hylian Shield", "Buy Goron Tunic", "Buy Zora Tunic", "Buy Deku Nut (5)", "Buy Deku Nut (10)", "Buy Deku Stick (1)", "Buy Bottle Bug", "Buy Fish", "Buy Fairy's Spirit", "Buy Blue Fire", "Buy Bombchu (5)", "Buy Bombchu (10)", "Buy Bombchu (20)", "Buy Arrows (10)", "Buy Deku Seeds (30)", "Buy Bombs (5) for 35 Rupees", "Buy Heart", "Buy Red Potion for 30 Rupees"],
   "bottle": ["Buy Red Potion for 30 Rupees", "Buy Green Potion", "Buy Half Milk", "Buy Fairy's Spirit", "Buy Blue Fire", "Buy Poe", "Buy Bottle Bug", "Buy Fish"],
   "bombs": ["Buy Bombchu (1)", "Buy Bombchu (3)", "Buy Bombchu (5)", "Buy Bombchu (8)", "Buy Bombchu (10)", "Buy Bombchu (15)", "Buy Bombchu (20)", "Buy Bombchu (30)"],
-  "deal_items": ["Boomerang", "Lens of Truth", "Megaton Hammer", "Kokiri Sword", "Mirror Shield", "Iron Boots", "Hover Boots", "Stone of Agony", "Gerudo Membership Card", "Fire Arrows", "Ice Arrows", "Light Arrows", "Dins Fire", "Farores Wind", "Nayrus Love"],
   "rupees": [
     ["Rupees (20)", 5],
     ["Rupees (50)", 3],
@@ -777,7 +776,7 @@
     ["Arrows (30)", "Shop_ArrowBundle_02"],
     ["Recovery Heart", "Shop_Heart"]
   ],
-  "upgrades": ["Hookshot", "Strength", "Wallet", "Scale", "NutBag", "StickBag", "Ocarina"],
+  "upgrades": ["Hookshot", "Strength", "Wallet", "Scale", "NutBag", "StickBag", "Ocarina", "BombBag", "Bow", "Slingshot", "Magic"],
   "hearts": ["Piece of Heart", "Heart Container"],
   "song_models": ["Dm_Item_Sheik_Harp", "Obj_Ocarina_Time"],
   "flex": ["Bombs (5)", "Bombs (20)"],

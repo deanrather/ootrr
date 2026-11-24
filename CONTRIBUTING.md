@@ -6,7 +6,7 @@ Thanks for helping. OOTRR is a randomizer for the Ocarina of Time Switch 2 remak
 
 - **No game data in the repo.** No game files, keys, dumps, extracted textures, saves or anything derived from them. The shipped tool never decrypts anything and never touches keys. Identifiers (flag names, actor names, hashes) are fine.
 - **License.** The project is GPL-3.0-or-later (releases up to 0.4.0 were MIT). Code you contribute is under the GPL. Credits for ported work stay in `NOTICE`.
-- **One concern per pull request.** Small, focused changes are reviewed fast. Base your branch on `main`.
+- **One concern per pull request.** Small, focused changes are reviewed fast. Base your branch on `nightly` and open the pull request against `nightly`. Merged work ships in the next nightly build, and `nightly` is merged into `main` for each release.
 - **Maintainers decide releases.** Tags and releases are made by the owner. Do not push tags.
 - **No new crate without asking first.** The only dependency is `ruzstd`.
 
@@ -62,7 +62,7 @@ Never run `ootrr` with no arguments. It starts the local web server and may open
 
 ## Settings
 
-- Every new setting defaults to the old behaviour. With it off, seed files and spoilers must stay byte identical to `main`. Show that in your pull request with a few seeds per mode (default, chests, pots and crates and so on).
+- Every new setting defaults to the old behaviour. With it off, seed files and spoilers must stay byte identical to `nightly`. Show that in your pull request with a few seeds per mode (default, chests, pots and crates and so on).
 - Old settings strings must keep their meaning. The settings model has an optional baseline for this, see the commit that made story and NPC rewards on by default.
 - Number your settings in a range the maintainer gives you, so two branches never collide.
 - Write a plain tip for each setting and say when it is experimental or untested in the game.

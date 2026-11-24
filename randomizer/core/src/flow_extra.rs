@@ -5,9 +5,11 @@ pub mod cows;
 mod data;
 pub mod frogs;
 mod gate;
+pub mod goron_pot;
 mod op;
 pub mod potion;
 pub mod sim;
+pub mod sun;
 pub mod trade;
 
 pub use apply::{always_ops, edit_bytes, edit_flow, ops_for, ops_of};
@@ -16,6 +18,14 @@ pub use gate::{bound, fits, open, pouch, POUCH_ONLY};
 pub use op::{apply as apply_op, How, Once, Op, ITEM};
 
 pub const SETTING: &str = "shuffle_rewards_extra";
+
+pub const GERUDO_CARD: &str = "shuffle_gerudo_card";
+pub const GERUDO_CARD_NUM: u16 = 170;
+pub const GERUDO_CARD_LOC: &str = "Hideout Gerudo Membership Card";
+
+pub fn scripted(name: &str) -> bool {
+    sun::is(name) || goron_pot::is(name)
+}
 
 pub const MERCHANTS: u16 = 97;
 pub const MERCHANTS_SETTING: &str = "shuffle_merchants";
@@ -46,11 +56,14 @@ pub struct Rewards {
     pub dungeon_own: bool,
     pub extra: bool,
     pub trade: bool,
+    /// Every adult trade item is its own shuffled item (crate::open_world::trade_shuffle).
+    pub trade_items: bool,
     pub cows: bool,
     pub cows_other: bool,
     pub frog_songs: bool,
     pub frog_bug: bool,
     pub potion: bool,
+    pub gerudo_card: bool,
     pub scrubs: bool,
     pub scrubs_b: bool,
     pub medigoron: bool,
@@ -91,10 +104,12 @@ impl Rewards {
         };
         let extra: bool = on && toggle(s, SETTING, bad);
         let trade: bool = on && toggle(s, trade::SETTING, bad);
+        let trade_items: bool = trade && toggle(s, crate::open_world::trade_shuffle::SETTING, bad);
         let cows: bool = on && toggle(s, cows::SETTING, bad);
         let frog_songs: bool = on && toggle(s, frogs::SONGS_SETTING, bad);
         let frog_bug: bool = on && toggle(s, frogs::BUG_SETTING, bad);
         let potion: bool = on && toggle(s, potion::SETTING, bad);
+        let gerudo_card: bool = on && toggle(s, GERUDO_CARD, bad);
         let scrubs: bool = crate::scrubs_a::read(s, on, bad);
         let scrubs_b: bool = crate::scrubs_b::read(s, on, bad);
         Rewards {
@@ -103,11 +118,13 @@ impl Rewards {
             dungeon_own,
             extra,
             trade,
+            trade_items,
             cows,
             cows_other: cows,
             frog_songs,
             frog_bug,
             potion,
+            gerudo_card,
             scrubs,
             scrubs_b,
             medigoron: false,

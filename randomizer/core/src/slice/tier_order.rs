@@ -65,6 +65,7 @@ pub fn fixed_spot(d: &Data, loc: &str) -> bool {
     crate::pot_slice::targets::is_loc(d, loc)
         || crate::shops::is_loc(loc)
         || crate::slice::skulls::is_skull(d, loc)
+        || loc == crate::slice::treasure::LOC
         || d.cat.by_name(loc).is_some_and(|l| crate::slice::pickups::is_world(l) || l.kind == "bossheart")
 }
 
@@ -85,7 +86,7 @@ pub fn slots(d: &Data, placed: &BM<String, String>) -> Vec<Slot> {
             } else {
                 Give::Open
             }
-        } else if fixed_spot(d, loc) {
+        } else if fixed_spot(d, loc) || (crate::slice::flow_rules::priced_sale(d, loc) && !crate::scrubs_a::home(d, loc, item)) {
             Give::Open
         } else if is_sale(d, loc) {
             if crate::scrubs_a::home(d, loc, item) {
@@ -160,6 +161,10 @@ pub fn judge(d: &Data, w: &World, place: &Placement, placed: &BM<String, String>
         let name: &str = mine.iter().find(|s| s.give == Give::Open).map(|s| s.item.as_str()).unwrap_or("");
         let it: ItemId = w.item(name).ok_or_else(|| E::Msg(format!("{name} is not in the logic item list")))?;
         for s in mine.iter().filter(|s| s.give != Give::Flow) {
+            if s.give == Give::Open && crate::pickup_tiers::runtime(d, &s.loc, f) {
+                v.assign.insert(s.loc.clone(), crate::pickup_tiers::base(f)?.to_string());
+                continue;
+            }
             let Some(l) = w.loc(&s.loc) else {
                 v.bad.push(format!("{} holds {} but is not a logic location", s.loc, s.item));
                 continue;
@@ -208,6 +213,54 @@ pub fn pinned(d: &Data, w: &World, free: &[LocId]) -> Vec<&'static str> {
     FAMILIES.iter().map(|(f, _)| *f).filter(|f| d.holders(f).iter().any(|h| !names.contains(h))).collect()
 }
 
+/// The sphere in which each location is first reached (None: never).
+fn spheres(w: &World, place: &Placement) -> Vec<Option<usize>> {
+    let mut out: Vec<Option<usize>> = vec![None; w.locs.len()];
+    let mut s: Search = Search::new(w);
+    let mut n: usize = 0;
+    let mut found: Vec<LocId> = s.settle(place, false);
+    while !found.is_empty() {
+        for l in &found {
+            out[*l].get_or_insert(n);
+            if let Some(i) = place.get(*l) {
+                s.add(i, 1);
+            }
+        }
+        n += 1;
+        found = s.settle(place, false);
+    }
+    out
+}
+
+/// The tier a chain chest of an upgrade most likely gives, for the model its chest raises: a
+/// chest raises its drop actor (PouchContentGuestPerformer), while the chain grants the next
+/// tier at run time. Every holder of the family is ordered by the sphere that reaches it, and
+/// the k-th one shows tier k past the copies the player starts with. Found in that order, the
+/// model matches the item; the item granted is right either way.
+pub fn chest_views(d: &Data, seed: &SeedFile) -> Res<BM<String, String>> {
+    let chests: Vec<Slot> = slots(d, &seed.placements).into_iter().filter(|s| s.give == Give::Flow && seed.placements.contains_key(&s.loc) && !is_sale(d, &s.loc) && !fixed_spot(d, &s.loc)).collect();
+    let mut out: BM<String, String> = BM::new();
+    if chests.is_empty() {
+        return Ok(out);
+    }
+    let (w, place): (World, Placement) = crate::slice::starts::rebuild(d, seed)?;
+    let when: Vec<Option<usize>> = spheres(&w, &place);
+    let fams: BS<&'static str> = chests.iter().map(|s| s.family).collect();
+    for f in fams {
+        let t: &[&str] = tiers(f)?;
+        let Some(name) = chests.iter().find(|s| s.family == f).map(|s| s.item.as_str()) else { continue };
+        let Some(it) = w.item(name) else { continue };
+        let mut holders: Vec<(usize, &str)> = (0..w.locs.len()).filter(|l| place.get(*l) == Some(it)).map(|l| (when[l].unwrap_or(usize::MAX), w.locs[l].name.as_str())).collect();
+        holders.sort();
+        let start: usize = held_at_start(&w, it);
+        for s in chests.iter().filter(|s| s.family == f) {
+            let Some(k) = holders.iter().position(|h| h.1 == s.loc) else { continue };
+            out.insert(s.loc.clone(), t[(start + k).min(t.len() - 1)].to_string());
+        }
+    }
+    Ok(out)
+}
+
 pub fn fixed_actors(d: &Data, seed: &SeedFile) -> Res<Verdict> {
     if !slots(d, &seed.placements).iter().any(|s| s.give == Give::Open) {
         return Ok(Verdict::default());
@@ -224,6 +277,44 @@ mod tests {
     use crate::slice::generate::{generate_data, GenOpts, Generated};
     use crate::slice::logic::world_with;
     use crate::slice::support::{plan, Plan};
+
+    #[test]
+    fn chain_chests_show_the_tiers_in_reach_order() {
+        let d: Data = Data::load().unwrap();
+        let mut later: usize = 0;
+        for n in 0..6 {
+            let g: Generated = generate_data(&d, &Settings::default(), &format!("views {n}"), &GenOpts::default()).unwrap();
+            let v: BM<String, String> = chest_views(&d, &g.seed_file).unwrap();
+            let (w, place): (World, Placement) = crate::slice::starts::rebuild(&d, &g.seed_file).unwrap();
+            let when: Vec<Option<usize>> = spheres(&w, &place);
+            for (f, _) in FAMILIES.iter().copied() {
+                let mut mine: Vec<(Option<usize>, usize)> = v
+                    .iter()
+                    .filter(|(l, _)| g.seed_file.placements.get(*l).is_some_and(|i| d.family(i) == Some(f)))
+                    .map(|(l, a)| (when[w.loc(l).unwrap()], rank(f, a).unwrap()))
+                    .collect();
+                mine.sort();
+                // A chest reached in a later sphere never shows a lower tier than an earlier one.
+                assert!(mine.windows(2).all(|x| x[0].1 <= x[1].1 || x[0].0 == x[1].0), "{f} {mine:?}");
+                later += mine.iter().filter(|m| m.1 > 0).count();
+            }
+            for (l, a) in &v {
+                let f: &str = d.family(&g.seed_file.placements[l]).unwrap();
+                assert!(rank(f, a).is_some(), "{l} {a}");
+            }
+        }
+        assert!(later > 0);
+    }
+
+    #[test]
+    fn a_viewed_tier_that_sets_off_the_pre_grant_falls_back_to_the_safe_drop() {
+        use crate::slice::chest_targets::view_drop;
+        assert_eq!(view_drop("Strength", Some("Item_Gauntlet_Silver")).unwrap(), "Item_Gauntlet_Silver");
+        assert_eq!(view_drop("Hookshot", Some("Item_Longshot")).unwrap(), "Item_Longshot");
+        assert_eq!(view_drop("Hookshot", None).unwrap(), "Item_Hookshot");
+        assert_eq!(view_drop("BombBag", Some("Item_BombBag_Small")).unwrap(), "Item_BombBag_Medium");
+        assert_eq!(view_drop("Strength", Some("Item_Longshot")).unwrap(), crate::pregrant::chest_drop("Strength").unwrap());
+    }
 
     fn map(pairs: &[(&str, &str)]) -> BM<String, String> {
         pairs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()
@@ -303,30 +394,58 @@ mod tests {
         assert_eq!((n.held, n.tight), (1, true));
     }
 
-    #[test]
-    fn a_shop_deal_gets_the_tier_of_the_reach_order_and_not_the_top_tier() {
-        let d: Data = Data::load().unwrap();
-        let s: Settings = with(&[("shuffle_chests", "overworld"), ("shuffle_shops", "deals_2")]);
-        let (w, mut place): (World, Placement) = world_of(&d, &s);
+    /// A world whose only Slingshot stands at `at` (the Deku Tree chest holds Rupees (5)).
+    fn lone_slingshot(d: &Data, s: &Settings, at: &str) -> (World, Placement) {
+        let (w, mut place): (World, Placement) = world_of(d, s);
         let sling: ItemId = w.item("Slingshot").unwrap();
         let five: ItemId = w.item("Rupees (5)").unwrap();
-        let shop: LocId = w.loc("KF Shop Item 1").unwrap();
-        let chest: LocId = w.loc("Deku Tree Slingshot Chest").unwrap();
-        let alone: Vec<LocId> = (0..w.locs.len()).filter(|l| *l != chest && place.get(*l) == Some(sling)).collect();
+        let alone: Vec<LocId> = (0..w.locs.len()).filter(|l| place.get(*l) == Some(sling)).collect();
         for l in &alone {
             place.put(*l, five);
         }
-        place.put(chest, five);
-        place.put(shop, sling);
-        let placed: BM<String, String> = map(&[("KF Shop Item 1", "Slingshot"), ("Deku Tree Slingshot Chest", "Rupees (5)")]);
+        place.put(w.loc(at).unwrap(), sling);
+        (w, place)
+    }
+
+    #[test]
+    fn a_shop_deal_of_an_upgrade_gives_the_next_tier_at_run_time_like_a_chest_chain() {
+        let d: Data = Data::load().unwrap();
+        let s: Settings = with(&[("shuffle_chests", "overworld"), ("shuffle_shops", "deals_2")]);
+        // Every upgrade family sells on a shelf, tier by tier (shelf::hook), so the reach order fixes
+        // no tier there, however early another copy is found.
+        assert_eq!(crate::shops::jobs::tiered_family(&d, "Slingshot"), Some("Slingshot"));
+        let (w, mut place): (World, Placement) = lone_slingshot(&d, &s, "KF Shop Right Side Bottom Left");
+        let placed: BM<String, String> = map(&[("KF Shop Right Side Bottom Left", "Slingshot"), ("Deku Tree Slingshot Chest", "Rupees (5)")]);
+        assert_eq!(give(&slots(&d, &placed), "KF Shop Right Side Bottom Left"), Some(Give::Flow));
         let v: Verdict = judge(&d, &w, &place, &placed).unwrap();
-        assert_eq!(v.assign.get("KF Shop Item 1").map(|s| s.as_str()), Some("Item_Range_SlingShot"));
-        assert!(!v.bad.iter().any(|b| b.starts_with("KF Shop Item 1")), "{:?}", v.bad);
-        place.put(w.loc("KF Midos Top Left Chest").unwrap(), sling);
-        let early: BM<String, String> = map(&[("KF Shop Item 1", "Slingshot"), ("KF Midos Top Left Chest", "Slingshot"), ("Deku Tree Slingshot Chest", "Rupees (5)")]);
+        assert!(!v.assign.contains_key("KF Shop Right Side Bottom Left"), "{:?}", v.assign);
+        assert!(!v.bad.iter().any(|b| b.starts_with("KF Shop Right Side Bottom Left")), "{:?}", v.bad);
+        place.put(w.loc("KF Midos Top Left Chest").unwrap(), w.item("Slingshot").unwrap());
+        let early: BM<String, String> = map(&[("KF Shop Right Side Bottom Left", "Slingshot"), ("KF Midos Top Left Chest", "Slingshot"), ("Deku Tree Slingshot Chest", "Rupees (5)")]);
+        assert_eq!(give(&slots(&d, &early), "KF Shop Right Side Bottom Left"), Some(Give::Flow));
         let v: Verdict = judge(&d, &w, &place, &early).unwrap();
-        assert_eq!(v.assign.get("KF Shop Item 1").map(|s| s.as_str()), Some("Item_BulletBag_Medium"));
-        assert!(v.bad.iter().any(|b| b.starts_with("KF Shop Item 1")), "{:?}", v.bad);
+        assert!(!v.assign.contains_key("KF Shop Right Side Bottom Left"), "{:?}", v.assign);
+        assert!(!v.bad.iter().any(|b| b.starts_with("KF Shop Right Side Bottom Left")), "{:?}", v.bad);
+    }
+
+    #[test]
+    fn a_priced_sale_gets_the_tier_of_the_reach_order_and_not_the_top_tier() {
+        let d: Data = Data::load().unwrap();
+        let s: Settings = with(&[("shuffle_chests", "overworld")]);
+        // A scrub sale stays one plain call (crate::slice::flow_rules::priced_sale), so an upgrade
+        // there sells the tier the copies reachable before it fix.
+        let sale: &str = "HF Deku Scrub Grotto";
+        assert!(crate::slice::flow_rules::priced_sale(&d, sale));
+        let (w, mut place): (World, Placement) = lone_slingshot(&d, &s, sale);
+        let placed: BM<String, String> = map(&[(sale, "Slingshot"), ("Deku Tree Slingshot Chest", "Rupees (5)")]);
+        assert_eq!(give(&slots(&d, &placed), sale), Some(Give::Open));
+        let v: Verdict = judge(&d, &w, &place, &placed).unwrap();
+        assert_eq!(v.assign.get(sale).map(|s| s.as_str()), Some("Item_Range_SlingShot"));
+        assert!(!v.bad.iter().any(|b| b.starts_with(sale)), "{:?}", v.bad);
+        place.put(w.loc("KF Midos Top Left Chest").unwrap(), w.item("Slingshot").unwrap());
+        let early: BM<String, String> = map(&[(sale, "Slingshot"), ("KF Midos Top Left Chest", "Slingshot"), ("Deku Tree Slingshot Chest", "Rupees (5)")]);
+        let v: Verdict = judge(&d, &w, &place, &early).unwrap();
+        assert_eq!(v.assign.get(sale).map(|s| s.as_str()), Some("Item_BulletBag_Medium"));
     }
 
     #[test]

@@ -183,8 +183,10 @@ mod tests {
         let p: Plan = plan(&with(&[("shuffle_pots", "all"), ("shuffle_crates", "all")])).unwrap();
         let ok = |item: &str, loc: &str| allowed(&d, &w, &p, w.item(item).unwrap(), w.loc(loc).unwrap());
         let items: [&str; 8] = ["Rupees (20)", "Recovery Heart", "Progressive Hookshot", "Megaton Hammer", "Fire Arrows", "Gold Skulltula Token", "Heart Container", "Small Key (Fire Temple)"];
+        // Dungeon items can stand in any pot of their own dungeon now, so the Fire Temple remake pot
+        // is matched with a Fire Temple pot.
         for (mine, theirs) in [
-            ("Fire Temple Near Boss Remake Pot 1", "Dodongos Cavern Right Side Pot 1"),
+            ("Fire Temple Near Boss Remake Pot 1", "Fire Temple Near Boss Pot 1"),
             ("GV Storms Grotto Adult Remake Pot 1", "Dodongos Cavern Right Side Pot 1"),
             ("Kakariko Village Adult Remake Pot 1", "Dodongos Cavern Right Side Pot 1"),
             ("Gerudo Fortress Adult Remake Crate 1", "GC Boulder Maze Crate"),
@@ -194,6 +196,8 @@ mod tests {
             }
         }
         assert!(ok("Megaton Hammer", "Fire Temple Near Boss Remake Pot 1"));
+        assert!(ok("Small Key (Fire Temple)", "Fire Temple Near Boss Remake Pot 1"));
+        assert!(!ok("Small Key (Fire Temple)", "Dodongos Cavern Right Side Pot 1"));
         assert!(ok("Rupees (20)", "Hideout Break Room Adult Remake Flying Pot 1"));
     }
 
@@ -249,8 +253,8 @@ mod tests {
                 }
                 let want: usize = match remake {
                     "all" => 213,
-                    "dungeons" => 113,
-                    _ => 100,
+                    "dungeons" => 114,
+                    _ => 99,
                 };
                 assert_eq!(here, want, "{remake} {pots} {n}");
             }

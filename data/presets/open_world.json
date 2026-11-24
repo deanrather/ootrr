@@ -1,16 +1,16 @@
 {
   "id": "open_world",
   "name": "Open world",
-  "tip": "Nothing blocks your way. You start as an adult and the bridge is already up.",
+  "tip": "Nothing blocks your way and the bridge needs no rewards.",
   "order": 40,
   "settings": {
-    "starting_age": "adult",
     "open_forest": "open",
     "open_kakariko": "open",
     "door_of_time_condition": "open",
     "zora_fountain": "open",
     "gerudo_fortress": "open",
-    "bridge": "open",
+    "bridge": "dungeons",
+    "bridge_rewards": 0,
     "shuffle_ganon_bosskey": "remove",
     "skip_ganon_trials": true
   }

@@ -57,6 +57,34 @@ pub fn swap(y: &mut Byml, keeper: &str, slot: usize, to: &str) -> usize {
     n
 }
 
+fn height(n: &Node) -> Option<f32> {
+    match n.get("Translate")?.as_arr()?.get(1)? {
+        Node::F32(v) => Some(*v),
+        _ => None,
+    }
+}
+
+/// Stands the shelf actors of `keeper` slot `slot` `dy` metres above where `stock` (the vanilla
+/// Banc) places them. Set from the vanilla height, so a second pass on a built mod does not lift
+/// twice, and a shelf two keepers share moves once. Returns how many actors were placed.
+pub fn seat(y: &mut Byml, stock: &Byml, keeper: &str, slot: usize, dy: f32) -> usize {
+    let hs: Vec<u64> = shelves(y, keeper, slot);
+    let at: BM<u64, f32> = actors(stock).iter().filter_map(|n| Some((hash_of(n)?, height(n)?))).filter(|(h, _)| hs.contains(h)).collect();
+    let mut n: usize = 0;
+    if let Some(list) = y.root.get_mut("Actors").and_then(|l| l.as_arr_mut()) {
+        for a in list.iter_mut() {
+            let Some(base) = hash_of(a).and_then(|h| at.get(&h)) else {
+                continue;
+            };
+            if let Some(Node::F32(v)) = a.get_mut("Translate").and_then(|t| t.as_arr_mut()).and_then(|t| t.get_mut(1)) {
+                *v = base + dy;
+                n += 1;
+            }
+        }
+    }
+    n
+}
+
 pub const BOARD: &str = "Shop_Board_Bundle";
 pub const REFERENCE: &str = "Reference";
 
@@ -157,6 +185,16 @@ mod tests {
         assert_eq!(on_shelf(&y, "Npc_Kokiri_001_Shop_Adult", 6), vec!["Shop_Weapon_Shield_Deku"]);
         assert_eq!(on_shelf(&y, "Npc_Kokiri_001_Shop_Child", 0), vec!["Shop_Heart"]);
         assert_eq!(swap(&mut y, "Npc_Kokiri_001_Shop_Child", 5, "X"), 0);
+        // Seating lifts from the vanilla height, so doing it twice changes nothing.
+        let at = |y: &Byml, h: u64| actors(y).iter().find(|n| hash_of(n) == Some(h)).and_then(height);
+        let mut stock: Byml = y.clone();
+        for a in stock.root.get_mut("Actors").and_then(|l| l.as_arr_mut()).unwrap() {
+            a.set("Translate", Node::Arr(vec![Node::F32(0.0), Node::F32(100.0), Node::F32(0.0)]));
+        }
+        let mut lifted: Byml = stock.clone();
+        assert_eq!(seat(&mut lifted, &stock, "Npc_Kokiri_001_Shop_Child", 6, 0.25), 1);
+        assert_eq!(seat(&mut lifted, &stock, "Npc_Kokiri_001_Shop_Child", 6, 0.25), 1);
+        assert_eq!((at(&lifted, 11), at(&lifted, 20), at(&lifted, 10)), (Some(100.25), Some(100.0), Some(100.0)));
         let mut z: Byml = Byml { root: Node::Map(vec![("Actors".to_string(), Node::Arr(vec![actor(1, "Npc_K", None, &[10]), refd(10, "Shop_DekuNutBundle_02", 0, 30), actor(30, "Shop_Board_Bundle_10", None, &[])]))]), version: 7, big: false };
         assert_eq!(board_map(&[z.clone()]).get("Shop_DekuNutBundle_02").map(|s| s.as_str()), Some("Shop_Board_Bundle_10"));
         assert_eq!(boards(&mut z, "Npc_K", 0, "Shop_Board_Bundle_05"), 1);

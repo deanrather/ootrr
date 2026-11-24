@@ -445,7 +445,7 @@
    "folder": "InsideTheDekuTree",
    "via": "actor",
    "age": "both",
-   "region": "Deku Tree Before Boss",
+   "region": "Deku Tree Compass Room",
    "rule": "True",
    "refs": [
     {
@@ -459,7 +459,7 @@
     "remake"
    ],
    "grade": "guess",
-   "basis": "OoTR candidate Deku Tree Basement Recovery Heart 1, OoTR candidate Deku Tree Basement Recovery Heart 2, OoTR candidate Deku Tree Basement Recovery Heart 3, took the harder region (sphere 2) over Deku Tree Lobby (1)"
+   "basis": "room 0, the top ledge of the lobby beside the Compass Room door, under a big skulltula"
   },
   {
    "name": "Deku Tree Before Boss Remake Heart 3",
@@ -497,7 +497,7 @@
    "folder": "InsideTheDekuTree",
    "via": "actor",
    "age": "both",
-   "region": "Deku Tree Before Boss",
+   "region": "Deku Tree Compass Room",
    "rule": "True",
    "refs": [
     {
@@ -511,7 +511,7 @@
     "remake"
    ],
    "grade": "guess",
-   "basis": "OoTR candidate Deku Tree Basement Recovery Heart 1, OoTR candidate Deku Tree Basement Recovery Heart 2, OoTR candidate Deku Tree Basement Recovery Heart 3, took the harder region (sphere 2) over Deku Tree Lobby (1)"
+   "basis": "room 0, the top ledge of the lobby beside the Compass Room door, under a big skulltula"
   },
   {
    "name": "Deku Tree Before Boss Remake Heart 5",
@@ -523,7 +523,7 @@
    "folder": "InsideTheDekuTree",
    "via": "actor",
    "age": "both",
-   "region": "Deku Tree Before Boss",
+   "region": "Deku Tree Compass Room",
    "rule": "True",
    "refs": [
     {
@@ -537,7 +537,7 @@
     "remake"
    ],
    "grade": "guess",
-   "basis": "OoTR candidate Deku Tree Basement Recovery Heart 1, OoTR candidate Deku Tree Basement Recovery Heart 2, OoTR candidate Deku Tree Basement Recovery Heart 3, took the harder region (sphere 2) over Deku Tree Lobby (1)"
+   "basis": "room 0, the top ledge of the lobby beside the Compass Room door, under a big skulltula"
   },
   {
    "name": "Deku Tree Before Boss Remake Heart 6",

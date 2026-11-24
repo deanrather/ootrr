@@ -132,6 +132,13 @@ impl Game {
         if self.p.read(self.arena.checked_add(at)?, &mut b) { Some(b) } else { None }
     }
 
+    pub fn write(&self, at: u64, b: &[u8]) -> bool {
+        match self.arena.checked_add(at) {
+            Some(a) => self.p.write(a, b),
+            None => false,
+        }
+    }
+
     pub fn u64_at(&self, at: u64) -> Option<u64> {
         let b: Vec<u8> = self.read(at, 8)?;
         Some(u64::from_le_bytes([b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7]]))

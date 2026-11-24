@@ -80,8 +80,9 @@ mod tests {
     use crate::romfs::Romfs;
     use crate::settings::{Settings, Value};
     use crate::slice::data::Data;
-    use crate::slice::generate::{generate_data, GenOpts, Generated};
-    use crate::slice::support::plan as plan_of;
+    use crate::slice::generate::{allowed, generate_data, GenOpts, Generated};
+    use crate::slice::support::{plan as plan_of, Plan};
+    use crate::world::World;
 
     const FLAGS: &str = include_str!("../../../../data/flags.json");
     const FLOW: &str = "MiniGame_FrogTenors";
@@ -374,12 +375,16 @@ mod tests {
         let d: Data = Data::load().unwrap();
         let off: Generated = generate_data(&d, &with(false, false), "frogs", &GenOpts::default()).unwrap();
         assert!(SONGS.iter().chain([&BUG]).all(|l| !off.seed_file.placements.contains_key(*l)));
+        // Every item may go to a frog: its grant is the generic pouch get and a dungeon item there
+        // credits its dungeon (crate::debug_names), so only crate::slice::generate::allowed judges it.
+        let p: Plan = plan_of(&with(true, true)).unwrap();
+        let w: World = crate::slice::logic::world_with(&d, &p.logic()).unwrap();
         for n in 0..2 {
             let g: Generated = generate_data(&d, &with(true, true), &format!("frogs {n}"), &GenOpts::default()).unwrap();
             assert_eq!(g.seed_file.placements.len(), off.seed_file.placements.len() + SONGS.len() + 1);
             for l in SONGS.iter().chain([&BUG]) {
                 let it: &str = &g.seed_file.placements[*l];
-                assert!(d.item(it).is_some_and(|i| d.flow_accepts(i) || Some(it) == d.vanilla_of(l)), "{l} holds {it}");
+                assert!(allowed(&d, &w, &p, w.item(it).unwrap(), w.loc(l).unwrap()) || Some(it) == d.vanilla_of(l), "{l} holds {it}");
             }
             let s: Generated = generate_data(&d, &with(true, false), &format!("frog songs {n}"), &GenOpts::default()).unwrap();
             assert_eq!(s.seed_file.placements.len(), off.seed_file.placements.len() + SONGS.len());

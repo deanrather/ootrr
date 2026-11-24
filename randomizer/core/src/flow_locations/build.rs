@@ -25,6 +25,9 @@ pub struct Choice {
 pub struct Opts {
     pub untested: bool,
     pub songs: bool,
+    /// Adult trade shuffle: a trade spot replaces its chain gifts like any NPC gift, and chain
+    /// items may go anywhere (crate::open_world::trade_shuffle).
+    pub trades: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -117,7 +120,7 @@ pub fn plan(d: &Data, cs: &[Choice], o: &Opts) -> Res<(Vec<Change>, usize, Vec<S
                 untested.push(c.item.clone());
             }
         }
-        if crate::flow_extra::trade::is(&l.name) {
+        if crate::flow_extra::trade::is(&l.name) && !o.trades {
             if l.item.as_deref() == Some(c.item.as_str()) {
                 same += 1;
             } else {
@@ -133,7 +136,7 @@ pub fn plan(d: &Data, cs: &[Choice], o: &Opts) -> Res<(Vec<Change>, usize, Vec<S
             }
             continue;
         }
-        if !o.untested && crate::flow_extra::trade::chain(&c.item) && l.item.as_deref() != Some(c.item.as_str()) {
+        if !o.untested && !(o.trades && crate::open_world::trade_shuffle::item(&c.item)) && crate::flow_extra::trade::chain(&c.item) && l.item.as_deref() != Some(c.item.as_str()) {
             return Err(E::Msg(format!(
                 "{} is a trade quest item, it shares one menu slot with the chain and may only stay at its own location, so {} refuses it. Pass the untested option to try it anyway",
                 c.item, l.name
@@ -366,11 +369,11 @@ mod tests {
         // plausible pouch item through the generic pouch get (slice::flow_rules::any_item, #24).
         let keep: &str = "HF Deku Scrub Grotto";
         assert!(plan(&d, &[ch(keep, "Item_Hookshot")], &Opts::default()).is_err());
-        let (c, _, u): (Vec<Change>, usize, Vec<String>) = plan(&d, &[ch(keep, "Item_Hookshot")], &Opts { untested: true, songs: false }).unwrap();
+        let (c, _, u): (Vec<Change>, usize, Vec<String>) = plan(&d, &[ch(keep, "Item_Hookshot")], &Opts { untested: true, songs: false, trades: false }).unwrap();
         assert!(!c.is_empty());
         assert_eq!(u, vec!["Item_Hookshot".to_string()]);
         assert!(plan(&d, &[ch("Volvagia", "Item_Hookshot")], &Opts::default()).is_ok());
-        assert!(plan(&d, &[ch("Volvagia", "bad name")], &Opts { untested: true, songs: false }).is_err());
+        assert!(plan(&d, &[ch("Volvagia", "bad name")], &Opts { untested: true, songs: false, trades: false }).is_err());
     }
 
     #[test]

@@ -272,14 +272,15 @@ pub fn fold_mods(table: &mut Rst, mods: &P, skip: &str) -> Res<Fold> {
     let own: String = skip.to_ascii_lowercase();
     let mut f: Fold = Fold { grew: 0, unread: Vec::new(), later: Vec::new() };
     for (name, dir) in found {
-        if name == skip {
+        let leaf: &str = name.rsplit('/').next().unwrap_or(&name);
+        if leaf == skip {
             continue;
         }
         let raw: Vec<u8> = match std::fs::read(dir.join("romfs").join(TABLE_PATH)) {
             Ok(b) if !b.is_empty() => b,
             _ => continue,
         };
-        if name.to_ascii_lowercase() > own {
+        if leaf.to_ascii_lowercase() > own {
             f.later.push(name.clone());
         }
         match Zs::new().decompress(&raw).and_then(|b| Rst::parse(&b)) {

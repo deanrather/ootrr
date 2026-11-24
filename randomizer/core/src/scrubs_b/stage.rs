@@ -26,6 +26,11 @@ pub struct Job {
 pub fn jobs(d: &Data, seed: &SeedFile) -> Res<Vec<Job>> {
     let b: &Book = book()?;
     let mut out: Vec<Job> = Vec::new();
+    let tiers: BM<String, String> = if seed.placements.iter().any(|(l, i)| d.family(i).is_some() && d.flow.by_name(l).is_some_and(crate::scrubs_b::is_b)) {
+        crate::slice::tier_order::fixed_actors(d, seed)?.assign
+    } else {
+        BM::new()
+    };
     for (loc, item) in &seed.placements {
         let Some(l) = d.flow.by_name(loc) else {
             continue;
@@ -38,10 +43,14 @@ pub fn jobs(d: &Data, seed: &SeedFile) -> Res<Vec<Job>> {
             continue;
         }
         let i = d.item(item).ok_or_else(|| E::Msg(format!("unknown item {item}")))?;
-        if !crate::scrubs_b::fits(d, loc, i) || d.family(item).is_some() {
+        if !crate::scrubs_b::fits(d, loc, i) {
             return Err(E::Msg(format!("{loc} cannot sell {item}")));
         }
-        let a: String = i.actor.clone().ok_or_else(|| E::Msg(format!("{item} has no remake item actor and cannot be placed")))?;
+        // An upgrade sells the tier the reach order fixes for this sale (crate::slice::tier_order).
+        let a: String = match d.family(item) {
+            Some(_) => tiers.get(loc).cloned().ok_or_else(|| E::Msg(format!("{loc} sells {item}, but the tier order fixed no tier for it")))?,
+            None => i.actor.clone().ok_or_else(|| E::Msg(format!("{item} has no remake item actor and cannot be placed")))?,
+        };
         let actor: String = dest_form(d, item, loc, a);
         out.push(Job { scrub: s.clone(), item: item.clone(), sale: Sale { entry: s.entry(), flag: s.flag.clone(), actor, price: s.price } });
     }

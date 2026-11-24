@@ -54,6 +54,7 @@ async function build(res) {
     ...color_request(state.cosmetic),
     cosmetic_seed: state.cosmetic.seed,
     title_logo: state.cosmetic.title !== false,
+    delete_others: !!state.delete_others,
     spoiler_text: spoiler_for(res),
   });
   run.target = r.target || run.target;
@@ -154,7 +155,9 @@ function instructions() {
     h(
       "ol",
       null,
-      flat
+      host === "longshot"
+        ? h("li", null, `Pick Longshot's mods folder. The mod is written as mods/${state.info.title_id}/<name>/romfs. Longshot loads every mod in mods, so keep one seed at a time (Delete all other seeds does that).`)
+        : flat
         ? h("li", null, "The mod is written as mods/<name>/romfs in the folder you chose. For Hookshot, name it randomizer-<seed> so co-op can match the seed.")
         : h("li", null, `The mod is written to your mod folder, inside a folder named ${state.info.title_id} and then your mod name.`),
       host === "longshot"
@@ -165,11 +168,10 @@ function instructions() {
   );
 }
 
-async function open_file(pick, out, redraw) {
-  const f = pick.files && pick.files[0];
-  pick.value = "";
-  if (!f) return;
-  if (f.size > 8 * 1024 * 1024) return fill(out, notice("error", "That file is too large to be a seed file."));
+// Loads a seed file as the current seed (its settings too). Returns an error text, or "" when it worked.
+export async function load_seed_file(f) {
+  if (!f) return "Pick a seed file first.";
+  if (f.size > 8 * 1024 * 1024) return "That file is too large to be a seed file.";
   const text = await f.text();
   try {
     const res = await post("/api/seed/read", { seed_text: text });
@@ -179,10 +181,19 @@ async function open_file(pick, out, redraw) {
     state.result = res;
     Object.assign(run, { phase: "idle", job: null, error: "", target: "" });
     touch();
-    redraw();
+    return "";
   } catch (e) {
-    fill(out, notice("error", e.message));
+    return e.message;
   }
+}
+
+async function open_file(pick, out, redraw) {
+  const f = pick.files && pick.files[0];
+  pick.value = "";
+  if (!f) return;
+  const err = await load_seed_file(f);
+  if (err) return fill(out, notice("error", err));
+  redraw();
 }
 
 function summary(res) {

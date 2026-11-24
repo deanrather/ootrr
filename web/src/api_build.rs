@@ -41,9 +41,39 @@ pub struct Plan {
     pub source: Source,
     /// Add the v1.1.1 update's own files to the mod.
     pub with_update: bool,
+    pub delete_others: bool,
 }
 
 pub const SPOILER_FILE: &str = "Spoiler.txt";
+
+pub fn delete_others(root: &std::path::Path) -> std::io::Result<Vec<String>> {
+    let Some(parent) = root.parent() else {
+        return Ok(Vec::new());
+    };
+    let own = root.file_name();
+    let mut gone: Vec<String> = Vec::new();
+    let mut folders: Vec<&std::path::Path> = vec![parent];
+    if parent.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.eq_ignore_ascii_case(TITLE_ID)) {
+        if let Some(up) = parent.parent() {
+            folders.push(up);
+        }
+    }
+    for folder in folders {
+        for e in fs::read_dir(folder)? {
+            let p: PB = e?.path();
+            if !p.is_dir() || p == root {
+                continue;
+            }
+            if p.join(SPOILER_FILE).is_file() && p.join("romfs").is_dir() {
+                fs::remove_dir_all(&p)?;
+                gone.push(p.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default());
+            }
+        }
+    }
+    let _ = own;
+    gone.sort();
+    Ok(gone)
+}
 const SPOILER_MAX: usize = 4 * 1024 * 1024;
 
 fn put_spoiler(root: &PB, text: Option<&str>) -> std::io::Result<()> {
@@ -145,8 +175,9 @@ pub fn plan(b: &Json) -> Hr<Plan> {
         Some(t) if t.len() > SPOILER_MAX => return Err(refuse("Spoiler: the spoiler log is too large.")),
         Some(t) => Some(t.to_string()),
     };
-    let target: PB = if host.flat() { md.join(name) } else { md.join(TITLE_ID).join(name) };
-    Ok(Plan { seed, load: md, name: name.to_string(), target, host, cos, spoiler, source, with_update })
+    let target: PB = if host.no_title() { md.join(name) } else { md.join(TITLE_ID).join(name) };
+    let delete_others: bool = b.get("delete_others").and_then(|x| x.as_bool()) == Some(true);
+    Ok(Plan { seed, load: md, name: name.to_string(), target, host, cos, spoiler, source, with_update, delete_others })
 }
 
 pub fn run(jobs: &Arc<Jobs>, b: &Json) -> Hr<Json> {
@@ -226,6 +257,20 @@ pub fn run(jobs: &Arc<Jobs>, b: &Json) -> Hr<Json> {
                         Err(e) => {
                             c.mark("failed");
                             c.finish("failed", &format!("The mod was written, but the v1.1.1 update files could not be added: {e}"));
+                            return;
+                        }
+                    }
+                }
+                if p.delete_others {
+                    c.begin("Delete the other seeds in the mod folder");
+                    match delete_others(&built.root) {
+                        Ok(gone) if gone.is_empty() => built.report.push_str("No other seeds to delete.
+"),
+                        Ok(gone) => built.report.push_str(&format!("Deleted {} other seeds: {}.
+", gone.len(), gone.join(", "))),
+                        Err(e) => {
+                            c.mark("failed");
+                            c.finish("failed", &format!("The mod was written, but the other seeds could not all be deleted: {e}"));
                             return;
                         }
                     }
@@ -360,7 +405,7 @@ mod tests {
             let body: Json = req(&s, &g, &m, "randomizer-seed").with("host", host.into());
             let p: Plan = plan(&body).unwrap();
             assert!(p.target.ends_with("randomizer-seed"), "{}", p.target.display());
-            assert!(!p.target.components().any(|c| c.as_os_str() == TITLE_ID));
+            assert_eq!(p.target.components().any(|c| c.as_os_str() == TITLE_ID), host == "longshot", "{host}");
             assert_eq!(p.host.id(), host);
         }
         assert!(plan(&req(&s, &g, &m, "x")).is_err());

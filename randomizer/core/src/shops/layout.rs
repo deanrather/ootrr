@@ -82,7 +82,7 @@ fn units(t: &Table) -> Vec<(String, Vec<&Slot>)> {
     out
 }
 
-fn deal_slots(t: &Table, o: &Opts, room: Room, rng: &mut Rng) -> (BS<String>, usize) {
+fn deal_slots(t: &Table, o: &Opts, room: Room, rng: &mut Rng, forced: &[String]) -> (BS<String>, usize) {
     let mut all: Vec<(usize, usize, String)> = Vec::new();
     for (si, sh) in t.shops.iter().enumerate().filter(|(_, s)| s.deals) {
         let n: usize = match o.level {
@@ -112,6 +112,9 @@ fn deal_slots(t: &Table, o: &Opts, room: Room, rng: &mut Rng) -> (BS<String>, us
         }
         out.insert(name);
     }
+    for f in forced.iter().filter(|f| t.slots.iter().any(|s| &s.name == *f)) {
+        out.insert(f.clone());
+    }
     (out, cut)
 }
 
@@ -127,32 +130,29 @@ fn rupee(t: &Table, rng: &mut Rng) -> String {
     t.rupees[0].0.clone()
 }
 
-fn survivors(t: &Table, mut goods: Vec<Goods>, room: usize, bottles: usize) -> Res<Vec<Goods>> {
-    let mut kept: Vec<Goods> = Vec::new();
-    for k in &t.keep {
-        if kept.len() >= room {
-            break;
-        }
-        if let Some(i) = goods.iter().position(|g| &g.item == k) {
-            kept.push(goods.remove(i));
-        }
-    }
-    while kept.iter().filter(|g| t.bottle.contains(&g.item)).count() < bottles && kept.len() < room {
-        match goods.iter().position(|g| t.bottle.contains(&g.item)) {
-            Some(i) => kept.push(goods.remove(i)),
-            None => break,
-        }
-    }
-    let rest: usize = room.saturating_sub(kept.len());
-    kept.extend(goods.into_iter().take(rest));
-    if kept.len() != room {
-        return Err(E::Msg(format!("shops: {} shop goods for {room} shelf slots", kept.len())));
-    }
-    Ok(kept)
+pub fn own_pool(item: &str) -> Option<&'static str> {
+    Some(match item {
+        "Buy Deku Shield" => "Deku Shield",
+        "Buy Hylian Shield" => "Hylian Shield",
+        "Buy Goron Tunic" => "Goron Tunic",
+        "Buy Zora Tunic" => "Zora Tunic",
+        "Buy Arrows (10)" => "Arrows (10)",
+        "Buy Arrows (30)" | "Buy Arrows (50)" => "Arrows (30)",
+        "Buy Bombs (5) for 25 Rupees" | "Buy Bombs (5) for 35 Rupees" => "Bombs (5)",
+        "Buy Bombs (10)" => "Bombs (10)",
+        "Buy Bombs (20)" | "Buy Bombs (30)" => "Bombs (20)",
+        "Buy Deku Nut (5)" => "Deku Nuts (5)",
+        "Buy Deku Nut (10)" => "Deku Nuts (10)",
+        "Buy Deku Stick (1)" | "Buy Deku Stick (5)" => "Deku Stick (1)",
+        "Buy Deku Seeds (10)" | "Buy Deku Seeds (30)" => "Deku Seeds (30)",
+        "Buy Heart" => "Recovery Heart",
+        "Buy Bombchu (1)" | "Buy Bombchu (3)" | "Buy Bombchu (5)" => "Bombchus (5)",
+        "Buy Bombchu (8)" | "Buy Bombchu (10)" => "Bombchus (10)",
+        "Buy Bombchu (15)" | "Buy Bombchu (20)" | "Buy Bombchu (30)" => "Bombchus (20)",
+        _ => return None,
+    })
 }
 
-/// Shop goods a child can buy in any shop (shelf::hook::child_tunics). Moved out of the shop that
-/// sells them in the game, they cost a random shopsanity price instead of their own.
 pub const TUNICS: [&str; 2] = ["Buy Goron Tunic", "Buy Zora Tunic"];
 
 /// Whether `item` is a tunic standing in a shop other than its own.
@@ -161,53 +161,66 @@ pub fn moved_tunic(t: &Table, item: &str, shop: &str) -> bool {
 }
 
 pub fn make(o: &Opts, seed: &str, room: Room) -> Res<Layout> {
+    make_with(o, seed, room, &[])
+}
+
+pub fn make_with(o: &Opts, seed: &str, room: Room, forced: &[String]) -> Res<Layout> {
     let t: &Table = table()?;
     let mut rng: Rng = Rng::from_text(&format!("{seed}/shops"));
-    let (deals, cut): (BS<String>, usize) = deal_slots(t, o, room, &mut rng);
+    let (deals, cut): (BS<String>, usize) = deal_slots(t, o, room, &mut rng, forced);
     let us: Vec<(String, Vec<&Slot>)> = units(t);
-    let mut goods: Vec<Goods> = us.iter().map(|(_, ss)| Goods { item: ss[0].item.clone(), actor: ss[0].actor.clone(), price: ss[0].price }).collect();
-    rng.shuffle(&mut goods);
     let open: Vec<&(String, Vec<&Slot>)> = us.iter().filter(|(_, ss)| !ss.iter().any(|s| deals.contains(&s.name))).collect();
-    let potion = |ss: &[&Slot]| ss.len() > 1;
-    let bottles: usize = open.iter().filter(|(_, ss)| potion(ss)).count();
-    let mut kept: Vec<Goods> = survivors(t, goods, open.len(), bottles)?;
-    rng.shuffle(&mut kept);
     let mut given: BM<String, Goods> = BM::new();
-    for (item, shop) in &t.pin {
-        let Some(i) = kept.iter().position(|g| &g.item == item) else {
+    let goods_of = |ss: &[&Slot]| Goods { item: ss[0].item.clone(), actor: ss[0].actor.clone(), price: ss[0].price };
+    let mut at_pos: Vec<Vec<Goods>> = Vec::new();
+    for at in 0..8usize {
+        let mut goods: Vec<Goods> = open.iter().filter(|(_, ss)| ss[0].slot == at).map(|(_, ss)| goods_of(ss)).collect();
+        rng.shuffle(&mut goods);
+        at_pos.push(goods);
+    }
+    let needed = |item: &str| t.keep.iter().any(|k| k == item) || t.pin.iter().any(|(p, _)| p == item);
+    for (_, ss) in us.iter().filter(|(_, ss)| ss.iter().any(|s| deals.contains(&s.name))) {
+        let g: Goods = goods_of(ss);
+        if !needed(&g.item) || own_pool(&g.item).is_some() || at_pos.iter().flatten().any(|x| x.item == g.item) {
             continue;
-        };
-        let homes: Vec<String> = open.iter().filter(|(k, ss)| !potion(ss) && ss[0].shop == *shop && !given.contains_key(k)).map(|(k, _)| k.clone()).collect();
-        if !homes.is_empty() {
-            let k: String = homes[rng.below(homes.len() as u64) as usize].clone();
-            given.insert(k, kept.remove(i));
+        }
+        let at: usize = ss[0].slot;
+        let spot: Option<(usize, usize)> = std::iter::once(at).chain((0..8).filter(|p| *p != at)).find_map(|p| at_pos[p].iter().rposition(|x| !needed(&x.item)).map(|i| (p, i)));
+        if let Some((p, i)) = spot {
+            at_pos[p][i] = g;
         }
     }
-    for (k, ss) in open.iter().filter(|(_, ss)| potion(ss)) {
-        let i: usize = kept.iter().position(|g| t.bottle.contains(&g.item)).ok_or_else(|| E::Msg(format!("shops: no bottle goods left for the shared Potion Shop slot {}", ss[0].slot)))?;
-        given.insert(k.clone(), kept.remove(i));
-    }
-    let left: Vec<String> = open.iter().filter(|(k, ss)| !potion(ss) && !given.contains_key(k)).map(|(k, _)| k.clone()).collect();
-    for k in left {
-        given.insert(k, kept.remove(0));
+    for (at, mut goods) in at_pos.into_iter().enumerate() {
+        let here: Vec<&(String, Vec<&Slot>)> = open.iter().copied().filter(|(_, ss)| ss[0].slot == at).collect();
+        let mut keys: Vec<String> = here.iter().map(|(k, _)| k.clone()).collect();
+        for (item, shop) in &t.pin {
+            let Some(i) = goods.iter().position(|g| &g.item == item) else {
+                continue;
+            };
+            if let Some((k, _)) = here.iter().find(|(k, ss)| ss[0].shop == *shop && keys.contains(k)) {
+                keys.retain(|x| x != k);
+                given.insert(k.clone(), goods.remove(i));
+            }
+        }
+        for (k, g) in keys.into_iter().zip(goods) {
+            given.insert(k, g);
+        }
     }
     let mut places: Vec<Place> = Vec::new();
     for s in &t.slots {
         if deals.contains(&s.name) {
             let cap: i32 = t.shop(&s.shop).and_then(|x| x.cap).unwrap_or(i32::MAX);
             let p: i32 = price::draw(o, &mut rng).min(cap);
-            let pool: String = if o.kinds != Kinds::default() && !t.flex.is_empty() { t.flex[rng.below(t.flex.len() as u64) as usize].clone() } else { rupee(t, &mut rng) };
+            let pool: String = match own_pool(&s.item) {
+                Some(own) => own.to_string(),
+                None if o.kinds != Kinds::default() && !t.flex.is_empty() => t.flex[rng.below(t.flex.len() as u64) as usize].clone(),
+                None => rupee(t, &mut rng),
+            };
             places.push(Place { loc: s.name.clone(), item: String::new(), actor: String::new(), price: p, deal: true, pool });
             continue;
         }
         let g: &Goods = given.get(&t.unit(s)).ok_or_else(|| E::Msg(format!("shops: {} got no goods", s.name)))?;
-        let price: i32 = if moved_tunic(t, &g.item, &s.shop) {
-            let cap: i32 = t.shop(&s.shop).and_then(|x| x.cap).unwrap_or(i32::MAX);
-            price::draw(o, &mut rng).min(cap)
-        } else {
-            g.price
-        };
-        places.push(Place { loc: s.name.clone(), item: g.item.clone(), actor: g.actor.clone(), price, deal: false, pool: String::new() });
+        places.push(Place { loc: s.name.clone(), item: g.item.clone(), actor: g.actor.clone(), price: g.price, deal: false, pool: String::new() });
     }
     Ok(Layout { places, cut })
 }
@@ -219,10 +232,14 @@ pub fn home() -> Res<Layout> {
 }
 
 pub fn of(o: &Opts, seed: &str, room: Room) -> Res<Option<Layout>> {
+    of_with(o, seed, room, &[])
+}
+
+pub fn of_with(o: &Opts, seed: &str, room: Room, forced: &[String]) -> Res<Option<Layout>> {
     if !o.on() {
         return Ok(None);
     }
-    make(o, seed, room).map(Some)
+    make_with(o, seed, room, forced).map(Some)
 }
 
 pub fn fill_deals(l: &mut Layout, got: &BM<String, String>) -> Res<()> {
@@ -263,11 +280,8 @@ mod tests {
         assert!(moved > 30, "{moved}");
         for p in &a.places {
             let s: &Slot = t.slot(&p.loc).unwrap();
-            if moved_tunic(t, &p.item, &s.shop) {
-                assert!((10..=300).contains(&p.price) && p.price % 5 == 0, "{} {}", p.loc, p.price);
-            } else {
-                assert!(t.slots.iter().any(|x| x.item == p.item && x.price == p.price), "{} keeps the price of {}", p.loc, p.item);
-            }
+            let _ = s;
+            assert!(t.slots.iter().any(|x| x.item == p.item && x.price == p.price), "{} keeps the price of {}", p.loc, p.item);
         }
         let differ: bool = (0..20).any(|n| {
             let l: Layout = make(&opts(Level::Shuffle), &format!("p{n}"), Room::any(64)).unwrap();
@@ -277,7 +291,7 @@ mod tests {
     }
 
     #[test]
-    fn a_tunic_out_of_its_own_shop_costs_a_random_price() {
+    fn a_tunic_out_of_its_own_shop_keeps_its_price() {
         let t: &Table = table().unwrap();
         assert!(!moved_tunic(t, "Buy Goron Tunic", "GC Shop"));
         assert!(moved_tunic(t, "Buy Goron Tunic", "KF Shop"));
@@ -290,8 +304,7 @@ mod tests {
                 let shop: &str = &t.slot(&p.loc).unwrap().shop;
                 if moved_tunic(t, &p.item, shop) {
                     seen += 1;
-                    let cap: i32 = t.shop(shop).unwrap().cap.unwrap_or(500);
-                    assert!((10..=cap.min(500)).contains(&p.price), "{} {}", p.loc, p.price);
+                    assert_eq!(p.price, 600, "{}", p.loc);
                 }
             }
         }
@@ -307,19 +320,26 @@ mod tests {
                 assert_eq!(l.deal_count(), 8 * n as usize);
                 for sh in t.shops.iter() {
                     for (k, i) in sh.deal_order.iter().enumerate() {
-                        let p: &Place = l.get(&t.at(&sh.shop, *i).unwrap().name).unwrap();
+                        let slot = t.at(&sh.shop, *i).unwrap();
+                        let p: &Place = l.get(&slot.name).unwrap();
                         assert_eq!(p.deal, sh.deals && k < n as usize, "{} {i}", sh.shop);
                         if p.deal {
-                            assert!(t.rupees.iter().any(|r| r.0 == p.pool));
+                            match own_pool(&slot.item) {
+                                Some(own) => assert_eq!(p.pool, own, "{}", slot.name),
+                                None => assert!(t.rupees.iter().any(|r| r.0 == p.pool), "{}", slot.name),
+                            }
                             assert!((10..=300).contains(&p.price) && p.price % 5 == 0);
                         }
                     }
                 }
                 for k in &t.keep {
-                    assert!(count(&l, k) >= 1, "{k} lost at deals {n}");
+                    let pooled: bool = l.places.iter().any(|p| p.deal && own_pool(k) == Some(p.pool.as_str()));
+                    assert!(count(&l, k) >= 1 || pooled, "{k} lost at deals {n}");
                 }
                 for (item, shop) in &t.pin {
-                    assert!(l.places.iter().any(|p| &p.item == item && t.slot(&p.loc).unwrap().shop == *shop), "{item} left {shop}");
+                    let kept: bool = l.places.iter().any(|p| &p.item == item && t.slot(&p.loc).unwrap().shop == *shop);
+                    let pooled: bool = l.places.iter().any(|p| p.deal && own_pool(item) == Some(p.pool.as_str()) && t.slot(&p.loc).unwrap().shop == *shop);
+                    assert!(kept || pooled, "{item} left {shop}");
                 }
             }
         }

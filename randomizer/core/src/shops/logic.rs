@@ -144,8 +144,8 @@ mod tests {
         for s in &table().unwrap().slots {
             assert_eq!(sd.vanilla_of(&s.name), Some(s.item.as_str()), "{}", s.name);
         }
-        assert!(table().unwrap().slots.iter().any(|s| s.name == "KF Shop Item 7" && s.item.contains("Deku")));
-        assert_eq!(d.vanilla_of("KF Shop Item 7"), Some("Buy Arrows (30)"));
+        assert!(table().unwrap().slots.iter().any(|s| s.name == "KF Shop Right Side Top Right" && s.item.contains("Deku")));
+        assert_eq!(d.vanilla_of("KF Shop Right Side Top Right"), Some("Buy Arrows (30)"));
         let m: Layout = make(&opts(Level::Deals(2)), "logic", crate::shops::layout::Room::any(64)).unwrap();
         let md: Data = data_with(&d, &m).unwrap();
         let mw: World = super::world(&md, &[], &m).unwrap();
@@ -160,7 +160,7 @@ mod tests {
     fn a_six_hundred_rupee_tunic_needs_both_wallets() {
         let d: Data = Data::load().unwrap();
         let l: Layout = home().unwrap();
-        let tunic: &str = "GC Shop Item 5";
+        let tunic: &str = "GC Shop Left Side Bottom Right";
         assert_eq!(l.get(tunic).map(|p| (p.item.as_str(), p.price)), Some(("Buy Goron Tunic", 600)));
         let sd: Data = data_with(&d, &l).unwrap();
         let w: World = super::world(&sd, &[], &l).unwrap();

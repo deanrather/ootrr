@@ -1,10 +1,9 @@
 {
   "id": "easy",
   "name": "Easy",
-  "tip": "Keys are removed, the world is mostly open and the goals are short. A good first seed.",
+  "tip": "Boss keys are removed, the world is mostly open and the goals are short. A good first seed.",
   "order": 10,
   "settings": {
-    "shuffle_smallkeys": "remove",
     "shuffle_bosskeys": "remove",
     "shuffle_ganon_bosskey": "remove",
     "shuffle_mapcompass": "startwith",
@@ -12,8 +11,8 @@
     "open_kakariko": "open",
     "zora_fountain": "open",
     "gerudo_fortress": "fast",
-    "bridge": "stones",
-    "bridge_stones": 3,
+    "bridge": "dungeons",
+    "bridge_rewards": 3,
     "skip_ganon_trials": true
   }
 }

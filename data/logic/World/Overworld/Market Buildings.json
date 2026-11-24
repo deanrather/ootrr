@@ -78,14 +78,14 @@
         "region_name": "Market Bazaar",
         "scene": "Market Bazaar",
         "locations": {
-            "Market Bazaar Item 1": "True",
-            "Market Bazaar Item 2": "True",
-            "Market Bazaar Item 3": "True",
-            "Market Bazaar Item 4": "True",
-            "Market Bazaar Item 5": "True",
-            "Market Bazaar Item 6": "True",
-            "Market Bazaar Item 7": "True",
-            "Market Bazaar Item 8": "True"
+            "Market Bazaar Right Side Bottom Left": "True",
+            "Market Bazaar Right Side Top Left": "True",
+            "Market Bazaar Right Side Top Right": "True",
+            "Market Bazaar Left Side Top Left": "True",
+            "Market Bazaar Left Side Bottom Right": "True",
+            "Market Bazaar Left Side Top Right": "True",
+            "Market Bazaar Right Side Bottom Right": "True",
+            "Market Bazaar Left Side Bottom Left": "True"
         },
         "exits": {
             "Market": "True"
@@ -157,14 +157,14 @@
         "region_name": "Market Potion Shop",
         "scene": "Market Potion Shop",
         "locations": {
-            "Market Potion Shop Item 1": "'Zelda Met'",
-            "Market Potion Shop Item 2": "'Zelda Met'",
-            "Market Potion Shop Item 3": "'Zelda Met'",
-            "Market Potion Shop Item 4": "'Zelda Met'",
-            "Market Potion Shop Item 5": "'Zelda Met'",
-            "Market Potion Shop Item 6": "'Zelda Met'",
-            "Market Potion Shop Item 7": "'Zelda Met'",
-            "Market Potion Shop Item 8": "'Zelda Met'"
+            "Market Potion Shop Left Side Top Right": "can_use(Bottle) and is_child",
+            "Market Potion Shop Right Side Top Left": "can_use(Bottle) and is_child",
+            "Market Potion Shop Left Side Top Left": "can_use(Bottle) and is_child",
+            "Market Potion Shop Left Side Bottom Right": "can_use(Bottle) and is_child",
+            "Market Potion Shop Left Side Bottom Left": "can_use(Bottle) and is_child",
+            "Market Potion Shop Right Side Bottom Left": "can_use(Bottle) and is_child",
+            "Market Potion Shop Right Side Top Right": "can_use(Bottle) and is_child",
+            "Market Potion Shop Right Side Bottom Right": "can_use(Bottle) and is_child"
         },
         "exits": {
             "Market": "True"
@@ -205,14 +205,14 @@
         "region_name": "Market Bombchu Shop",
         "scene": "Market Bombchu Shop",
         "locations": {
-            "Market Bombchu Shop Item 1": "True",
-            "Market Bombchu Shop Item 2": "True",
-            "Market Bombchu Shop Item 3": "True",
-            "Market Bombchu Shop Item 4": "True",
-            "Market Bombchu Shop Item 5": "True",
-            "Market Bombchu Shop Item 6": "True",
-            "Market Bombchu Shop Item 7": "True",
-            "Market Bombchu Shop Item 8": "True"
+            "Market Bombchu Shop Left Side Bottom Left": "True",
+            "Market Bombchu Shop Right Side Top Left": "True",
+            "Market Bombchu Shop Left Side Top Left": "True",
+            "Market Bombchu Shop Left Side Top Right": "True",
+            "Market Bombchu Shop Right Side Bottom Left": "True",
+            "Market Bombchu Shop Left Side Bottom Right": "True",
+            "Market Bombchu Shop Right Side Top Right": "True",
+            "Market Bombchu Shop Right Side Bottom Right": "True"
         },
         "exits": {
             "Market Back Alley": "True"

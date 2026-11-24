@@ -162,14 +162,19 @@ mod tests {
         assert_eq!(a.report, b.report);
         assert_eq!(a.seed_file.placements, b.seed_file.placements);
         assert_eq!(a.counts, b.counts);
+        // A scrub sale sells any item now: only crate::slice::generate::allowed judges it, and an
+        // upgrade away from its home sale sells the tier the reach order fixes (the sale stays one
+        // plain call, crate::slice::tier_order).
+        let p: crate::slice::support::Plan = plan(&with(true, Some(true))).unwrap();
+        let w: crate::world::World = crate::slice::logic::world_with(&d, &p.logic()).unwrap();
         for n in 0..3 {
             let g: Generated = generate_data(&d, &with(true, Some(true)), &format!("scrubs {n}"), &GenOpts::default()).unwrap();
             assert_eq!(g.seed_file.placements.len(), a.seed_file.placements.len() + NEW.len());
+            let fixed: crate::slice::tier_order::Verdict = crate::slice::tier_order::fixed_actors(&d, &g.seed_file).unwrap();
             for x in NEW.iter().chain(["HF Deku Scrub Grotto"].iter()) {
                 let it: &str = &g.seed_file.placements[*x];
-                let i: &Item = d.item(it).unwrap();
-                assert!(fits(&d, x, i) && d.flow_accepts(i), "{x} holds {it}");
-                assert!(d.family(it).is_none() || home(&d, x, it), "{x} holds {it}");
+                assert!(crate::slice::generate::allowed(&d, &w, &p, w.item(it).unwrap(), w.loc(x).unwrap()), "{x} holds {it}");
+                assert!(d.family(it).is_none() || home(&d, x, it) || fixed.assign.contains_key(*x), "{x} holds {it}");
             }
             assert!(g.report.contains(NOTE));
         }
@@ -190,14 +195,14 @@ mod tests {
     }
 
     #[test]
-    fn plando_can_put_an_item_at_a_scrub_but_not_a_refused_one() {
+    fn plando_can_put_any_item_at_a_scrub() {
         let d: Data = Data::load().unwrap();
         let s: Settings = with(true, Some(true));
         let o: GenOpts = GenOpts { plando: vec![Entry { location: "DMC Deku Scrub".to_string(), item: "Hover Boots".to_string() }], ..GenOpts::default() };
         let g: Generated = generate_data(&d, &s, "plando", &o).unwrap();
         assert_eq!(g.seed_file.placements["DMC Deku Scrub"], "Hover Boots");
-        let bad: GenOpts = GenOpts { plando: vec![Entry { location: "LW Deku Scrub Near Bridge".to_string(), item: "Deku Nut Capacity".to_string() }], ..GenOpts::default() };
-        assert!(generate_data(&d, &s, "plando", &bad).is_err());
+        let other: GenOpts = GenOpts { plando: vec![Entry { location: "LW Deku Scrub Near Bridge".to_string(), item: "Deku Nut Capacity".to_string() }], ..GenOpts::default() };
+        assert_eq!(generate_data(&d, &s, "plando", &other).unwrap().seed_file.placements["LW Deku Scrub Near Bridge"], "Deku Nut Capacity");
         let back: GenOpts = GenOpts { plando: vec![Entry { location: "LW Deku Scrub Near Bridge".to_string(), item: "Deku Stick Capacity".to_string() }], ..GenOpts::default() };
         assert_eq!(generate_data(&d, &s, "plando", &back).unwrap().seed_file.placements["LW Deku Scrub Near Bridge"], "Deku Stick Capacity");
     }

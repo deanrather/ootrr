@@ -34,7 +34,7 @@ pub const OWN: [(&str, &[&str]); 41] = [
     ("HC Zeldas Letter", &["HavePlayedEvent.Dm_HrlCastle_0050"]),
     ("ZR Magic Bean Salesman", &["Get_MagicBeans=10"]),
     ("ZD Diving Minigame", &["MiniGame_Diving_Cleared"]),
-    ("GC Rolling Goron as Adult", &["SageOfFire_Step02_DaruniaJr_FirstTalked"]),
+    ("GC Rolling Goron as Adult", &["SageOfFire_Step02_DoorOpen"]),
     ("GC Rolling Goron as Child", &["GoronCity_GetBombBag_fromGoron006"]),
     ("Kak 100 Gold Skulltula Reward", &["Step_GatheringTokenGold=Complete"]),
     ("Deku Tree Queen Gohma Heart", &["DefeatedEnemyNum.Enemy_DungeonBoss_Gohma"]),

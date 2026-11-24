@@ -9,6 +9,8 @@
         "locations": {
             "Pierre": "is_adult and Bonooru and scarecrow_behavior != 'free'",
             "LH Sun": "'Water Temple Clear' and can_use(Bow)",
+            # A field Poe's chest on the lake shore, reached once the lake is refilled (tester run).
+            "LH Poe Chest": "is_adult and 'Water Temple Clear'",
             "LH Freestanding PoH": "
                 is_adult and (can_use(Scarecrow) or here(can_plant_bean))",
             "LH Underwater Item": "is_child and can_dive",
@@ -17,10 +19,10 @@
             "LH Underwater Green Rupee 2": "is_child and can_dive",
             "LH GS Bean Patch": "can_plant_bugs and can_child_attack",
             "LH GS Lab Wall": "
-                is_child and (at_night or gold_skulls_ignore_daytime) and
+                is_child and can_get_night_gs and
                 (Boomerang or (logic_lab_wall_gs and (Sticks or Kokiri_Sword)))",
             "LH GS Small Island": "is_child and can_child_attack",
-            "LH GS Tree": "can_use(Longshot) and (at_night or gold_skulls_ignore_daytime)",
+            "LH GS Tree": "can_use(Longshot) and can_get_night_gs",
             "LH Lab Gossip Stone": "True",
             "LH Gossip Stone (Southeast)": "True",
             "LH Gossip Stone (Southwest)": "True",

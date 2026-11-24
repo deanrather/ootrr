@@ -6,6 +6,10 @@
         "events": {
             "Cojiro Access": "is_adult and at_day and 'Wake Up Adult Talon'",
             "Pocket Egg Given": "is_adult and at_day and not adult_trade_shuffle",
+            # Adult trade shuffle: the quest follows the earliest trade item held, so Grog and
+            # Fado only stand once Anju gave her first adult gift and the earlier items (Pocket
+            # Cucco for Anju, Odd Mushroom for Granny) can be handed over.
+            "Adult Trade Takers": "is_adult and at_day",
             "Kakariko Village Gate Open": "is_child and Zeldas_Letter"
         },
         "locations": {
@@ -46,12 +50,12 @@
             "Kak Child Crate 4": "is_child and can_break_crate",
             "Kak Child Crate 5": "is_child and can_break_crate",
             "Kak Child Construction Wonderitem": "is_child",
-            "Kak GS House Under Construction": "is_child and (at_night or gold_skulls_ignore_daytime)",
-            "Kak GS Skulltula House": "is_child and (at_night or gold_skulls_ignore_daytime)",
-            "Kak GS Near Gate Guard": "is_child and (at_night or gold_skulls_ignore_daytime)",
-            "Kak GS Tree": "is_child and (at_night or gold_skulls_ignore_daytime) and can_bonk",
+            "Kak GS House Under Construction": "is_child and can_get_night_gs",
+            "Kak GS Skulltula House": "is_child and can_get_night_gs",
+            "Kak GS Near Gate Guard": "is_child and can_get_night_gs",
+            "Kak GS Tree": "is_child and can_get_night_gs and can_bonk",
             "Kak GS Watchtower": "
-                is_child and (at_night or gold_skulls_ignore_daytime) and
+                is_child and can_get_night_gs and
                 (Slingshot or has_bombchus or (logic_kakariko_tower_gs and (Sticks or Kokiri_Sword)))",
             "Bug Rock": "has_bottle"
         },
@@ -66,7 +70,7 @@
             "Bottom of the Well": "'Drain Well' and (is_child or shuffle_dungeon_entrances)",
             "Kak Potion Shop Front": "is_child or at_day",
             "Kak Redead Grotto": "can_open_bomb_grotto",
-            "Kak Impas Ledge": "(is_child and at_day) or (is_adult and logic_visible_collisions)",
+            "Kak Impas Ledge": "is_adult and can_use(Hookshot)",
             "Kak Impas Rooftop": "
                 can_use(Hookshot) or (logic_kakariko_rooftop_gs and can_use(Hover_Boots))",
             "Kak Odd Medicine Rooftop": "
@@ -94,7 +98,7 @@
         "scene": "Kakariko Village",
         "hint": "KAKARIKO_VILLAGE",
         "locations": {
-            "Kak GS Above Impas House": "is_adult and (at_night or gold_skulls_ignore_daytime)"
+            "Kak GS Above Impas House": "is_adult and can_get_night_gs"
         },
         "exits": {
             "Kak Impas Ledge": "True",
@@ -136,7 +140,7 @@
         "region_name": "Kak Carpenter Boss House",
         "scene": "Kak Carpenter Boss House",
         "events": {
-            "Wake Up Adult Talon": "is_adult and (Pocket_Egg or Pocket_Cucco or 'Pocket Egg Given')"
+            "Wake Up Adult Talon": "is_adult and (Pocket_Cucco or ((Pocket_Egg or 'Pocket Egg Given') and not adult_trade_shuffle))"
         },
         "exits": {
             "Kakariko Village": "True"
@@ -199,9 +203,7 @@
             "Drain Well": "is_child and can_play(Song_of_Storms)"
         },
         "locations": {
-            "Kak Windmill Freestanding PoH": "
-                can_use(Boomerang) or
-                (logic_windmill_poh and is_adult) or 'Dampes Windmill Access'",
+            "Kak Windmill Freestanding PoH": "(logic_windmill_poh and is_adult) or 'Dampes Windmill Access'",
             "Song from Windmill": "is_adult and Ocarina"
         },
         "exits": {
@@ -212,14 +214,14 @@
         "region_name": "Kak Bazaar",
         "scene": "Kak Bazaar",
         "locations": {
-            "Kak Bazaar Item 1": "True",
-            "Kak Bazaar Item 2": "True",
-            "Kak Bazaar Item 3": "True",
-            "Kak Bazaar Item 4": "True",
-            "Kak Bazaar Item 5": "True",
-            "Kak Bazaar Item 6": "True",
-            "Kak Bazaar Item 7": "True",
-            "Kak Bazaar Item 8": "True"
+            "Kak Bazaar Right Side Bottom Left": "True",
+            "Kak Bazaar Right Side Top Left": "True",
+            "Kak Bazaar Right Side Top Right": "True",
+            "Kak Bazaar Left Side Top Left": "True",
+            "Kak Bazaar Left Side Bottom Right": "True",
+            "Kak Bazaar Left Side Top Right": "True",
+            "Kak Bazaar Right Side Bottom Right": "True",
+            "Kak Bazaar Left Side Bottom Left": "True"
         },
         "exits": {
             "Kakariko Village": "True"
@@ -239,14 +241,14 @@
         "region_name": "Kak Potion Shop Front",
         "scene": "Kak Potion Shop",
         "locations": {
-            "Kak Potion Shop Item 1": "is_adult",
-            "Kak Potion Shop Item 2": "is_adult",
-            "Kak Potion Shop Item 3": "is_adult",
-            "Kak Potion Shop Item 4": "is_adult",
-            "Kak Potion Shop Item 5": "is_adult",
-            "Kak Potion Shop Item 6": "is_adult",
-            "Kak Potion Shop Item 7": "is_adult",
-            "Kak Potion Shop Item 8": "is_adult"
+            "Kak Potion Shop Left Side Bottom Left": "is_adult",
+            "Kak Potion Shop Right Side Bottom Right": "is_adult",
+            "Kak Potion Shop Left Side Top Left": "is_adult",
+            "Kak Potion Shop Left Side Top Right": "is_adult",
+            "Kak Potion Shop Right Side Top Left": "is_adult",
+            "Kak Potion Shop Right Side Bottom Left": "is_adult",
+            "Kak Potion Shop Right Side Top Right": "is_adult",
+            "Kak Potion Shop Left Side Bottom Right": "is_adult"
         },
         "exits": {
             "Kakariko Village": "True",

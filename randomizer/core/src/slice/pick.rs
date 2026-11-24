@@ -12,6 +12,22 @@ pub struct Pick {
     pub flow: usize,
 }
 
+const COUNTED: [(&str, &str); 3] = [("Small Key (Fire Temple)", "fire_key_layout"), ("Small Key (Water Temple)", "water_key_layout"), ("Small Key (Spirit Temple)", "spirit_key_layout")];
+
+pub fn key_of(layout: &str) -> Option<&'static str> {
+    COUNTED.iter().find(|(_, l)| *l == layout).map(|(k, _)| *k)
+}
+
+pub fn own_strict_kept(d: &Data, w: &World, p: &Plan, free: &[LocId]) -> Vec<(&'static str, &'static str)> {
+    p.own_strict
+        .iter()
+        .copied()
+        .filter(|(lay, _)| {
+            key_of(lay).is_some_and(|k| w.real.iter().filter(|l| d.vanilla_of(&w.locs[**l].name) == Some(k)).all(|l| free.contains(l)))
+        })
+        .collect()
+}
+
 pub const OCARINAS: &str = "shuffle_ocarinas";
 pub const OCARINAS_NUM: u16 = 105;
 pub const SWORD: &str = "shuffle_kokiri_sword";
@@ -25,8 +41,6 @@ pub fn shuffle_both(s: &mut crate::settings::Settings) {
         s.set(k, crate::settings::Value::Bool(true)).unwrap();
     }
 }
-
-const COUNTED_VANILLA: [&str; 3] = ["Small Key (Fire Temple)", "Small Key (Water Temple)", "Small Key (Spirit Temple)"];
 
 fn class(kind: &str) -> u8 {
     match kind {
@@ -58,6 +72,10 @@ fn pinned_vanilla(p: &Plan, kind: &str) -> bool {
     }
 }
 
+fn excluded(p: &Plan, name: &str) -> bool {
+    p.excluded.iter().any(|e| e == name)
+}
+
 fn reason(d: &Data, w: &World, p: &Plan, name: &str) -> Option<String> {
     let Some(l) = w.loc(name) else {
         return Some("location is not in the logic world".to_string());
@@ -67,6 +85,12 @@ fn reason(d: &Data, w: &World, p: &Plan, name: &str) -> Option<String> {
     }
     if !p.remake && crate::slice::held_chests::gated(name) {
         return Some(crate::slice::remake_chests::OFF.to_string());
+    }
+    if d.keeps_event(name) && !d.special(name) && d.vanilla_of(name).is_some_and(|v| d.family(v).is_some()) {
+        return Some("it holds an upgrade item behind a story event".to_string());
+    }
+    if excluded(p, name) {
+        return None;
     }
     let dungeon: bool = w.regions[w.locs[l].region].dungeon.is_some();
     match (p.chests, dungeon) {
@@ -81,12 +105,6 @@ fn reason(d: &Data, w: &World, p: &Plan, name: &str) -> Option<String> {
     let kind: &str = d.vanilla_of(name).and_then(|v| d.item(v)).map(|i| i.kind.as_str()).unwrap_or("");
     if pinned_vanilla(p, kind) {
         return Some("its dungeon item setting is vanilla".to_string());
-    }
-    if !p.keys_roam() && d.vanilla_of(name).is_some_and(|v| COUNTED_VANILLA.contains(&v)) {
-        return Some("its dungeon's keys are counted for the vanilla layout".to_string());
-    }
-    if d.keeps_event(name) && !d.special(name) && d.vanilla_of(name).is_some_and(|v| d.family(v).is_some()) {
-        return Some("it holds an upgrade item behind a story event".to_string());
     }
     None
 }
@@ -111,45 +129,43 @@ pub fn pick(d: &Data, w: &World, p: &Plan) -> Pick {
         }
     }
     let mut flow: usize = 0;
-    if p.rewards.on {
-        for l in &d.flow.locs {
-            if l.cat == "song" && p.songs != Songs::Off {
-                continue;
-            }
-            if l.cat == crate::slice::support::DUNGEON_REWARD_CAT && !p.rewards.dungeon_rewards {
-                continue;
-            }
-            if crate::scrubs_a::is_a(l) && !p.rewards.scrubs {
-                continue;
-            }
-            if crate::scrubs_b::is_b(l) && !p.rewards.scrubs_b {
-                continue;
-            }
-            if !d.flow_ok(&l.name) || !crate::flow_extra::open(l, p) {
-                *left.entry("reward event is not supported yet".to_string()).or_insert(0) += 1;
-                continue;
-            }
-            flow += 1;
-            if [crate::slice::flow_rules::SARIA, crate::slice::flow_rules::OCARINA_OF_TIME].contains(&l.name.as_str()) && !p.ocarinas {
-                *left.entry("Ocarina shuffle is off".to_string()).or_insert(0) += 1;
-                continue;
-            }
-            if p.gates.kakariko && crate::start_state::KAKARIKO_EXCLUDED.contains(&l.name.as_str()) {
-                *left.entry("the castle visit is skipped, so the check cannot be reached".to_string()).or_insert(0) += 1;
-                continue;
-            }
-            if p.open.fortress == crate::open_world::Fortress::Fast
-                && l.name == "Hideout Gerudo Membership Card"
-            {
-                *left
-                    .entry("fast Gerudo Fortress keeps the Membership Card vanilla".to_string())
-                    .or_insert(0) += 1;
-                continue;
-            }
-            match w.loc(&l.name) {
-                Some(x) => free.push(x),
-                None => *left.entry("location is not in the logic world".to_string()).or_insert(0) += 1,
-            }
+    for l in &d.flow.locs {
+        let ex: bool = excluded(p, &l.name);
+        if !p.rewards.on && !ex {
+            continue;
+        }
+        if l.cat == "song" && p.songs != Songs::Off {
+            continue;
+        }
+        if l.cat == crate::slice::support::DUNGEON_REWARD_CAT && !p.rewards.dungeon_rewards && !ex {
+            continue;
+        }
+        if crate::scrubs_a::is_a(l) && !p.rewards.scrubs && !ex {
+            continue;
+        }
+        if crate::scrubs_b::is_b(l) && !p.rewards.scrubs_b && !ex {
+            continue;
+        }
+        if !d.flow_ok(&l.name) || !crate::flow_extra::open(l, p) {
+            *left.entry("reward event is not supported yet".to_string()).or_insert(0) += 1;
+            continue;
+        }
+        flow += 1;
+        if [crate::slice::flow_rules::SARIA, crate::slice::flow_rules::OCARINA_OF_TIME].contains(&l.name.as_str()) && !p.ocarinas && !ex {
+            *left.entry("Ocarina shuffle is off".to_string()).or_insert(0) += 1;
+            continue;
+        }
+        if p.gates.kakariko && crate::start_state::KAKARIKO_EXCLUDED.contains(&l.name.as_str()) {
+            *left.entry("the castle visit is skipped, so the check cannot be reached".to_string()).or_insert(0) += 1;
+            continue;
+        }
+        if l.name == crate::flow_extra::GERUDO_CARD_LOC && !p.rewards.gerudo_card && !ex {
+            *left.entry("Gerudo Membership Card shuffle is off".to_string()).or_insert(0) += 1;
+            continue;
+        }
+        match w.loc(&l.name) {
+            Some(x) => free.push(x),
+            None => *left.entry("location is not in the logic world".to_string()).or_insert(0) += 1,
         }
     }
     if p.songs != Songs::Off {
@@ -165,13 +181,11 @@ pub fn pick(d: &Data, w: &World, p: &Plan) -> Pick {
             }
         }
     }
-    if p.hearts {
-        for l in d.cat.locs.iter().filter(|l| l.kind == "bossheart") {
-            flow += 1;
-            match w.loc(&l.name) {
-                Some(x) => free.push(x),
-                None => *left.entry("location is not in the logic world".to_string()).or_insert(0) += 1,
-            }
+    for l in d.cat.locs.iter().filter(|l| l.kind == "bossheart" && (p.hearts || excluded(p, &l.name))) {
+        flow += 1;
+        match w.loc(&l.name) {
+            Some(x) => free.push(x),
+            None => *left.entry("location is not in the logic world".to_string()).or_insert(0) += 1,
         }
     }
     pu::select(d, w, p, &mut free, &mut left, &mut flow);
@@ -180,7 +194,6 @@ pub fn pick(d: &Data, w: &World, p: &Plan) -> Pick {
     free.extend(sk);
     flow += n;
     flow += crate::slice::silver::select(w, p, &mut free, &mut left);
-    crate::slice::junk_spots::trim(d, w, p, &mut free, &mut left);
     free.sort_unstable();
     free.dedup();
     Pick { free, left, flow }

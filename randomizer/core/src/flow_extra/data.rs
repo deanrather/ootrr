@@ -162,7 +162,7 @@ mod tests {
         for n in ["DMT Great Fairy Reward", "HC Great Fairy Reward", "DMC Great Fairy Reward", "ZF Great Fairy Reward", "Colossus Great Fairy Reward", "OGC Great Fairy Reward"] {
             assert!(x.by_name(n).is_some(), "{n}");
         }
-        for l in d.locs.iter().filter(|l| l.gated && !crate::scrubs_a::is_a(l) && !crate::scrubs_b::is_b(l) && !crate::open_world::skips::is_bean_sale(&l.name)) {
+        for l in d.locs.iter().filter(|l| l.gated && !crate::scrubs_a::is_a(l) && !crate::scrubs_b::is_b(l) && !crate::open_world::skips::is_bean_sale(&l.name) && !crate::flow_extra::scripted(&l.name)) {
             assert!(x.by_name(&l.name).is_some(), "{} is gated without edits", l.name);
         }
     }

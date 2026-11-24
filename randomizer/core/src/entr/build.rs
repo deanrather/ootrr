@@ -67,7 +67,7 @@ pub fn swap_moves(cat: &Cat, a: (&[u64], &[u64]), b: (&[u64], &[u64])) -> Res<Ve
     Ok(out)
 }
 
-fn actor<'a>(y: &'a Byml, h: u64) -> Option<&'a Node> {
+pub fn actor<'a>(y: &'a Byml, h: u64) -> Option<&'a Node> {
     y.root.get("Actors")?.as_arr()?.iter().find(|a| hash_of(a) == Some(h))
 }
 

@@ -44,6 +44,19 @@ fn set_int(f: &mut crate::bfevfl::Flow, index: usize, name: &str, key: &str, v: 
     if e.name != name {
         return Err(E::Msg(format!("merchant prices: event {index} is named {} and not {name}, the game files differ", e.name)));
     }
+    if !e.kind.params().is_some_and(|c| c.items.iter().any(|(k, _)| k == key)) {
+        // A sale wrapped into tier or bag checks: set every copy of the sale.
+        let copies: Vec<usize> = crate::scrub_prices::wrapped_sales(f, index, key);
+        if copies.is_empty() {
+            return Err(E::Msg(format!("merchant prices: {name} has no number {key}")));
+        }
+        for i in copies {
+            let n: String = f.events[i].name.clone();
+            set_int(f, i, &n, key, v)?;
+        }
+        return Ok(());
+    }
+    let e: &mut Event = &mut f.events[index];
     let c: &mut Cont = e.kind.params_mut().ok_or_else(|| E::Msg(format!("merchant prices: {name} has no parameters")))?;
     match c.items.iter_mut().find(|(k, _)| k == key) {
         Some((_, Val::Int(x))) => {

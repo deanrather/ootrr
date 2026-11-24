@@ -768,7 +768,7 @@ mod tests {
 
     #[test]
     fn the_moat_ocarina_waits_for_the_escape_not_the_quest_step() {
-        let Some(mut rf) = real() else { return };
+        let Some(rf) = real() else { return };
         let mut a: Ainb = Ainb::parse(&rf.read(MOAT_MODULE).unwrap()).unwrap();
         patch_escape_ocarina(&mut a).unwrap();
         let b: Ainb = Ainb::parse(&a.write().unwrap()).unwrap();

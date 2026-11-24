@@ -274,10 +274,17 @@ pub fn mark(y: &mut Byml, g: &BM<u64, &'static str>, used: &mut BS<&'static str>
             continue;
         };
         let size: Size = Size::of_gyaml(text(a, "Gyaml"));
-        let Some(dy) = a.get_mut("Dynamic").filter(|d| d.get(DROP).is_some()) else {
+        // A chest without the drop field gives its actor's default (banc::DEFAULT_DROPS).
+        let default: bool = crate::slice::banc::default_drop(h).is_some();
+        let Some(dy) = a.get_mut("Dynamic").filter(|d| d.get(DROP).is_some() || default) else {
             continue;
         };
         dy.set(DROP, Node::Str(CONTENT.to_string()));
+        // A chest that swaps its content for a substitute (the Bow check of the GTG Hammer Room)
+        // must give the Silver Rupee either way, as banc::set_drop_ev does for other items.
+        if dy.get("Drop__DropActor_Substitute").is_some() {
+            dy.set("Drop__DropActor_Substitute", Node::Str(CONTENT.to_string()));
+        }
         dy.set("GetEventName", Node::Str(event_name(tag, size)));
         used.insert(tag);
         hit.insert(h);
@@ -775,7 +782,7 @@ mod tests {
             chests += ok as usize;
         }
         assert!(chests > 100, "{chests}");
-        for n in ["Song from Impa", "Kak Impas House Cow", "KF Shop Item 1", "Queen Gohma", "GV Waterfall Freestanding PoH"] {
+        for n in ["Song from Impa", "Kak Impas House Cow", "KF Shop Right Side Bottom Left", "Queen Gohma", "GV Waterfall Freestanding PoH"] {
             if let Some(l) = w.loc(n) {
                 assert!(!allowed(&d, &w, &p, item, l), "{n}");
             }
@@ -828,7 +835,8 @@ mod tests {
             let new: Byml = Byml::parse(&rf.zs.decompress(&std::fs::read(&p).unwrap()).unwrap()).unwrap();
             let olds: &[Node] = old.root.get("Actors").unwrap().as_arr().unwrap();
             let news: &[Node] = new.root.get("Actors").unwrap().as_arr().unwrap();
-            assert_eq!(olds.len(), news.len(), "{f}");
+            let added: usize = if f == crate::qol::dampe_race::GRAVE { 2 } else { 0 };
+            assert_eq!(olds.len() + added, news.len(), "{f}");
             for (a, b) in olds.iter().zip(news) {
                 let h: u64 = hash_of(a).unwrap_or(0);
                 if text(a, "Gyaml") == TOKEN {

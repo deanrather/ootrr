@@ -42,6 +42,15 @@ pub fn of_row(row: &Node) -> Option<u32> {
     Some(((far * 1000.0).round() as u32).min(CAP))
 }
 
+/// How far a model hangs below its origin, in metres, from its actor row's ModelAabbMin (0 for a
+/// model that stands on its origin), up to [`CAP`]. A shelf deal stands without a turn, so
+/// raising it by this much seats the model on the shelf board, as the shop's own goods sit (their
+/// models start at the origin).
+pub fn below_of(row: &Node) -> Option<f32> {
+    let y: f32 = num(row.get("ModelAabbMin")?.get("Y")?)?;
+    Some((-y).clamp(0.0, CAP as f32 / 1000.0))
+}
+
 fn num(n: &Node) -> Option<f32> {
     match n {
         Node::F32(x) => Some(*x),
@@ -68,11 +77,16 @@ pub fn layers(rf: &mut Romfs, item: &str, l: &Layers) -> Res<Layers> {
 
 /// The lift of the seed pickup pack `pack` (a pickup the catalog builds), in metres.
 pub fn for_pack(t: &Byml, pack: &str) -> Option<f32> {
-    let p: crate::slice::key_spots::Pick = crate::slice::key_spots::by_pack(pack)?;
+    let p: crate::slice::key_spots::Pick = pick_of(pack)?;
     let (s, l) = p.spec().ok()?;
     let mm: u32 = lift_of(t, l.model.as_deref().unwrap_or(&s.item));
     (mm > 0).then_some(mm as f32 / 1000.0)
 }
+
+pub fn pick_of(pack: &str) -> Option<crate::slice::key_spots::Pick> {
+    crate::slice::key_spots::by_pack(pack).or_else(|| crate::dungeon_packs::by_name(pack).map(|p| p.pick()))
+}
+
 
 pub fn perimeter_file(name: &str) -> String {
     format!("Component/PerimeterAnalyserParam/{name}.game__component__PerimeterAnalyserParam.bgyml")
@@ -151,6 +165,33 @@ mod tests {
         assert_eq!(of_row(&row(v(-0.10858154, -0.039733887, -0.120462894), v(0.10882568, 0.03945923, 0.5272422))), Some(527));
         assert_eq!(of_row(&row(v(-0.44, -0.27, -0.32), v(0.21, 0.27, 1.45))), Some(CAP));
         assert_eq!(of_row(&Node::Map(Vec::new())), None);
+    }
+
+    #[test]
+    fn a_shelf_model_rises_by_how_far_it_hangs_below_its_origin() {
+        let row = |a: Node| Node::Map(vec![("ModelAabbMin".into(), a)]);
+        assert_eq!(below_of(&row(v(-0.52, -0.1521505, -0.15))), Some(0.1521505));
+        assert_eq!(below_of(&row(v(-0.1, 0.0072, -0.04))), Some(0.0));
+        assert_eq!(below_of(&row(v(0.0, -2.0, 0.0))), Some(CAP as f32 / 1000.0));
+        assert_eq!(below_of(&Node::Map(Vec::new())), None);
+    }
+
+    #[test]
+    fn dungeon_item_packs_find_their_pick_for_the_lift() {
+        for n in ["Obj_BossKey_FireTemple", "Obj_SmallKey_WaterTemple", "Obj_Map_ForestTemple", "Obj_Compass_SpiritTemple"] {
+            assert_eq!(pick_of(n).map(|p| p.pack), Some(n.to_string()), "{n}");
+        }
+        assert!(pick_of("Obj_BossKey_Nowhere").is_none());
+    }
+
+    #[test]
+    fn a_lifted_placement_keeps_the_game_s_own_size() {
+        let a = |h: u64| Node::Map(vec![("Hash".into(), Node::U64(h)), ("Translate".into(), Node::Arr(vec![Node::F32(0.0); 3]))]);
+        let mut y: Byml = Byml { root: Node::Map(vec![("Actors".into(), Node::Arr(vec![a(1), a(2)]))]), version: 7, big: false };
+        assert_eq!(raise(&mut y, 2, 0.13), 1);
+        let list = y.root.get("Actors").and_then(|v| v.as_arr()).unwrap();
+        assert_eq!(list[1].get("Translate").and_then(|t| t.as_arr()).map(|t| t[1].clone()), Some(Node::F32(0.13)));
+        assert!(list.iter().all(|x| x.get("Scale").is_none()));
     }
 
     #[test]

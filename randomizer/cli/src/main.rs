@@ -32,6 +32,7 @@ mod progressive_cmd;
 mod qol_cmd;
 mod save_cmd;
 mod mem_watch_cmd;
+mod ap_cmd;
 mod serve_cmd;
 mod settings_cmd;
 mod shelf_cmd;
@@ -77,7 +78,8 @@ const USAGE: &str = "usage:
   ootrr flow-scale <romfs_root> <load_dir> <mod_name> <factor> <min_frames> <relative_path>...
   ootrr flow-force <romfs_root> <load_dir> <mod_name> <relative_path> <event_name> <case_value> [<event_name> <case_value>]...
   ootrr intro-skip <romfs_root> <load_dir> <mod_name> [--movie-only | --scene-only | --hold | --hold-and-scene]
-  ootrr qol-mod <romfs_root> <load_dir> <mod_name> <skip-story | skip-all | anju | poe | navi-dungeons | navi-everywhere | bunny-speed | bunny-jump | big-chest-anim | owl-warps>
+  ootrr qol-mod <romfs_root> <load_dir> <mod_name> <skip-story | skip-all | anju | poe | navi-dungeons | navi-everywhere | bunny-speed | bunny-jump | big-chest-anim | owl-warps | gear-cycle>
+  ootrr gear-probe <romfs_root> <out_dir> [seed_player_pack.zs]...
   ootrr door-fix <romfs_root> <load_dir> <mod_name>
   ootrr door-open <romfs_root> <load_dir> <mod_name>
   ootrr deku-bridge-testmod <romfs_root> <load_dir> <mod_name>
@@ -113,7 +115,9 @@ const USAGE: &str = "usage:
   ootrr spot-audit <seed.ootrr> [--all]
   ootrr spot-regions <out_tsv>
   ootrr pots-persist <romfs_root> <load_dir> <mod_name>
-  ootrr pack-add <romfs_root> <load_dir> <mod_name> <Item_Actor> [--name <Obj_Actor>] [--press] [--heap N] [--host eden|hookshot|longshot|nx2navi] [--base <mod_romfs_dir>] [--rst-from <rsizetable.zs>] [--place <ActorHash>]... [--tag <TagName>]... [--ammo] [--magic] [--model-from <Actor>] [--dry]
+  ootrr ap-test-mod <romfs_root> <load_dir> <mod_name> <item_actor>...
+  ootrr ap-flag <flag_name> [on|off]
+  ootrr pack-add <romfs_root> <load_dir> <mod_name> <Item_Actor> [--name <Obj_Actor>] [--press] [--heap N] [--host eden|hookshot|longshot|nx2navi] [--base <mod_romfs_dir>] [--rst-from <rsizetable.zs>] [--place <ActorHash>]... [--tag <TagName>]... [--ammo] [--magic] [--own] [--model-from <Actor>] [--dry]
   ootrr pack-kit <romfs_root> <load_dir> <mod_name> <Item_Actor|Obj_Actor> [--name <Obj_Actor_GS>] [--heap N] [--host eden|hookshot|longshot|nx2navi] [--base <mod_romfs_dir>] [--rst-from <rsizetable.zs>] [--drop <SkulltulaHash>]... [--model-from <Actor>] [--dry]
   ootrr flags-build <romfs_root> <out_json>
   ootrr flags-lookup <flags_json> <name_or_hash> ...
@@ -359,6 +363,7 @@ fn main() -> ExitCode {
         Some("flow-scale") => check_bfevfl::scale(&a[1..]),
         Some("intro-skip") => intro_cmd::run(&a[1..]),
         Some("qol-mod") => qol_cmd::run(&a[1..]),
+        Some("gear-probe") => qol_cmd::gear_probe(&a[1..]),
         Some("door-fix") => door_fix_cmd::run(&a[1..]),
         Some("door-open") => door_open_cmd::run(&a[1..]),
         Some("deku-bridge-testmod") => deku_bridge_cmd::testmod(&a[1..]),
@@ -390,6 +395,8 @@ fn main() -> ExitCode {
         Some("settings-dump") => settings_cmd::run(&a[1..]),
         Some("serve") => serve_cmd::run(&a[1..]),
         Some("mem-watch") => mem_watch_cmd::run(&a[1..]),
+        Some("ap-test-mod") => ap_cmd::test_mod(&a[1..]),
+        Some("ap-flag") => ap_cmd::flag(&a[1..]),
         None => serve_cmd::run(&[]),
         Some("help") | Some("--help") | Some("-h") => {
             println!("{USAGE}");

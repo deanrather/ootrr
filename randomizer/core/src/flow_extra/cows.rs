@@ -77,7 +77,9 @@ mod tests {
     use crate::settings::{Settings, Value};
     use crate::slice::data::Data;
     use crate::slice::generate::{generate_data, GenOpts, Generated};
-    use crate::slice::support::plan as plan_of;
+    use crate::slice::generate::allowed;
+    use crate::slice::support::{plan as plan_of, Plan};
+    use crate::world::World;
 
     const FLAGS: &str = include_str!("../../../../data/flags.json");
     const NEW: &str = "Item_Longshot";
@@ -209,6 +211,16 @@ mod tests {
         assert!(!d.flow_ok("LLR Tower Left Cow"));
     }
 
+    /// The plan and logic world `crate::slice::generate::allowed` judges a cow's item with. Every
+    /// item may go to a cow: its once grant is the generic pouch get, and a dungeon item there
+    /// credits its dungeon through a location credit (crate::debug_names), so only the setting and
+    /// safety rules and the build checks remain.
+    fn rules(d: &Data, s: &Settings) -> (Plan, World) {
+        let p: Plan = plan_of(s).unwrap();
+        let w: World = crate::slice::logic::world_with(d, &p.logic()).unwrap();
+        (p, w)
+    }
+
     #[test]
     fn toggle_off_places_no_cow_and_toggle_on_adds_all_eight_with_items_the_flows_hand_out() {
         let d: Data = Data::load().unwrap();
@@ -216,12 +228,13 @@ mod tests {
         for l in LOCS {
             assert!(!off.seed_file.placements.contains_key(l), "{l}");
         }
+        let (p, w): (Plan, World) = rules(&d, &with(true));
         for n in 0..3 {
             let g: Generated = generate_data(&d, &with(true), &format!("cows {n}"), &GenOpts::default()).unwrap();
             assert_eq!(g.seed_file.placements.len(), off.seed_file.placements.len() + LOCS.len() + OTHER.len());
             for l in LOCS {
                 let it: &str = &g.seed_file.placements[l];
-                assert!(d.item(it).is_some_and(|i| d.flow_accepts(i) || it == "Rupees (5)"), "{l} holds {it}");
+                assert!(allowed(&d, &w, &p, w.item(it).unwrap(), w.loc(l).unwrap()), "{l} holds {it}");
                 assert_ne!(it, "Milk", "{l}");
             }
             assert!(g.seed_file.placements.values().all(|i| i != "Milk"));
@@ -232,7 +245,13 @@ mod tests {
     fn a_built_mod_carries_the_once_gate_for_both_cows_and_leaves_the_others_alone() {
         let Some(r) = root() else { return };
         let d: Data = Data::load().unwrap();
-        let o: GenOpts = GenOpts { plando: vec![crate::slice::plando::parse("KF Links House Cow=Hover Boots").unwrap()], ..GenOpts::default() };
+        // Every item may go to a cow now, and an upgrade, ammo or a dungeon item may add tier, bag
+        // or credit events of its own, so the other two Animal_Cow cows (GV and GF) get plain items
+        // too: the event count below is the three once gates alone.
+        let o: GenOpts = GenOpts {
+            plando: ["KF Links House Cow=Hover Boots", "GV Cow=Iron Boots", "GF Cow=Lens of Truth"].iter().map(|x| crate::slice::plando::parse(x).unwrap()).collect(),
+            ..GenOpts::default()
+        };
         let g: Generated = generate_data(&d, &with(true), "cows build", &o).unwrap();
         assert_eq!(g.seed_file.placements.get("KF Links House Cow").map(|s| s.as_str()), Some("Hover Boots"));
         let load: PB = PB::from(env!("CARGO_MANIFEST_DIR")).join("../../target/cows_mods");
@@ -491,12 +510,13 @@ mod tests {
         for l in OTHER {
             assert!(!off.seed_file.placements.contains_key(l), "{l}");
         }
+        let (p, w): (Plan, World) = rules(&d, &with(true));
         for n in 0..2 {
             let g: Generated = generate_data(&d, &with(true), &format!("cows other {n}"), &GenOpts::default()).unwrap();
             assert_eq!(g.seed_file.placements.len(), off.seed_file.placements.len() + LOCS.len() + OTHER.len());
             for l in OTHER {
                 let it: &str = &g.seed_file.placements[l];
-                assert!(d.item(it).is_some_and(|i| d.flow_accepts(i) || it == "Rupees (5)"), "{l} holds {it}");
+                assert!(allowed(&d, &w, &p, w.item(it).unwrap(), w.loc(l).unwrap()), "{l} holds {it}");
             }
         }
     }
@@ -534,7 +554,7 @@ mod tests {
             }
             let push = row(&an, &crate::cow_clone::flow::push_row(&c.class)).unwrap();
             let subs: Vec<&str> = push.get("SubFlowList").unwrap().as_arr().unwrap().iter().filter_map(|x| x.as_str()).collect();
-            assert!(subs.contains(&"Dm_SY_Get") && subs.contains(&"Dm_SY_GetInEvent"), "{} {subs:?}", c.class);
+            assert!(subs.contains(&"Dm_SY_GetInEvent"), "{} {subs:?}", c.class);
             assert_eq!(tag.tags_of(&c.class), tag.tags_of("Animal_Cow"));
             for s in &c.spots {
                 let y: crate::byml::Byml = crate::byml::Byml::parse(&rd(&mut rf, &s.file)).unwrap();

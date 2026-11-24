@@ -4,7 +4,7 @@ use std::path::{Path as P, PathBuf as PB};
 use crate::error::{Error as E, Res};
 use crate::modpack::Host;
 use crate::settings::seed::SeedFile;
-use crate::shelf::stage::{run, Done};
+use crate::shelf::stage::{run_with, Done};
 use crate::shelf::{audit, Job};
 use crate::shops::layout::Layout;
 use crate::slice::data::Data;
@@ -19,7 +19,7 @@ pub fn after(seed: &SeedFile, romfs: &P, load: &P, mod_name: &str, host: Host, m
     let d: Data = Data::load()?;
     let jobs: Vec<Job> = crate::shops::jobs::of(&d, &l)?;
     let base: PB = b.root.join("romfs");
-    let done: Done = run(romfs, Some(&base), load, mod_name, host, &jobs)?;
+    let done: Done = run_with(romfs, Some(&base), load, mod_name, host, &jobs, &[])?;
     if done.root != b.root {
         return Err(E::Msg(format!("the shelf files went to {} and not to the seed mod {}", done.root.display(), b.root.display())));
     }

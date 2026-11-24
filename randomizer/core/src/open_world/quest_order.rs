@@ -1,13 +1,12 @@
 //! Quest order: checks that live inside one window of a story quest stay obtainable when the
 //! player moves the quest past that window first, and early step requests never move a quest back.
 //!
-//! The remake hands several gifts out only while a quest sits on one step: Link the Goron gives his
-//! gift while SageOfFire is at TalkDaruniaJr, King Zora while the red ice still holds him (until
-//! SageOfWater is complete), and the fortress guard gives the Membership Card in the scene that
-//! moves SageOfSpirit from Step01 to Step02. A randomizer seed can push those quests on first:
-//! entering the Crater (MeetSheik) or clearing the Fire Temple, clearing the Water Temple, or
-//! reaching the Colossus or the Spirit Temple (SageOfSpirit Step04 and on, which also clears the
-//! fortress, mends the bridge and calms the Gerudo). Each [`LATE`] hook adds a branch to the talk
+//! The remake hands several gifts out only while a quest sits on one step: King Zora while the red
+//! ice still holds him (until SageOfWater is complete), and the fortress guard gives the Membership
+//! Card in the scene that moves SageOfSpirit from Step01 to Step02. A randomizer seed can push those
+//! quests on first: clearing the Water Temple, or reaching the Colossus or the Spirit Temple
+//! (SageOfSpirit Step04 and on, which also clears the fortress, mends the bridge and calms the
+//! Gerudo). Each [`LATE`] hook adds a branch to the talk
 //! the NPC still has in those later states: while the gift has not been given, the talk runs the
 //! game's own gift part (the location patcher's shuffled item is inside it) instead.
 //!
@@ -60,11 +59,10 @@ pub struct Late {
 }
 
 pub const ZORA_DONE: &str = "SageOfWater_KingZora_adult_Talk_Event198";
-pub const GORON_DONE: &str = "SageOfFire_Step02_DoorOpen";
 pub const CARD_DONE: &str = "HavePlayedEvent.Dm_Gerudo_0025";
 pub const CARD_SCENE: &str = "Dm_Gerudo_0025";
 
-pub const LATE: [Late; 3] = [
+pub const LATE: [Late; 2] = [
     // After the Water Temple, King Zora stands free in the thawed domain and talks through his own
     // flow; without a Zora Tunic in the pouch he only points at the shop. Safety_Entry is the part
     // his frozen-era talk ends with when the thaw gift is still owed (SageOfWater event Event278).
@@ -76,20 +74,6 @@ pub const LATE: [Late; 3] = [
         done: ZORA_DONE,
         give: Give::Sub("SageOfWater", "Safety_Entry"),
         prefix: "OOTRRLateZora",
-    },
-    // Once SageOfFire is past TalkDaruniaJr (the Crater's MeetSheik, the temple, or the quest's end)
-    // Link the Goron leaves the quest's participant schedules and talks through his own flow:
-    // SageOfFire_IsCompleted_Exp_Talk (completed, or arrived from the Crater or the trail),
-    // Npc_Goron_DaruniaJr_Step3_on (default schedule). The gift talk sets SageOfFire_Step02_DoorOpen
-    // right after the item.
-    Late {
-        loc: "GC Rolling Goron as Adult",
-        flow: "Npc_Goron_DaruniaJr_Adult",
-        entries: &["Talk", "Npc_Goron_DaruniaJr_Step3_on", "SageOfFire_IsCompleted_Exp_Talk"],
-        when: None,
-        done: GORON_DONE,
-        give: Give::Sub("SageOfFire", "Step02_Npc_Goron_DaruniaJr_Adult_Talk"),
-        prefix: "OOTRRLateGoron",
     },
     // The jail-side guard while the quest sits at Step02 without the card scene (an open fortress).
     // A cleared fortress (open_world::fortress: holding the card) otherwise gets its card scene from
@@ -423,7 +407,7 @@ mod tests {
         };
         let mut rf: Romfs = Romfs::open(&root).unwrap();
         let all = edits();
-        assert_eq!(all.len(), 8);
+        assert_eq!(all.len(), 7);
         for (name, edit) in &all {
             let mut b: Bf = load(&mut rf, name);
             edit(&mut b).unwrap();

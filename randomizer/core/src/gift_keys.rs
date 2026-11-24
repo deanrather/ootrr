@@ -51,8 +51,13 @@ pub struct Gift {
 }
 
 /// True for a flow location whose grant is the generic pouch get.
+/// A flow location that hands its dungeon item out through its grant edit: every reward event
+/// with a grant, not only the gift scenes. A grant routine without a window-only copy stops the
+/// build with its name (edit_flow), so it can be added to crate::item_window.
 pub fn spot(d: &Data, name: &str) -> bool {
-    d.flow.by_name(name).is_some_and(|l| l.name == crate::slice::flow_rules::SARIA || crate::slice::flow_rules::any_item(l))
+    d.flow.by_name(name).is_some_and(|l| {
+        l.name == crate::slice::flow_rules::SARIA || crate::slice::flow_rules::any_item(l) || (!crate::slice::flow_rules::own_module(l) && l.edits.iter().any(|e| e.role == "grant"))
+    })
 }
 
 /// The dungeon items the seed puts in gift scenes, one per grant event.

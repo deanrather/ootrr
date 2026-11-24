@@ -14,7 +14,7 @@ pub const PRIZES: &[(&str, &str, bool)] = &[
 pub fn wraps(d: &Data, seed: &SeedFile) -> BM<String, &'static str> {
     let mut out: BM<String, &'static str> = BM::new();
     for (loc, item) in &seed.placements {
-        if !is_sale(d, loc) || !d.flow_ok(loc) || crate::scrubs_a::home(d, loc, item) {
+        if !is_sale(d, loc) || !d.flow_ok(loc) || crate::scrubs_a::home(d, loc, item) || crate::slice::flow_rules::priced_sale(d, loc) {
             continue;
         }
         let Some(f) = d.family(item) else {

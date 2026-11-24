@@ -138,9 +138,9 @@ mod tests {
     fn the_table_parses_and_rejects_bad_rows() {
         let t: Names = names().unwrap();
         assert_eq!(t.spots.len(), 48);
-        assert_eq!(t.spots.iter().filter(|s| s.grade == Grade::Release).count(), 30);
-        assert_eq!(t.spots.iter().filter(|s| s.grade == Grade::Lean).count(), 12);
-        assert_eq!(t.spots.iter().filter(|s| s.grade == Grade::Tour).count(), 6);
+        assert_eq!(t.spots.iter().filter(|s| s.grade == Grade::Release).count(), 32);
+        assert_eq!(t.spots.iter().filter(|s| s.grade == Grade::Lean).count(), 11);
+        assert_eq!(t.spots.iter().filter(|s| s.grade == Grade::Tour).count(), 5);
         assert_eq!(t.rules.len(), 8);
         let one: &str = "{\"format\":1,\"spots\":[{\"hash\":\"1\",\"name\":\"A\",\"grade\":\"release\"},{\"hash\":\"1\",\"name\":\"B\",\"grade\":\"lean\"}],\"rules\":[]}";
         assert!(parse_names(one).is_err());

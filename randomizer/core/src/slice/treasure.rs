@@ -17,41 +17,16 @@ pub const VIEW: &str = "DropViewActor";
 
 pub const VANILLA: &str = "Obj_Heart_Piece";
 
-pub const NOTE: &str = "The Treasure Chest Game reward is shuffled. The first win gives the shuffled item and every later win gives the vanilla red rupee. Only unique items whose second copy changes nothing can be placed there.";
+pub const NOTE: &str = "The Treasure Chest Game reward is shuffled. The first win gives the shuffled item once (its chest stays open) and every later win gives the vanilla red rupee. An upgrade there gives the tier fixed for it in the spoiler.";
 
-pub const ITEMS: [&str; 29] = [
-    "Boomerang",
-    "Lens of Truth",
-    "Megaton Hammer",
-    "Iron Boots",
-    "Hover Boots",
-    "Mirror Shield",
-    "Stone of Agony",
-    "Gerudo Membership Card",
-    "Fire Arrows",
-    "Ice Arrows",
-    "Light Arrows",
-    "Dins Fire",
-    "Farores Wind",
-    "Nayrus Love",
-    "Piece of Heart",
-    "Piece of Heart (Out of Logic)",
-    "Piece of Heart (Treasure Chest Game)",
-    "Zeldas Lullaby",
-    "Eponas Song",
-    "Sarias Song",
-    "Suns Song",
-    "Song of Time",
-    "Song of Storms",
-    "Minuet of Forest",
-    "Bolero of Fire",
-    "Serenade of Water",
-    "Requiem of Spirit",
-    "Nocturne of Shadow",
-    "Prelude of Light",
+pub const REPEAT_OPEN: &str = "IsEnableRepeatOpen";
+
+const VIEWS: [(&str, &str); 4] = [
+    ("Obj_Heart_Piece", "Obj_Heart_Piece_MiniGame"),
+    ("TBox_Rupee_Green", "Obj_OrnamentalRupee_Green_MiniGame"),
+    ("TBox_Rupee_Blue", "Obj_OrnamentalRupee_Blue_MiniGame"),
+    ("TBox_Rupee_Red", "Obj_OrnamentalRupee_Red_MiniGame"),
 ];
-
-const VIEWS: [(&str, &str); 1] = [("Obj_Heart_Piece", "Obj_Heart_Piece_MiniGame")];
 
 pub fn mode(s: &Settings, bad: &mut Vec<String>) -> bool {
     s.flag(SETTING).unwrap_or_else(|e| {
@@ -64,13 +39,6 @@ pub fn opens(on: bool, name: &str) -> bool {
     on && name == LOC
 }
 
-pub fn at(on: bool, name: &str, item: &str) -> Option<bool> {
-    if !on || name != LOC {
-        return None;
-    }
-    Some(ITEMS.contains(&item))
-}
-
 pub fn with(mut d: Data, on: bool) -> Data {
     if on {
         d.events.keep.insert(FIRST);
@@ -81,7 +49,8 @@ pub fn with(mut d: Data, on: bool) -> Data {
 pub fn view_of(actor: &str) -> String {
     match VIEWS.iter().find(|(a, _)| *a == actor) {
         Some((_, v)) => v.to_string(),
-        None => actor.to_string(),
+        None if actor.starts_with("Item_") => actor.to_string(),
+        None => VIEWS[0].1.to_string(),
     }
 }
 
@@ -104,6 +73,7 @@ pub fn set_view(y: &mut Byml, hash: u64, actor: &str) -> usize {
             continue;
         }
         d.set(VIEW, Node::Str(view_of(actor)));
+        d.set(REPEAT_OPEN, Node::Bool(false));
         n += 1;
     }
     n
@@ -205,21 +175,12 @@ mod tests {
     }
 
     #[test]
-    fn the_allowed_items_are_unique_untiered_and_exist() {
-        let d: Data = Data::load().unwrap();
-        for n in ITEMS {
-            let i: &crate::slice::data::Item = d.item(n).unwrap_or_else(|| panic!("{n}"));
-            assert!(i.tiers.is_empty() && d.family(n).is_none(), "{n}");
-            assert!(i.kind == "Item" || crate::slice::song_spots::is_song_item(i), "{n}");
-            let a: &str = i.actor.as_deref().unwrap();
-            assert!(a.starts_with("Item_") || a == "Obj_Heart_Piece", "{n} {a}");
-        }
-        assert!(ITEMS.contains(&d.vanilla_of(LOC).unwrap()));
-        for n in ["Progressive Hookshot", "Bottle", "Rupees (200)", "Bombchus (10)", "Small Key (Treasure Chest Game)", "Pocket Egg", "Deku Nuts (5)", "Heart Container"] {
-            assert!(!ITEMS.contains(&n), "{n}");
-        }
+    fn the_preview_is_a_minigame_model_or_an_item_actor() {
         assert_eq!(view_of("Obj_Heart_Piece"), "Obj_Heart_Piece_MiniGame");
+        assert_eq!(view_of("TBox_Rupee_Blue"), "Obj_OrnamentalRupee_Blue_MiniGame");
         assert_eq!(view_of("Item_Hammer"), "Item_Hammer");
+        assert_eq!(view_of("Obj_Heart_Container"), "Obj_Heart_Piece_MiniGame");
+        assert_eq!(view_of("TBox_ArrowBundle_Large"), "Obj_Heart_Piece_MiniGame");
     }
 
     #[test]
@@ -254,37 +215,50 @@ mod tests {
     }
 
     #[test]
-    fn seeds_with_the_setting_put_only_allowed_items_on_the_reward() {
+    fn seeds_with_the_setting_put_any_item_on_the_reward() {
         let d: Data = Data::load().unwrap();
         let w: World = world(&d).unwrap();
         let s: Settings = on();
         let p: Plan = plan(&s).unwrap();
         let mut seen: BM<String, usize> = BM::new();
-        for n in 0..12 {
+        for n in 0..24 {
             let g: Generated = generate_data(&d, &s, &format!("treasure {n}"), &GenOpts::default()).unwrap();
             let it: &str = &g.seed_file.placements[LOC];
-            assert!(ITEMS.contains(&it), "{it}");
             assert!(allowed(&d, &w, &p, w.item(it).unwrap(), w.loc(LOC).unwrap()));
             *seen.entry(it.to_string()).or_insert(0) += 1;
             assert!(g.report.contains(NOTE));
         }
         assert!(seen.len() > 1, "{seen:?}");
         let l: LocId = w.loc(LOC).unwrap();
-        for bad in ["Progressive Hookshot", "Bottle", "Rupees (200)", "Bomb Bag", "Deku Nuts (5)"] {
-            assert!(!allowed(&d, &w, &p, w.item(bad).unwrap(), l), "{bad}");
+        for any in ["Progressive Hookshot", "Bottle", "Rupees (200)", "Bomb Bag", "Deku Nuts (5)", "Gold Skulltula Token"] {
+            assert!(allowed(&d, &w, &p, w.item(any).unwrap(), l), "{any}");
         }
         let off: Generated = generate_data(&d, &Settings::default(), "treasure off", &GenOpts::default()).unwrap();
         assert!(!off.seed_file.placements.contains_key(LOC));
     }
 
     #[test]
-    fn a_plando_hookshot_is_refused_and_a_hammer_is_honoured() {
+    fn an_upgrade_on_the_reward_drops_its_fixed_tier_and_keeps_the_clear_event() {
+        const WATER: &str = "Water Temple Longshot Chest";
         let d: Data = Data::load().unwrap();
         let go = |x: &str| GenOpts { plando: vec![crate::slice::plando::parse(x).unwrap()], ..GenOpts::default() };
-        let e: String = generate_data(&d, &on(), "p", &go(&format!("{LOC}=Progressive Hookshot"))).err().unwrap().to_string();
-        assert!(e.contains("cannot be placed"), "{e}");
-        let g: Generated = generate_data(&d, &on(), "p", &go(&format!("{LOC}=Megaton Hammer"))).unwrap();
-        assert_eq!(g.seed_file.placements[LOC], "Megaton Hammer");
+        let prize: &str = d.vanilla_of(LOC).unwrap();
+        let swap = GenOpts { plando: vec![crate::slice::plando::parse(&format!("{LOC}=Progressive Hookshot")).unwrap(), crate::slice::plando::parse(&format!("{WATER}={prize}")).unwrap()], ..GenOpts::default() };
+        let g: Generated = generate_data(&d, &on(), "p", &swap).unwrap();
+        assert_eq!(g.seed_file.placements[LOC], "Progressive Hookshot");
+        assert!(crate::slice::tier_order::fixed_spot(&d, LOC));
+        let order: crate::slice::tier_order::Verdict = crate::slice::tier_order::fixed_actors(&d, &g.seed_file).unwrap();
+        let tier: &String = order.assign.get(LOC).unwrap();
+        assert!(["Item_Hookshot", "Item_Longshot"].contains(&tier.as_str()), "{tier}");
+        let built: Data = with(Data::load().unwrap(), true);
+        let mut only: crate::settings::seed::SeedFile = g.seed_file.clone();
+        only.placements.retain(|l, _| l == LOC || l == WATER);
+        let (ts, _, _) = crate::slice::chest_targets::targets_with(&built, &only, false, &order.assign, &crate::pickup_persist::Extra::default()).unwrap();
+        let t: &Target = ts.iter().find(|t| t.name == LOC).unwrap_or_else(|| panic!("{:?}", ts.iter().map(|t| &t.name).collect::<Vec<_>>()));
+        assert_eq!(&t.new_actor, tier);
+        assert!(t.family.is_none(), "the chain would replace the clear event");
+        let h: Generated = generate_data(&d, &on(), "p", &go(&format!("{LOC}=Megaton Hammer"))).unwrap();
+        assert_eq!(h.seed_file.placements[LOC], "Megaton Hammer");
     }
 
     #[test]
@@ -307,7 +281,8 @@ mod tests {
         assert_eq!(text(&a, "Drop__DropActor"), "Item_Hammer");
         assert_eq!(text(&a, VIEW), "Item_Hammer");
         assert_eq!(text(&a, "GetEventName"), "MiniGame_ChoiceTreasure_OpenClearTreasureBox");
-        assert_eq!(a.get("IsEnableRepeatOpen"), first.get("IsEnableRepeatOpen"));
+        assert_eq!(first.get(REPEAT_OPEN), Some(&Node::Bool(true)));
+        assert_eq!(a.get(REPEAT_OPEN), Some(&Node::Bool(false)));
         assert_eq!(dynamic(&after, REPEAT), repeat);
         let old: &[Node] = before.root.get("Actors").and_then(|x| x.as_arr()).unwrap();
         let new: &[Node] = after.root.get("Actors").and_then(|x| x.as_arr()).unwrap();
@@ -319,7 +294,7 @@ mod tests {
             _ => Vec::new(),
         };
         keys.sort();
-        assert_eq!(keys, vec![VIEW, "Drop__DropActor"]);
+        assert_eq!(keys, vec![VIEW, "Drop__DropActor", REPEAT_OPEN]);
         let mut c: Byml = before.clone();
         c.root.set("Actors", Node::Arr(new.to_vec()));
         assert_eq!(c, after);
