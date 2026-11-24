@@ -1575,4 +1575,28 @@ mod tests {
             assert!(outs.iter().any(|x| x.path == k.plan(true).graph), "the child graph of nook {}", k.name);
         }
     }
+
+    #[test]
+    fn no_environment_variable_is_read_outside_the_tests() {
+        fn walk(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+            for e in std::fs::read_dir(dir).unwrap() {
+                let p: std::path::PathBuf = e.unwrap().path();
+                if p.is_dir() {
+                    walk(&p, out);
+                } else if p.extension().is_some_and(|x| x == "rs") {
+                    out.push(p);
+                }
+            }
+        }
+        let src: std::path::PathBuf = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut files: Vec<std::path::PathBuf> = vec![src.join("difficulty.rs")];
+        walk(&src.join("difficulty"), &mut files);
+        assert!(files.len() > 40, "{}", files.len());
+        let needle: String = ["env", "::var"].concat();
+        for f in &files {
+            let text: String = std::fs::read_to_string(f).unwrap();
+            let shipped: &str = text.split("#[cfg(test)]").next().unwrap();
+            assert!(!shipped.contains(&needle), "{} reads an environment variable outside its tests", f.display());
+        }
+    }
 }

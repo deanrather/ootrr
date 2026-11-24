@@ -34,11 +34,6 @@ pub const CONDITION: &str = "EventStartConditionType";
 pub const EVENT_NAME: &str = "EventName";
 pub const GROUPS: [&str; 2] = ["FarDeleteGroups", "SimultaneousGroups"];
 pub const SEED: &str = "ootrr volvagia roams";
-pub const STAGE_VAR: &str = "OOTRR_VOLVAGIA_STAGE";
-pub const LIFT_VAR: &str = "OOTRR_VOLVAGIA_LIFT";
-pub const SCALE_VAR: &str = "OOTRR_VOLVAGIA_SCALE";
-pub const LIFT_RANGE: (f32, f32) = (0.0, 60.0);
-pub const SCALE_RANGE: (f32, f32) = (0.5, 4.0);
 pub const WIDE: [&str; 7] = ["AirDiveStartDistance", "BeforeCircleMoveDistance", "CircleMoveDistance", "FinalCircleMoveDistance", "JumpOutCircleMoveDistance", "MaxLeaveDistRoomCenter", "FireBreathMaxDistanceRoomCenter"];
 pub const BOSS_SHOW: &str = "?Component/BattlePresentationParam/EnemyCommon.game__component__BattlePresentationParam.bgyml";
 pub const DEATH_KEY: &str = "DeathRef";
@@ -86,14 +81,7 @@ pub struct Shape {
     pub scale: f32,
 }
 
-fn num(var: &str, r: (f32, f32), or: f32) -> f32 {
-    std::env::var(var).ok().and_then(|v| v.trim().parse::<f32>().ok()).filter(|v| v.is_finite() && *v >= r.0 && *v <= r.1).unwrap_or(or)
-}
-
-pub fn shape() -> Shape {
-    let test: bool = std::env::var(STAGE_VAR).map(|v| v.trim() == "1").unwrap_or(false);
-    Shape { arena: if test { TEST } else { FIELD }, lift: num(LIFT_VAR, LIFT_RANGE, 0.0), scale: num(SCALE_VAR, SCALE_RANGE, 1.0) }
-}
+pub const SHAPE: Shape = Shape { arena: FIELD, lift: 0.0, scale: 1.0 };
 
 pub fn pack_of(name: &str) -> String {
     format!("Pack/Actor/{name}.pack.zs")
@@ -591,8 +579,7 @@ pub fn write(rf: &mut Romfs, pk: &Pack, rst: &mut Option<Rst>) -> Res<(usize, Ve
     }
     let t: &mut Rst = rst.as_mut().ok_or(E::Format("volvagia roams: no size table"))?;
     let have = |p: &str| -> Option<Vec<u8>> { fs::read(p.split('/').fold(root.clone(), |a, s| a.join(s))).ok() };
-    let s: Shape = shape();
-    let m: Made = stage(rf, &have, t, &s, die_graph::mode())?;
+    let m: Made = stage(rf, &have, t, &SHAPE, die_graph::MODE)?;
     for o in &m.outs {
         pk.write_romfs(&o.path, &o.z)?;
     }
@@ -626,8 +613,8 @@ mod tests {
     }
 
     #[test]
-    fn the_shape_reads_its_switches_and_ignores_bad_values() {
-        assert_eq!(num("OOTRR_VOLVAGIA_TEST_UNSET_VAR", LIFT_RANGE, 3.0), 3.0);
+    fn the_shipped_shape_is_the_field_unlifted_and_unscaled() {
+        assert_eq!(SHAPE, Shape { arena: FIELD, lift: 0.0, scale: 1.0 });
         assert_eq!(work("Actor/X.engine__actor__ActorParam.bgyml"), "Work/Actor/X.engine__actor__ActorParam.gyml");
         assert_eq!(own().len(), 8);
         assert!(death_table().ends_with("_game__death__DeathReasonProcedures.pp__CombinationDataTableData.bgyml") && death_table().contains(CLASS));

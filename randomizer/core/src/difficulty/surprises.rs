@@ -28,7 +28,6 @@ pub const DREAM: &str = "_Dream";
 pub const POE: &str = "Enemy_Poe";
 pub const SKULLTULA: &str = "Enemy_Skullwalltula";
 pub const LITTLE_HANDS: &str = "Enemy_Floormaster_Little";
-pub const CHANCE_VAR: &str = "OOTRR_SURPRISE_CHANCE";
 pub const POT_SURPRISES: [&str; 2] = [POE, LITTLE_HANDS];
 pub const GRASS_SURPRISES: [&str; 2] = [SKULLTULA, LITTLE_HANDS];
 pub const OWN: u32 = 2;
@@ -49,16 +48,12 @@ pub const RESETTER: &str = "SupplyItemResetSystemActor";
 pub const GROUPS: [&str; 2] = ["FarDeleteGroups", "SimultaneousGroups"];
 pub const NOTE: &str = "Now and then, about one time in 8, cutting grass or breaking an ordinary pot lets out an enemy instead of the usual drop: a Poe or a small crawling hand from a pot, a Skulltula or a small hand from grass. About 1 in 10 plain pots are flying pots in disguise (never pots that hold a key, a fairy, an item or a set drop, nor any in the first room of a dungeon). Experimental, untested in the game.";
 
-pub fn chance() -> i32 {
-    std::env::var(CHANCE_VAR).ok().and_then(|v| v.parse::<i32>().ok()).filter(|v| (1..=20).contains(v)).unwrap_or(CHANCE)
-}
-
 pub fn named(actor: &str) -> Node {
     Node::Map(vec![
         ("BadLuckValueRate".to_string(), Node::F32(1.0)),
         ("DropActorName".to_string(), Node::Str(format!("Work/Actor/{actor}.engine__actor__ActorParam.gyml"))),
         ("DropCreateCount".to_string(), Node::U32(1)),
-        ("DropProbability".to_string(), Node::I32(chance())),
+        ("DropProbability".to_string(), Node::I32(CHANCE)),
         ("IsReplace".to_string(), Node::Bool(true)),
         ("MostDepletedResource".to_string(), Node::Arr(Vec::new())),
         ("Type".to_string(), Node::U32(NAMED)),
@@ -81,7 +76,7 @@ pub fn surprise(raw: &[u8], actor: &str) -> Res<Option<Vec<u8>>> {
     if items.iter().any(|i| i.get("DropActorName").and_then(|x| x.as_str()) == Some(want.as_str())) {
         return Ok(None);
     }
-    let c: i32 = chance();
+    let c: i32 = CHANCE;
     let total: i32 = items.iter().map(odds).sum();
     if total >= 100 {
         let mut best: Option<usize> = None;

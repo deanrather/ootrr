@@ -51,8 +51,8 @@ pub const SPIN: &str = "AI/Enemy_MiddleBoss_GerudoThief.action.LargeAttack.modul
 pub const ARREST: &str = "IsRequestArrestEvent";
 pub const SET_BOOL: &str = "ExecuteBlackboardSetBool";
 pub const IDLE: &str = "ExecuteGenericDummyAction";
-pub const KEEP_AI_VAR: &str = "OOTRR_GERUDO_KEEP_AI";
-pub const STAGE_VAR: &str = "OOTRR_GERUDO_STAGE";
+pub const KEEP_AI: bool = false;
+pub const TEST_SPOT: bool = false;
 pub const NO_RECORD: &str = "IsSetBoolGameDataRecordingDeath";
 pub const SEED: &str = "ootrr gerudo fighter";
 pub const TEST_FILE: &str = "Banc/Market/Market_Child_Static.bcett.byml.zs";
@@ -320,10 +320,6 @@ pub fn dynamic() -> Node {
     Node::Map(vec![(NO_RECORD.to_string(), Node::Bool(false))])
 }
 
-pub fn test_spot() -> bool {
-    std::env::var(STAGE_VAR).map(|v| v.trim() == "1").unwrap_or(false)
-}
-
 #[derive(Clone, Debug, Default)]
 pub struct Made {
     pub outs: Vec<Out>,
@@ -435,8 +431,7 @@ pub fn write(rf: &mut Romfs, pk: &Pack, rst: &mut Option<Rst>) -> Res<(usize, Ve
     }
     let t: &mut Rst = rst.as_mut().ok_or(E::Format("gerudo fighter: no size table"))?;
     let have = |p: &str| -> Option<Vec<u8>> { fs::read(p.split('/').fold(root.clone(), |a, s| a.join(s))).ok() };
-    let keep: bool = std::env::var(KEEP_AI_VAR).map(|v| v.trim() == "1").unwrap_or(false);
-    let m: Made = stage(rf, &have, t, test_spot(), keep)?;
+    let m: Made = stage(rf, &have, t, TEST_SPOT, KEEP_AI)?;
     for o in &m.outs {
         pk.write_romfs(&o.path, &o.z)?;
     }

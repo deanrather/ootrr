@@ -64,11 +64,11 @@ Request: "I also want those creepy small hands that crawl around and attack you 
 - Tip of the setting updated.
 
 ## How to test in the game (small hands)
-- Test hook, for test builds only: set the environment variable `OOTRR_SURPRISE_CHANCE` to a whole number from 1 to 20 when building the mod. It replaces `CHANCE` for every surprise entry (10 means each surprise is 1 in 10, so a pot or a blade of grass gives some enemy 2 times in 10). Anything else, or unset, keeps `CHANCE` (1). Default behaviour and default seeds are unchanged.
+- Test hook (removed on 24 Nov: no environment variable changes what a build writes; every build now uses the constant `CHANCE`): the environment variable `OOTRR_SURPRISE_CHANCE`, a whole number from 1 to 20 at build time, replaced `CHANCE` for every surprise entry (10 meant each surprise 1 in 10, so a pot or a blade of grass gave some enemy 2 times in 10). Default behaviour and default seeds are unchanged.
 - Cut grass and break pots in Kakariko or Zora's Domain. Look for a small hand that crawls and attacks, a Poe from pots, a Skulltula standing on the ground from grass.
 
 ## Round 2 (branch `feature/enc-r2`, worktree `wt\enc-r2`)
-- Rate: `CHANCE` is now 2 percent per surprise ("1 in 50 for the actual build"; two surprises per source, so some enemy about 1 in 25). `OOTRR_SURPRISE_CHANCE` still overrides it.
+- Rate: `CHANCE` is now 2 percent per surprise ("1 in 50 for the actual build"; two surprises per source, so some enemy about 1 in 25). (At the time `OOTRR_SURPRISE_CHANCE` still overrode it; that override is gone since 24 Nov.)
 - Grass that normally spawns bugs: the clump in east Hyrule Field around the Dead Hand hole is 13 placed actors `Land_kokiri_Plant_A_02_DropFixed_03` (in `HyruleField_Child_Dynamic` and `_Adult_Dynamic`, nowhere else), each with a placement key `Drop__DropActor` = `Animal_Insect`, over a pack with its own table `Land_kokiri_Plant_A_02_DropFixed_03` (one entry: the bug type, 100). Neither `DropTable_Foliage_00` nor `DropTable_ResourceSupply_00`. That table now gets the grass surprises (wall Skulltula, little hands) like the others, and the placement key is removed from those actors in the two map files (the table already gives the same bug at 100, so nothing else changes; a placement key probably overrides the table, so without removing it the surprise could never roll). Composes with the cuts, idempotent. Tables now covered: pots and placed grass (`DropTable_ResourceSupply_00`), foliage grass (`DropTable_Foliage_00`), this bug grass.
 - Guard house pots in the Market: all `Obj_Pot_A_01` with a placement key `Drop__DropActor` = `Obj_Rupee_Green` or `Drop__DropTable` = `None`. These are deliberately fixed (rupees or nothing), so they are left alone, as the pot rules above say.
 - Not played.
@@ -76,7 +76,7 @@ Request: "I also want those creepy small hands that crawl around and attack you 
 
 ## Moved from STATUS.md (20 Nov): feature table row
 
-- **Feature (old table row 23):** Grass and pot surprises (part of special encounters): 1 in 100 that cut grass or a broken pot spawns a Skulltula (grass) or Poe (pot), or a small crawling hand (both; branch `feature/surprise-hands`, exe `<playtest folder>\hands\ootrr.exe`, test hook env `OOTRR_SURPRISE_CHANCE` 1 to 20), and 1 in 10 plain pots are flying pots
+- **Feature (old table row 23):** Grass and pot surprises (part of special encounters): 1 in 100 that cut grass or a broken pot spawns a Skulltula (grass) or Poe (pot), or a small crawling hand (both; branch `feature/surprise-hands`, exe `<playtest folder>\hands\ootrr.exe`, the test hook env `OOTRR_SURPRISE_CHANCE` it used was removed on 24 Nov), and 1 in 10 plain pots are flying pots
 - **State:** Built, untested (code only)
 - **What was seen in the game:** Nothing. Commit `163112b` on `feature/surprises`; 138 difficulty and 107 settings tests pass
 - **Next step:** Play it: cut about 300 blades and break about 200 pots; look for fake pots in Zora's Domain and Kakariko. Riskiest: whether a drop can create an enemy. Steps in `<playtest folder>\surprises\TESTS.md`. Round 2 (`feature/enc-r2`): rate now 2 percent per surprise (1 in 50), the bug grass round the hole 9 Dead Hand (`Land_kokiri_Plant_A_02_DropFixed_03`) now gets the grass surprises; Market guard house pots are fixed rupee pots and stay as they are

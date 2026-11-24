@@ -16,7 +16,7 @@ pub const SETTING: &str = "enemy_feints";
 pub const NUM: u16 = 166;
 pub const HEAP_EXTRA: i32 = 0x8000;
 pub const LABEL: &str = "enemy feints";
-pub const FREEZE_VAR: &str = "OOTRR_FEINT_FREEZE";
+pub const HOLD: Hold = Hold::Sway;
 pub const SINGLE_HOLD: [f32; 1] = [28.0];
 pub const TRIPLE_HOLDS: [f32; 2] = [28.0, 70.0];
 pub const JUMP_HOLD: [f32; 1] = [12.0];
@@ -57,13 +57,6 @@ pub fn note(pct: i64) -> Option<String> {
     (pct > 0).then(|| format!("About {pct} in 100 attacks by Stalfos, Lizalfos, Dinolfos, Iron Knuckles and Deku Babas are feints: the enemy winds up, then sways back and forth around its ready pose for about two thirds of a second to a second and a third, then strikes. Stalfos combos can hold before the second swing instead, and the Iron Knuckle can also hold before its second swing. The whole body sways, legs included. Experimental."))
 }
 
-pub fn hold_mode() -> Hold {
-    match std::env::var(FREEZE_VAR) {
-        Ok(v) if v.trim() == "1" => Hold::Freeze,
-        _ => Hold::Sway,
-    }
-}
-
 pub fn module_of(graph: &str) -> &str {
     graph.strip_prefix("AI/").and_then(|g| g.strip_suffix(".ainb")).unwrap_or(graph)
 }
@@ -100,7 +93,7 @@ fn patch_pack(es: &mut [Entry], p: f32, how: Hold, hit: &mut Set<&'static str>) 
 
 pub fn stage(rf: &mut Romfs, have: Have, dir: &str, pct: i64) -> Res<(Set<String>, Vec<Out>)> {
     let p: f32 = pct as f32 / 100.0;
-    let how: Hold = hold_mode();
+    let how: Hold = HOLD;
     let mut hit: Set<&'static str> = Set::new();
     let (z, old, mut es): (Vec<u8>, usize, Vec<Entry>) = hook::opened(rf, have, hook::GLOBAL)?;
     let shared: Set<String> = callers(&es);

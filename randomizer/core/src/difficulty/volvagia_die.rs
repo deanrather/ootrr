@@ -13,7 +13,7 @@ pub const PAY: &str = "OneshotIncreaseRupee";
 pub const DISCONNECT: &str = "OneShotActorHolderDisconnectActorLink";
 pub const PAY_VALUE: i32 = 50;
 pub const RISE: f32 = 1.5;
-pub const MODE_VAR: &str = "OOTRR_VOLVAGIA_DROP";
+pub const MODE: Mode = Mode::Spawn;
 pub const SEED: &str = "ootrr volvagia roams die";
 pub const ADDED_SPAWN: usize = 8;
 pub const ADDED_DROP: usize = 5;
@@ -42,14 +42,6 @@ pub enum Mode {
 }
 
 impl Mode {
-    pub fn read(v: Option<&str>) -> Mode {
-        match v.map(|s| s.trim()) {
-            Some("pay") => Mode::Pay,
-            Some("drop") => Mode::Drop,
-            _ => Mode::Spawn,
-        }
-    }
-
     pub fn added(&self) -> usize {
         match self {
             Mode::Spawn => ADDED_SPAWN,
@@ -61,10 +53,6 @@ impl Mode {
     pub fn holds(&self) -> bool {
         *self == Mode::Spawn
     }
-}
-
-pub fn mode() -> Mode {
-    Mode::read(std::env::var(MODE_VAR).ok().as_deref())
 }
 
 fn xyz(x: f32, y: f32, z: f32) -> Vec<u8> {
@@ -242,13 +230,8 @@ mod tests {
     }
 
     #[test]
-    fn the_switch_picks_the_rupee_unless_it_says_pay_or_drop() {
-        assert_eq!(Mode::read(None), Mode::Spawn);
-        assert_eq!(Mode::read(Some("")), Mode::Spawn);
-        assert_eq!(Mode::read(Some("spawn")), Mode::Spawn);
-        assert_eq!(Mode::read(Some(" pay ")), Mode::Pay);
-        assert_eq!(Mode::read(Some("drop")), Mode::Drop);
-        assert_eq!(Mode::read(Some("PAY")), Mode::Spawn);
+    fn the_shipped_mode_leaves_the_rupee_and_only_it_holds_an_actor() {
+        assert_eq!(MODE, Mode::Spawn);
         assert!(Mode::Spawn.holds() && !Mode::Pay.holds() && !Mode::Drop.holds());
         assert_eq!(RUPEE_VALUE, PAY_VALUE);
     }
