@@ -8,8 +8,16 @@ Upstream's menu shows "Full Wallets: Start with a full wallet. All wallet upgrad
 
 ## Interpretation
 
-- "Start with a full wallet" includes the vanilla wallet a new game gives: a new game starts with 200 rupees, or 500 or 1000 when "Adult's Wallet" or "Giant's Wallet" is a starting item. This is the default taken; the other reading (only starting-item wallets count, a plain new game keeps 0 rupees) is one constant away. Open decision for the user.
-- "Upgrades" are Adult's Wallet (500) and Giant's Wallet (1000), wherever they are found.
+Behaviour follows Ship of Harkinian's "Full Wallets", which upstream's stub text is taken from (see Decisions). Matched from SoH:
+
+- A new game starts with its wallet full, whatever that wallet is: 200 rupees, or 500 or 1000 when "Adult's Wallet" or "Giant's Wallet" is a starting item. SoH gives an over-large amount at new game that the wallet caps.
+- Each upgrade (Adult's Wallet 500, Giant's Wallet 1000), wherever it is found, fills to its new capacity. SoH adds the capacity gained, which from a full wallet gives the same result; here the game's own refill column sets the count to the new capacity.
+
+Not matched: SoH's child wallet (99) and Tycoon's Wallet (999) do not exist in the remake.
+
+## Decisions
+
+- **26 Nov (user):** Full Wallets behaves like SoH's Full Wallets (the stub is copied from SoH): the starting wallet starts full too, and each wallet upgrade fills to its new capacity. Settle any other behaviour question by SoH's behaviour (ideas only, no copied code).
 
 ## How it works
 
