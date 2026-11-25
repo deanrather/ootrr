@@ -43,6 +43,9 @@ The first version (commit ae95b3da) set `IsItemStockMaxIfGet = true` on the wall
 ## Tested
 
 - Unit tests (`cargo test -p ootrr-core full_wallet`, 4 of 4 passed with `OOTRR_ROMFS` set): only upgrade-wallet gives count (not the small wallet, not questions, not `DisplayItemActor`); in the real `GatheringTokenGold` flow exactly 2 gives get 500 and 1000, each rupee action leads to the give's old next event, every other event is unchanged, a second run changes nothing and the flow round-trips; in both real chest flows the progressive wallet wrap gets exactly 2 rupee actions; a new game's count is 200, 500 or 1000.
+- `cargo test --workspace` on 4fe247ee with `OOTRR_ROMFS` set: 2416 passed, 0 failed.
+- Built mods (commit 4fe247ee, same seed text, time savers, plando: both Progressive Wallets at "KF Midos Top Left Chest" and "Kak Man on Roof"): `ootrr flow-loads` finds no missing loads on four mods (on, off, Adult's Wallet start, Giant's Wallet start). On differs from off in exactly 4 files: the small chest flow and the roof man's flow (`Npc_Hylia_001_Adult`), each with 2 rupee actions, `GameData/GameDataList.Product.110.byml.zs` (the start count) and the resource size table.
+- Setting off: the seed file and every mod file are byte-identical to a build of nightly 2746d256 with the same preset.
 - Not played. The first version's game test is under History.
 
 ## How to test in the game
