@@ -8,6 +8,7 @@ use crate::flags_build::LIST_PATH;
 use crate::flow_locations::path_of;
 use crate::hints;
 use crate::intro_skip;
+use crate::pickup_pack::model::{POSE_HEAD, POSE_TAIL};
 use crate::progressive::{ANALYZED_TABLE, BIG_FLOW, SETTING_TABLE, SMALL_FLOW};
 use crate::rsizetable::TABLE_PATH;
 use crate::slice::data::Data;
@@ -50,7 +51,7 @@ pub fn list(d: &Data) -> Vec<String> {
 
 /// Folders a build reads whole: it lists them, or picks files in them by names that come
 /// from the seed or the data files (actor packs, event flows, map and language files).
-pub const TREES: [&str; 13] = [
+pub const TREES: [&str; 15] = [
     "AoC1",
     "Banc",
     "Event/EventFlow",
@@ -58,6 +59,8 @@ pub const TREES: [&str; 13] = [
     "Logic",
     "Mals",
     "Pack",
+    "Phive/NavMesh",
+    "Phive/StitchedNavMesh",
     "RSDB",
     "Sequence",
     "SLink2",
@@ -75,11 +78,12 @@ pub const SOUND: &str = "Sound/Resource";
 pub struct Unpack {
     pub files: BS<String>,
     pub trees: BS<String>,
+    pub shaped: Vec<(String, String)>,
 }
 
 impl Unpack {
     pub fn wants(&self, r: &str) -> bool {
-        self.files.contains(r) || self.trees.iter().any(|t| r.len() > t.len() && r.starts_with(t.as_str()) && r.as_bytes()[t.len()] == b'/')
+        self.files.contains(r) || self.trees.iter().any(|t| r.len() > t.len() && r.starts_with(t.as_str()) && r.as_bytes()[t.len()] == b'/') || self.shaped.iter().any(|(a, z)| r.starts_with(a.as_str()) && r.ends_with(z.as_str()))
     }
 }
 
@@ -103,7 +107,7 @@ pub fn unpack(d: &Data, sound: bool) -> Unpack {
     if sound {
         trees.insert(SOUND.to_string());
     }
-    Unpack { files, trees }
+    Unpack { files, trees, shaped: vec![(POSE_HEAD.to_string(), POSE_TAIL.to_string())] }
 }
 
 pub fn missing(root: &P, d: &Data) -> Vec<String> {
@@ -116,6 +120,10 @@ pub fn missing(root: &P, d: &Data) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::error::Res;
+    use crate::settings::seed::SeedFile;
+    use crate::settings::{Kind, Settings, Value};
+    use std::path::PathBuf as PB;
 
     #[test]
     fn the_list_names_the_files_a_default_build_reads() {
@@ -157,6 +165,111 @@ mod tests {
         ] {
             assert!(u.wants(&f), "{f}");
         }
+    }
+
+    #[test]
+    fn the_unpack_set_holds_the_walk_meshes_and_item_poses() {
+        let d: Data = Data::load().unwrap();
+        let u: Unpack = unpack(&d, false);
+        for f in ["Phive/NavMesh/DodongoCavern.Nin_Ounce_NVN2.bphnm.zs", "Phive/StitchedNavMesh/HyruleField_Child/X0_Z0.Nin_Ounce_NVN2.bphnm.zs", "Model/Item_Ocarina_Fairy_Animation.anim.bfres.zs"] {
+            assert!(u.wants(f), "{f}");
+        }
+        assert!(!u.wants("Phive/Shape/x") && !u.wants("Model/Item_Ocarina_Fairy.Item_Ocarina_Fairy.bfres.zs") && !u.wants("Model/Animal_Cow_Animation.anim.bfres.zs"));
+    }
+
+    fn files(root: &P) -> Vec<String> {
+        let mut out: Vec<String> = Vec::new();
+        let mut stack: Vec<PB> = vec![root.to_path_buf()];
+        while let Some(d) = stack.pop() {
+            for e in std::fs::read_dir(&d).unwrap() {
+                let p: PB = e.unwrap().path();
+                if p.is_dir() {
+                    stack.push(p);
+                } else {
+                    out.push(p.strip_prefix(root).unwrap().to_string_lossy().replace('\\', "/"));
+                }
+            }
+        }
+        out.sort();
+        out
+    }
+
+    fn at(root: &P, r: &str) -> PB {
+        r.split('/').fold(root.to_path_buf(), |a, s| a.join(s))
+    }
+
+    fn part(root: &P, u: &Unpack, to: &P) -> usize {
+        let mut n: usize = 0;
+        for r in files(root).into_iter().filter(|r| u.wants(r)) {
+            let (a, b): (PB, PB) = (at(root, &r), at(to, &r));
+            std::fs::create_dir_all(b.parent().unwrap()).unwrap();
+            if std::fs::hard_link(&a, &b).is_err() {
+                std::fs::copy(&a, &b).unwrap();
+            }
+            n += 1;
+        }
+        n
+    }
+
+    fn everything() -> Settings {
+        let mut s: Settings = Settings::default();
+        for x in crate::settings::schema().settings.iter().filter(|x| x.group == "difficulty") {
+            let v: Value = match x.kind {
+                Kind::Toggle => Value::Bool(true),
+                Kind::Number => Value::Int(x.max),
+                Kind::Choice => Value::s(&x.choices[x.choices.len() - 1].id),
+                Kind::Multi | Kind::List => continue,
+            };
+            s.set(&x.id, v).unwrap();
+        }
+        s
+    }
+
+    fn seed(d: &Data, s: &Settings) -> SeedFile {
+        crate::slice::generate::generate_data(d, s, "unpack set", &crate::slice::generate::GenOpts::default()).unwrap().seed_file
+    }
+
+    #[test]
+    fn a_build_from_the_unpack_set_alone_is_the_folder_build_and_stops_without_a_needed_file() {
+        let root: PB = ootrr_game::test_romfs::path();
+        if !root.join("Pack").join("ZsDic.pack.zs").is_file() {
+            eprintln!("skipped: no romfs at {}, set OOTRR_ROMFS", root.display());
+            return;
+        }
+        let d: Data = Data::load().unwrap();
+        let tmp: PB = std::env::temp_dir().join(format!("ootrr_unpack_set_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        let cut: PB = tmp.join("romfs");
+        assert!(part(&root, &unpack(&d, false), &cut) > 0);
+        let mut more: Settings = Settings::default();
+        more.set(crate::difficulty::MORE, Value::Int(1000)).unwrap();
+        for (name, s) in [("off", Settings::default()), ("more", more.clone()), ("everything", everything())] {
+            let f: SeedFile = seed(&d, &s);
+            let full: PB = crate::slice::edit::build(&f, &root, &tmp.join(format!("{name}_full")), "unpack set").unwrap().root;
+            let some: PB = crate::slice::edit::build(&f, &cut, &tmp.join(format!("{name}_part")), "unpack set").unwrap().root;
+            let (a, b): (Vec<String>, Vec<String>) = (files(&full), files(&some));
+            assert_eq!(a, b, "{name}");
+            let differ: Vec<&String> = a.iter().filter(|r| std::fs::read(at(&full, r)).unwrap() != std::fs::read(at(&some, r)).unwrap()).collect();
+            assert!(differ.is_empty(), "{name} differs from the folder build: {differ:?}");
+        }
+        let stops = |s: &Settings, to: &str| -> String {
+            let b: Res<crate::slice::edit::Built> = crate::slice::edit::build(&seed(&d, s), &cut, &tmp.join(to), "unpack set");
+            b.err().map(|e| e.to_string()).unwrap_or_default()
+        };
+        let poses: Vec<String> = files(&cut).into_iter().filter(|r| r.starts_with(POSE_HEAD) && r.ends_with(POSE_TAIL)).collect();
+        assert!(!poses.is_empty());
+        for r in &poses {
+            std::fs::remove_file(at(&cut, r)).unwrap();
+        }
+        let e: String = stops(&Settings::default(), "no_poses");
+        assert!(e.contains(POSE_TAIL), "{e}");
+        for r in &poses {
+            std::fs::copy(at(&root, r), at(&cut, r)).unwrap();
+        }
+        std::fs::rename(at(&cut, crate::difficulty::ground::NAV_DIR), tmp.join("nav")).unwrap();
+        let e: String = stops(&more, "no_meshes");
+        assert!(e.contains(crate::difficulty::ground::NAV_DIR), "{e}");
+        let _ = std::fs::remove_dir_all(&tmp);
     }
 
     #[test]

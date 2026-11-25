@@ -10,6 +10,8 @@ pub const HARP: &str = "Dm_Item_Sheik_Harp";
 pub const ROW_KEYS: [&str; 5] = ["FmdbName", "ModelProjectName", "ModelAabbMax", "ModelAabbMin", "PreActorRenderInfoHeapSize"];
 const ANIM_LIST: &str = "AnimationResources";
 const ANIM_NAME: &str = "ModelProjectName";
+pub const POSE_HEAD: &str = "Model/Item_";
+pub const POSE_TAIL: &str = "_Animation.anim.bfres.zs";
 
 pub fn anim_file(name: &str) -> String {
     format!("Component/AnimationParam/{name}.engine__component__AnimationParam.bgyml")
@@ -46,7 +48,16 @@ pub fn layers(rf: &mut Romfs, l: &Layers) -> Res<Layers> {
     }
     let t: Byml = rf.read_byml(ACTOR_INFO)?;
     let project: Option<String> = crate::pickup_pack::rows::find(&t, m).and_then(|r| r.get(ANIM_NAME)).and_then(|v| v.as_str()).map(pose_of);
-    let pose: Option<String> = project.filter(|n| rf.root.join(pose_file(n)).is_file());
+    let pose: Option<String> = match project {
+        Some(n) if rf.root.join(pose_file(&n)).is_file() => Some(n),
+        Some(n) => {
+            if crate::rsizetable::load(rf)?.get(&pose_file(&n)).is_some() {
+                rf.require(&pose_file(&n))?;
+            }
+            None
+        }
+        None => None,
+    };
     Ok(Layers { pose, ..l.clone() })
 }
 
@@ -99,6 +110,27 @@ mod tests {
         row(&mut r, &d, Some("Item_Ocarina_Time_Animation")).unwrap();
         let names: Vec<&str> = r.get(ANIM_LIST).and_then(|v| v.as_arr()).unwrap().iter().filter_map(|x| x.get(ANIM_NAME).and_then(|v| v.as_str())).collect();
         assert_eq!(names, [SHARED_ANIM, "Item_Ocarina_Time_Animation"]);
+    }
+
+    #[test]
+    fn the_size_table_lists_exactly_the_item_poses_the_game_has() {
+        let p: std::path::PathBuf = ootrr_game::test_romfs::path();
+        if !p.join("Pack").join("ZsDic.pack.zs").is_file() {
+            eprintln!("skipped: no romfs at {}, set OOTRR_ROMFS", p.display());
+            return;
+        }
+        let mut rf: Romfs = Romfs::open(&p).unwrap();
+        let t: Byml = rf.read_byml(ACTOR_INFO).unwrap();
+        let sizes: crate::rsizetable::Rst = crate::rsizetable::load(&mut rf).unwrap();
+        let projects: std::collections::BTreeSet<&str> = t.root.as_arr().unwrap().iter().filter_map(|r| r.get(ANIM_NAME).and_then(|v| v.as_str())).collect();
+        let mut posed: usize = 0;
+        for n in projects {
+            let f: String = pose_file(&pose_of(n));
+            let there: bool = rf.root.join(&f).is_file();
+            assert_eq!(sizes.get(&f).is_some(), there, "{f}");
+            posed += usize::from(there && f.starts_with(POSE_HEAD));
+        }
+        assert!(posed > 0);
     }
 
     #[test]
