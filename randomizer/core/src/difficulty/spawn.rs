@@ -64,7 +64,7 @@ fn idle(a: &mut Ainb, what: &str) -> Res<usize> {
     a.add_node(&Spec::node(IDLE, &format!("ootrr spawn idle {what}")))
 }
 
-fn route(a: &mut Ainb, from: usize, to: usize, out: &str, input: &str) -> Res<()> {
+pub fn route(a: &mut Ainb, from: usize, to: usize, out: &str, input: &str) -> Res<()> {
     let want: u32 = a.pool.add(input);
     let name: u32 = a.pool.add(out);
     let at: usize = a.params.get(to).ok_or(Error::Format("spawn combo: no such reader"))?.group(0).iter().position(|p| p.a as usize == from && p.b == want).ok_or(Error::Format("spawn combo: the reader does not have that link"))?;
