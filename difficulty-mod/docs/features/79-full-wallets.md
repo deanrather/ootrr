@@ -39,6 +39,9 @@ Off: neither step runs, so nothing is written.
 
 - Unit tests (`cargo test -p ootrr-core full_wallet`, 3 of 3 passed with `OOTRR_ROMFS` set): only wallet rows above 200 rupees gain the column and no other column or row changes; the step is idempotent; a new game's count is 200, 500 or 1000; against the real game table the constants 200/500/1000 match `AfterExpansionMaxNum`, the bomb bag carries `IsItemStockMaxIfGet = true` as a boolean, exactly 4 rows change, and the table round-trips.
 - `cargo test -p ootrr-core settings`: 113 passed, 0 failed.
+- `cargo test --workspace` on ae95b3da with `OOTRR_ROMFS` set: 2404 passed, 0 failed.
+- Built mods (commit ae95b3da, same seed text, time savers, plando: both Progressive Wallets at "KF Midos Top Left Chest" and "Kak Man on Roof"): `ootrr flow-loads` finds no missing loads on four mods (on, off, Adult's Wallet start, Giant's Wallet start). On differs from off in exactly 3 files: `GameData/GameDataList.Product.110.byml.zs` (the start count), `RSDB/PouchActorInfo.Product.111.rstbl.byml.zs` and the resource size table.
+- Setting off: the seed file and every mod file are byte-identical to the nightly reference build 1e7d9943 with the same preset. The preset reaches the pouch table: the default Ice Trap step rewrites it in both builds.
 - Not played. No game test has run.
 
 ## How to test in the game
