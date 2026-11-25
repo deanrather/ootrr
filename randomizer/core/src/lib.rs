@@ -46,6 +46,7 @@ pub mod flow_locations;
 pub mod flow_extra;
 pub mod flow_sim;
 pub mod frost;
+pub mod full_wallet;
 pub mod hints;
 pub mod intro_skip;
 pub mod gift_keys;

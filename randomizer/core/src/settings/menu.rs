@@ -366,7 +366,7 @@ const LOGIC: PortSection = port(
                         "Sunlight Arrows",
                         "Light Arrows can be used to light up the sun switches instead of using the Mirror Shield. Item placement logic will respect this option, so it might be required to use this to progress.",
                     ),
-                    gray_check("Full Wallets", "Start with a full wallet. All wallet upgrades come filled with rupees."),
+                    Entry::Plain(crate::full_wallet::SETTING),
                     Entry::View(&PLANT_BEANS),
                     Entry::View(&EPONA),
                     Entry::Plain("night_skulls_suns_song"),
