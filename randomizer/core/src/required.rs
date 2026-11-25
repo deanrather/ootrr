@@ -65,6 +65,9 @@ pub const TREES: [&str; 12] = [
     "System/Resource",
 ];
 
+pub const DIFFICULTY_FILES: [&str; 2] = [crate::difficulty::lottery::FILE, crate::difficulty::elink::FILE];
+pub const DIFFICULTY_TREES: [&str; 3] = [crate::difficulty::extras::MORE_SCENES, crate::difficulty::ground::NAV_DIR, crate::difficulty::ground::STITCHED_DIR];
+
 /// Music and sound effect shuffle list and size every sound bank and stream.
 pub const SOUND: &str = "Sound/Resource";
 
@@ -90,7 +93,8 @@ pub fn unpack(d: &Data, sound: bool) -> Unpack {
     if let Ok(p) = crate::title_logo::patch() {
         files.extend(crate::title_logo::touched(&p));
     }
-    let mut trees: BS<String> = TREES.iter().map(|s| s.to_string()).collect();
+    files.extend(DIFFICULTY_FILES.iter().map(|s| s.to_string()));
+    let mut trees: BS<String> = TREES.iter().chain(DIFFICULTY_TREES.iter()).map(|s| s.to_string()).collect();
     if sound {
         trees.insert(SOUND.to_string());
     }
@@ -107,6 +111,9 @@ pub fn missing(root: &P, d: &Data) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::error::Res;
+    use crate::settings::{Kind, Settings, Value};
+    use std::path::PathBuf as PB;
 
     #[test]
     fn the_list_names_the_files_a_default_build_reads() {
@@ -138,4 +145,92 @@ mod tests {
         assert_eq!(missing(&dir, &d).len(), list(&d).len());
         let _ = std::fs::remove_dir_all(&dir);
     }
+
+    #[test]
+    fn a_package_build_unpacks_the_files_the_difficulty_settings_read() {
+        let d: Data = Data::load().unwrap();
+        let u: Unpack = unpack(&d, false);
+        for f in [crate::difficulty::lottery::FILE, crate::difficulty::elink::FILE, "AoC1/Banc/BancBasedResource/StartPos.byml.zs", "Phive/NavMesh/DodongoCavern.Nin_Ounce_NVN2.bphnm.zs", "Phive/StitchedNavMesh/HyruleField_Child/X0_Z0.Nin_Ounce_NVN2.bphnm.zs"] {
+            assert!(u.wants(f), "{f}");
+        }
+        assert!(!u.wants("Phive/Shape/x") && !u.wants("ELink2/other.zs"));
+    }
+
+    const OURS: [&str; 4] = [crate::first_pickups::SETTING, crate::area_intros::SETTING, crate::qol::blocks::SETTING, crate::qol::owl::SETTING];
+
+    fn hard() -> Settings {
+        let mut s: Settings = Settings::default();
+        for x in crate::settings::schema().settings.iter().filter(|x| x.group == "difficulty" || OURS.contains(&x.id.as_str())) {
+            let v: Value = match x.kind {
+                Kind::Toggle => Value::Bool(true),
+                Kind::Number => Value::Int(x.max),
+                Kind::Choice => Value::s(&x.choices[x.choices.len() - 1].id),
+                Kind::Multi | Kind::List => continue,
+            };
+            s.set(&x.id, v).unwrap();
+        }
+        s
+    }
+
+    fn files(root: &P) -> Vec<String> {
+        let mut out: Vec<String> = Vec::new();
+        let mut stack: Vec<PB> = vec![root.to_path_buf()];
+        while let Some(d) = stack.pop() {
+            for e in std::fs::read_dir(&d).unwrap() {
+                let p: PB = e.unwrap().path();
+                if p.is_dir() {
+                    stack.push(p);
+                } else {
+                    out.push(p.strip_prefix(root).unwrap().to_string_lossy().replace('\\', "/"));
+                }
+            }
+        }
+        out.sort();
+        out
+    }
+
+    fn at(root: &P, r: &str) -> PB {
+        r.split('/').fold(root.to_path_buf(), |a, s| a.join(s))
+    }
+
+    fn part(root: &P, u: &Unpack, to: &P) -> usize {
+        let mut n: usize = 0;
+        for r in files(root).into_iter().filter(|r| u.wants(r)) {
+            let (a, b): (PB, PB) = (at(root, &r), at(to, &r));
+            std::fs::create_dir_all(b.parent().unwrap()).unwrap();
+            if std::fs::hard_link(&a, &b).is_err() {
+                std::fs::copy(&a, &b).unwrap();
+            }
+            n += 1;
+        }
+        n
+    }
+
+    #[test]
+    fn every_difficulty_setting_builds_the_same_mod_from_the_unpack_set_alone() {
+        let root: PB = ootrr_game::test_romfs::path();
+        if !root.is_dir() {
+            eprintln!("skipped: no romfs at {}, set OOTRR_ROMFS", root.display());
+            return;
+        }
+        let d: Data = Data::load().unwrap();
+        let u: Unpack = unpack(&d, false);
+        let tmp: PB = std::env::temp_dir().join(format!("ootrr_unpack_set_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        let cut: PB = tmp.join("romfs");
+        assert!(part(&root, &u, &cut) > 0);
+        let s: Settings = hard();
+        let o: crate::difficulty::Opts = crate::difficulty::read(&s, &mut Vec::new());
+        assert!(o.regen && o.fairy_helps && o.mega_like && o.extra > crate::difficulty::horde::FROM);
+        let g: crate::slice::generate::Generated = crate::slice::generate::generate_data(&d, &s, "unpack set", &crate::slice::generate::GenOpts::default()).unwrap();
+        let full: PB = crate::slice::edit::build(&g.seed_file, &root, &tmp.join("full"), "unpack set").unwrap().root;
+        let some: Res<crate::slice::edit::Built> = crate::slice::edit::build(&g.seed_file, &cut, &tmp.join("part"), "unpack set");
+        let some: PB = some.unwrap_or_else(|e| panic!("a build from the unpack set alone failed: {e}")).root;
+        let (a, b): (Vec<String>, Vec<String>) = (files(&full), files(&some));
+        assert_eq!(a, b);
+        let differ: Vec<&String> = a.iter().filter(|r| std::fs::read(at(&full, r)).unwrap() != std::fs::read(at(&some, r)).unwrap()).collect();
+        assert!(differ.is_empty(), "differ from the folder build: {differ:?}");
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
 }
+
