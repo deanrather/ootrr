@@ -41,7 +41,7 @@
             "DMT Biggoron": "is_adult and (Claim_Check or 'Claim Check Given')",
             "DMT Trade Broken Sword": "'Prescription Access'",
             "DMT Trade Eyedrops": "
-                is_adult andf (guarantee_trade_path or adult_trade_shuffle) and
+                is_adult and (guarantee_trade_path or adult_trade_shuffle) and
                 (('Eyedrops Access' and not adult_trade_shuffle) or (Eyedrops and disable_trade_revert))",
             "DMT GS Falling Rocks Path": "is_adult and (Megaton_Hammer or logic_trail_gs_upper)",
             "DMT Gossip Stone": "True",
