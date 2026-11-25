@@ -36,6 +36,6 @@ All 19 are in rc 4 (`<builds>\rc-4\`).
 | 75 | [Return with Navi: saving after a locked room](75-navi-warp-keeps-saving.md) | `navi_return` (fix for #71, #72) | Reproduced in the game; fix not yet |
 | 77 | [Archipelago: a slot with Shopsanity builds](77-ap-shopsanity-build.md) | none (fix in `ap::patch::check`) | No, scripted command line only |
 | 60 | [Kakariko Gate open: no dungeon item handed out at new game](60-new-game-dungeon-item-fix.md) | `open_kakariko` (fix) | No, from the generator and built data only |
-| 79 | [Full Wallets](79-full-wallets.md) | `full_wallets` | No |
+| 79 | [Full Wallets](79-full-wallets.md) | `full_wallets` | Partly, by script (chest and gift) |
 
 Features 01 to 08 I built directly. Features 09 to 19 were built by sub-agents; what those files say about investigation and testing comes from the agents' reports, which I did not re-run except where noted.

@@ -26,7 +26,7 @@ pub const GIVE_KEYS: [&str; 6] = ["ContentName", "ActorName", "ReveiveItem", "Re
 pub const FLOWS: &str = "Event/EventFlow";
 pub const VANILLA: [&str; 1] = ["Event/EventFlow/GatheringTokenGold.bfevfl.zs"];
 const PREFIX: &str = "OOTRRFullWallet";
-pub const NOTE: &str = "Full Wallets: a new game starts with as many rupees as its best wallet holds, and every flow that gives Adult's or Giant's Wallet adds that wallet's capacity in rupees right after the give, which the game should cap at the new capacity. Wallets on the ground are not covered. Not yet seen in the game.";
+pub const NOTE: &str = "Full Wallets: a new game starts with as many rupees as its best wallet holds, and every flow that gives Adult's or Giant's Wallet adds that wallet's capacity in rupees right after the give, and the game caps the count at the new capacity. Wallets on the ground are not covered.";
 
 pub fn cap(actor: &str) -> Option<i32> {
     CAPS.iter().find(|(a, _)| *a == actor).map(|(_, n)| *n)
@@ -219,6 +219,22 @@ mod tests {
         let mut bf: Bf = Bf::parse(&Romfs::open(&p).unwrap().read_zs(VANILLA[0]).unwrap()).unwrap();
         bf.flows[0] = f.clone();
         assert_eq!(Bf::parse(&bf.write().unwrap()).unwrap().flows[0], f);
+    }
+
+    #[test]
+    fn the_caps_match_the_game_wallet_table() {
+        let Some(p) = real() else {
+            return;
+        };
+        let mut rf: Romfs = Romfs::open(&p).unwrap();
+        let y: crate::byml::Byml = crate::byml::Byml::parse(&rf.read_zs(crate::pickup_pack::rows::POUCH_INFO).unwrap()).unwrap();
+        for (a, n) in std::iter::once(FIRST).chain(CAPS) {
+            for id in [a.to_string(), a.replace("Item_", "Pouch_")] {
+                let r: &crate::byml::Node = crate::pickup_pack::rows::find(&y, &id).unwrap();
+                assert_eq!(r.get(crate::pickup_pack::ammo::KIND).and_then(|v| v.as_str()), Some("Rupee"), "{id}");
+                assert_eq!(r.get(crate::pickup_pack::ammo::MAX), Some(&crate::byml::Node::I32(n)), "{id}");
+            }
+        }
     }
 
     #[test]
