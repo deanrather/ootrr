@@ -11,21 +11,17 @@ use crate::zs;
 pub const MAP: &str = "Banc/HyruleField/HyruleField_Child_Dynamic.bcett.byml.zs";
 pub const BRIDGE_MAP: &str = "Banc/HyruleField/HyruleField_Child_Static.bcett.byml.zs";
 pub const BRIDGE: &str = "Land_HrlField_DrawBridge_A_01";
-pub const STEP: &str = "Obj_MovableBox_A_01";
-pub const BASE: [f32; 3] = [1.49, 1.5, 1.49];
 pub const SEED: &str = "ootrr climbable drawbridge chains";
 pub const SIDES: [f32; 2] = [-1.0, 1.0];
 pub const CHAIN_X: f32 = 3.73;
-pub const WIDTH: f32 = 1.2;
-pub const WIDE: f32 = 2.0;
-pub const WIDE_PIECES: usize = 3;
-pub const THICK: f32 = 0.5;
 pub const OVERLAP: f32 = 0.4;
-pub const PITCH_SIGN: f32 = 1.0;
+pub const NET: &str = "Obj_SpiritTemple_MoveClimbWall_B_01";
+pub const NET_SIZE: [f32; 3] = [5.48, 3.0, 0.3];
+pub const NET_WIDTH: f32 = 1.4;
 
 pub const PROFILE: [[f32; 2]; 13] = [[15.0, 0.0], [13.0, 0.15], [11.2, 0.45], [9.5, 1.12], [6.5, 2.9], [5.5, 3.6], [4.5, 4.27], [2.5, 6.0], [1.5, 7.0], [0.5, 8.1], [-0.5, 9.3], [-1.5, 10.5], [-2.4, 11.4]];
 
-pub const NOTE: &str = "In the child Hyrule Field, a narrow invisible-collision ramp (wooden planks) runs up each of the two chains of the lowered Hyrule Castle drawbridge, from the end of the bridge to the gatehouse, so Link can climb them. Only while the bridge is down (by day). The adult castle has no chains, so nothing changes there.";
+pub const NOTE: &str = "In the child Hyrule Field, a strip of the Spirit Temple's climbable wire net runs along each of the two chains of the lowered Hyrule Castle drawbridge, from the end of the bridge up to the gatehouse, so Link can climb them. Only while the bridge is down (by day). The adult castle has no chains, so nothing changes there.";
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Piece {
@@ -34,24 +30,30 @@ pub struct Piece {
     pub scale: [f32; 3],
 }
 
-pub fn pieces(origin: [f32; 3], side: f32) -> Vec<Piece> {
+pub fn nets(origin: [f32; 3], side: f32) -> Vec<Piece> {
     let mut out: Vec<Piece> = Vec::new();
-    for (k, w) in PROFILE.windows(2).enumerate() {
-        let width: f32 = if k < WIDE_PIECES { WIDE } else { WIDTH };
+    for w in PROFILE.windows(2) {
         let dz: f32 = w[1][0] - w[0][0];
         let dy: f32 = w[1][1] - w[0][1];
         let len: f32 = (dz * dz + dy * dy).sqrt();
-        let pitch: f32 = dy.abs().atan2(dz.abs());
-        let (s, c): (f32, f32) = pitch.sin_cos();
-        let mid: [f32; 2] = [(w[0][0] + w[1][0]) / 2.0, (w[0][1] + w[1][1]) / 2.0];
-        let normal: [f32; 2] = [s, c];
+        let dir: [f32; 2] = [dz / len, dy / len];
+        let pitch: f32 = dy.atan2(-dz);
+        let normal: [f32; 2] = [pitch.sin(), pitch.cos()];
+        let start: [f32; 2] = [w[0][0] - dir[0] * OVERLAP, w[0][1] - dir[1] * OVERLAP];
+        let half: f32 = NET_SIZE[2] / 2.0;
         out.push(Piece {
-            at: [origin[0] + side * CHAIN_X, origin[1] + mid[1] - normal[1] * THICK, origin[2] + mid[0] - normal[0] * THICK],
-            rot: [pitch * PITCH_SIGN, 0.0, 0.0],
-            scale: [width / BASE[0], THICK / BASE[1], (len + OVERLAP * 2.0) / BASE[2]],
+            at: [origin[0] + side * CHAIN_X, origin[1] + start[1] - normal[1] * half, origin[2] + start[0] - normal[0] * half],
+            rot: [pitch - std::f32::consts::FRAC_PI_2, 0.0, 0.0],
+            scale: [NET_WIDTH / NET_SIZE[0], (len + OVERLAP * 2.0) / NET_SIZE[1], 1.0],
         });
     }
     out
+}
+
+pub fn twin(p: &Piece) -> Piece {
+    let (sn, c): (f32, f32) = p.rot[0].sin_cos();
+    let long: f32 = p.scale[1] * NET_SIZE[1];
+    Piece { at: [p.at[0], p.at[1] + c * long, p.at[2] + sn * long], rot: [p.rot[0] + std::f32::consts::PI, 0.0, 0.0], scale: p.scale }
 }
 
 pub fn bridge(y: &Byml) -> Res<(Node, [f32; 3])> {
@@ -65,12 +67,14 @@ pub fn bridge(y: &Byml) -> Res<(Node, [f32; 3])> {
 pub fn ramp(y: &mut Byml, origin: [f32; 3], presence: &Node, raws: &[&[u8]], taken: &mut Vec<u64>) -> Res<usize> {
     let mut made: Vec<Node> = Vec::new();
     for (i, side) in SIDES.iter().enumerate() {
-        for (k, piece) in pieces(origin, *side).iter().enumerate() {
-            let h: u64 = next(raws, taken, &format!("{SEED} step {i} {k}"));
-            let mut s: Node = actor(STEP, h, piece.at, piece.rot);
-            s.set("Scale", floats(piece.scale));
-            s.set("Presence", presence.clone());
-            made.push(s);
+        for (k, piece) in nets(origin, *side).iter().enumerate() {
+            for (j, q) in [*piece, twin(piece)].iter().enumerate() {
+                let h: u64 = next(raws, taken, &format!("{SEED} net {i} {k} {j}"));
+                let mut s: Node = actor(NET, h, q.at, q.rot);
+                s.set("Scale", floats(q.scale));
+                s.set("Presence", presence.clone());
+                made.push(s);
+            }
         }
     }
     let count: usize = made.len();
@@ -138,33 +142,73 @@ mod tests {
         assert!(steepest < 60.0, "{steepest}");
     }
 
+    fn up(p: &Piece) -> [f32; 2] {
+        let (s, c): (f32, f32) = p.rot[0].sin_cos();
+        [s, c]
+    }
+
+    fn face(p: &Piece, o: [f32; 3]) -> [f32; 2] {
+        let (s, c): (f32, f32) = p.rot[0].sin_cos();
+        let n: [f32; 2] = [c, -s];
+        [p.at[2] - o[2] + n[0] * NET_SIZE[2] / 2.0, p.at[1] - o[1] + n[1] * NET_SIZE[2] / 2.0]
+    }
+
     #[test]
-    fn the_pieces_follow_the_profile_without_gaps() {
+    fn the_nets_lie_on_the_chain_line_without_gaps() {
         let o: [f32; 3] = [0.0, 150.35, 34.0];
-        let ps: Vec<Piece> = pieces(o, 1.0);
+        let ps: Vec<Piece> = nets(o, 1.0);
         assert_eq!(ps.len(), PROFILE.len() - 1);
+        let mut reach: f32 = f32::MAX;
         for (k, p) in ps.iter().enumerate() {
             let w: &[[f32; 2]] = &PROFILE[k..k + 2];
             let len: f32 = ((w[1][0] - w[0][0]).powi(2) + (w[1][1] - w[0][1]).powi(2)).sqrt();
-            assert!((p.scale[2] * BASE[2] - len - OVERLAP * 2.0).abs() < 1e-4);
-            assert!(p.rot[0] * PITCH_SIGN > 0.0 && p.rot[1] == 0.0 && p.rot[2] == 0.0);
-            let (s, c): (f32, f32) = (p.rot[0] * PITCH_SIGN).sin_cos();
-            let top: [f32; 2] = [p.at[2] - o[2] + s * THICK, p.at[1] - o[1] + c * THICK];
-            let mid: [f32; 2] = [(w[0][0] + w[1][0]) / 2.0, (w[0][1] + w[1][1]) / 2.0];
-            assert!((top[0] - mid[0]).abs() < 1e-3 && (top[1] - mid[1]).abs() < 1e-3, "piece {k}: {top:?} vs {mid:?}");
+            let long: f32 = p.scale[1] * NET_SIZE[1];
+            assert!((long - len - OVERLAP * 2.0).abs() < 1e-4);
+            let d: [f32; 2] = up(p);
+            let want: [f32; 2] = [(w[1][0] - w[0][0]) / len, (w[1][1] - w[0][1]) / len];
+            assert!((d[0] - want[0]).abs() < 1e-4 && (d[1] - want[1]).abs() < 1e-4, "piece {k}: {d:?} vs {want:?}");
+            let a: [f32; 2] = face(p, o);
+            let b: [f32; 2] = [a[0] + d[0] * long, a[1] + d[1] * long];
+            for q in w {
+                let t: f32 = (q[0] - a[0]) * d[0] + (q[1] - a[1]) * d[1];
+                let off: f32 = ((q[0] - a[0]) - d[0] * t).hypot((q[1] - a[1]) - d[1] * t);
+                assert!(off < 1e-3 && t > 0.0 && t < long, "piece {k} misses {q:?}: off {off}, t {t}");
+            }
+            assert!(a[0] > PROFILE[k][0] && (k == 0 || a[0] > reach), "piece {k} leaves a gap");
+            reach = b[0];
             assert!((p.at[0] - CHAIN_X).abs() < 1e-4);
+            assert!(p.rot[1] == 0.0 && p.rot[2] == 0.0);
+            assert!(p.scale[0] * NET_SIZE[0] >= 1.0 && p.scale[2] == 1.0);
         }
-        let left: Vec<Piece> = pieces(o, -1.0);
+        assert!(reach <= PROFILE[PROFILE.len() - 1][0]);
+        let left: Vec<Piece> = nets(o, -1.0);
         assert!(left.iter().zip(ps.iter()).all(|(l, r)| (l.at[0] + r.at[0]).abs() < 1e-4 && l.at[1] == r.at[1] && l.at[2] == r.at[2]));
     }
 
     #[test]
-    fn a_positive_pitch_about_x_lifts_the_gatehouse_end() {
-        let p: Piece = pieces([0.0, 0.0, 0.0], 1.0)[0];
-        let (s, c): (f32, f32) = p.rot[0].sin_cos();
-        let toward_gatehouse: [f32; 2] = [-c, s];
-        assert!(toward_gatehouse[0] < 0.0 && toward_gatehouse[1] > 0.0);
-        assert!(p.scale[0] * BASE[0] >= 1.0 && WIDTH >= 1.0);
+    fn each_twin_covers_the_same_strip_facing_the_other_way() {
+        for p in nets([0.0, 150.0, 34.0], 1.0) {
+            let t: Piece = twin(&p);
+            let long: f32 = p.scale[1] * NET_SIZE[1];
+            let (s, c): (f32, f32) = t.rot[0].sin_cos();
+            let back: [f32; 3] = [t.at[0], t.at[1] + c * long, t.at[2] + s * long];
+            for k in 0..3 {
+                assert!((back[k] - p.at[k]).abs() < 1e-3, "{back:?} vs {:?}", p.at);
+            }
+            assert!((t.rot[0].sin() + p.rot[0].sin()).abs() < 1e-4 && (t.rot[0].cos() + p.rot[0].cos()).abs() < 1e-4);
+        }
+    }
+
+    #[test]
+    fn the_top_net_points_up_the_chain_and_its_face_looks_up() {
+        let ps: Vec<Piece> = nets([0.0, 0.0, 0.0], 1.0);
+        for p in &ps {
+            let d: [f32; 2] = up(p);
+            assert!(d[0] < 0.0 && d[1] > 0.0);
+            assert!(-p.rot[0].sin() > 0.0);
+        }
+        let top: f32 = ps.iter().map(|p| up(p)[1].asin().to_degrees()).fold(0.0, f32::max);
+        assert!(top < 60.0, "{top}");
     }
 
     #[test]
@@ -182,9 +226,9 @@ mod tests {
         let now_d: Byml = Byml::parse(&rf.zs.decompress(&all[0].z).unwrap()).unwrap();
         let old_d: &[Node] = before_d.root.get("Actors").unwrap().as_arr().unwrap();
         let acts_d: &[Node] = now_d.root.get("Actors").unwrap().as_arr().unwrap();
-        assert_eq!(acts_d.len(), old_d.len() + SIDES.len() * (PROFILE.len() - 1));
+        assert_eq!(acts_d.len(), old_d.len() + SIDES.len() * (PROFILE.len() - 1) * 2);
         assert_eq!(&acts_d[..old_d.len()], old_d);
-        assert_eq!(count(&now_d, STEP), count(&before_d, STEP) + SIDES.len() * (PROFILE.len() - 1));
+        assert_eq!(count(&now_d, NET), count(&before_d, NET) + SIDES.len() * (PROFILE.len() - 1) * 2);
         let (presence, _): (Node, [f32; 3]) = bridge(&before).unwrap();
         assert!(acts_d[old_d.len()..].iter().all(|s| s.get("Presence") == Some(&presence)));
         let mut hashes: Vec<u64> = acts_d.iter().filter_map(hash_of).collect();
@@ -194,3 +238,4 @@ mod tests {
         assert_eq!(hashes.len(), n);
     }
 }
+

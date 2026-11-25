@@ -1,44 +1,66 @@
 # 43. Climbable drawbridge chains
 
-Setting `climbable_drawbridge_chains` (number 158), toggle, default off. Difficulty page, section "Just for fun" (next to the Spawn enemies combo). Branch `feature/drawbridge-chains`, worktree `wt\chains`, module `difficulty/chains.rs`. **Status: built and unit tested; NOT confirmed in the game. The ramp and the lightning trigger are unproven (see Tested).**
+Setting `climbable_drawbridge_chains` (number 158), toggle, default off. Difficulty page, section "Environment". Branch `feature/drawbridge-chains`, module `difficulty/chains.rs`. **Status (24 Nov): round 6 built and unit tested (climbable wire net along each chain). NOT yet seen in the game.**
 
-## What was asked (user, 21 Nov)
+## What was asked
 
-A just-for-fun feature. The Hyrule Castle Town drawbridge (the field entrance to the Market) has two big chains from the bridge up to the gatehouse. Add an invisible solid surface along each chain so players can carefully walk up it to the top. At the top they are struck by lightning and knocked into the moat. The menu says only "Climbable drawbridge chains" and the tooltip does not mention the lightning: it is a surprise for players. This document and the pull request describe exactly what the setting does, so nothing is hidden from the maintainers.
+User, 21 Nov: a just-for-fun feature. The Hyrule Castle Town drawbridge has two big chains from the bridge up to the gatehouse; make them climbable so players can carefully go up to the top. The menu says only "Climbable drawbridge chains" (a surprise). The lightning strike at the top in the first request was dropped in round 5 (a bolt created by logic never fires; see feature 39).
 
-## What the setting does (all of it)
+Refined (24 Nov): find a prop whose own pack carries climbable collision and lay it along each chain so Link climbs from the ground to the gate top; arrival must be safe (no fall into a void, a way down); game-file tests; load-safe.
 
-When the setting is on, in the child Hyrule Field map only (`HyruleField_Child`):
+## Research: which props can be climbed and are solid when placed (24 Nov)
 
-1. **Invisible ramps.** On each of the two chains of the lowered drawbridge (x = -3.73 and +3.73 from the bridge's centre line) a row of 10 invisible solid boxes (the game's `FldObj_AirWall_Player`, a box that only the player collides with, 0.9 wide and 0.5 thick) follows the chain from the end of the bridge deck up to the top of the gatehouse. Slope 27 degrees at the bottom to 50 degrees at the top, the same line as the chain links. They are narrow on purpose: a player has to keep on the chain.
-2. **Only while the bridge is down.** The boxes carry the same presence flag as the lowered bridge model (`IsHyruleFieldBridgeClose` false), so they exist only while the bridge is lowered (by day, and at night while the flag is off) and disappear when the bridge is raised.
-3. **Lightning at the top.** At the top of each chain there is a trigger box (an `Area` on the player layer) and a Phantom Ganon lightning bolt actor (`PhantomGanon_Bullet_Thunder`) wired to it through a new logic graph. When Link stands in the box, the bolt is created. The bolt hurts like the Phantom Ganon's lightning (attack power 4, one heart at normal damage), so it cannot kill from full health, and its knock-back throws Link off the chain, outward, towards the moat.
-4. **The moat.** Link lands in the water beside the bridge. The moat is deep enough to swim in; the game's own scene throws the Ocarina of Time into it.
+Added map actors get no baked collision, so only props whose own pack creates a physics body (dynamic or kinematic) are solid. Climbable means a shape with a climb material.
 
-Nothing else changes: not the bridge, its model or collision, not the gatehouse, the Market, the adult castle (the adult drawbridge is broken and has no chains, so nothing is added there), no events, flows or flags. Setting off writes nothing. Default settings string and seeds are unchanged.
+| Actor | Body | Climb material | Verdict |
+|---|---|---|---|
+| `Obj_SpiritTemple_MoveClimbWall_B_01` | kinematic (`Ptm_ObjKinematicLarge_01`), the actor's own | `Physical` polytope 5.48 x 3.0 x 0.3 (local x +-2.74, y 0 to 3, z +-0.15) with `Material_WireNet` and `Wall_Climb`; `Front`/`Left`/`Right` shapes `AirWallForClimb` | **Used.** Solid and climbable by its own data. Moved only by its logic (`ActorLogicMoveClimbWall`); with no links it stays put. |
+| `Obj_InsideTheDekuTree_FallingLadder_A_01` | kinematic, own | mesh in a `.phsh` (material not readable from the pack params) | Second choice: a ladder 2.4 wide, 5.4 high; logic makes it fall. |
+| `FldObj_AirWall_ClimbPlayer`, `Land_IvyClimbableAirWall_A_01` | static (`*_StaticBody`) | `AirWallForClimb` | Invisible and climbable, but static bodies are baked: a placed `FldObj_AirWall_*` was not solid in round 1. |
+| `Land_*_Ladder_*`, `Land_IvyClimbable_*`, `Land_SpiritTemple_ClimbWall_*` | static | in `.phsh` | Same problem as above. |
+| `Obj_MovableBox_A_01` (rounds 3 to 5) | dynamic, own | stone (no climb) | Solid and on the chain line (round 4), but a walking ramp: Link crept up at about 0.04 units per stick push mid-ramp and slid off at the foot. |
 
-## What it does not do
+The game always places the Spirit Temple net as a back-to-back pair at one spot (two `Obj_SpiritTemple_MoveClimbWall_B_01` at (13.685, 135.99, -17.5), yaw +90 and -90 degrees; the same for `_B_02`), so one panel is climbable from one face. Round 6 copies that: each strip is laid twice, facing opposite ways.
 
-- No lightning anywhere else, no lightning when the setting is off, no damage other than the single bolt at the top.
-- No change to the lowered or raised state of the bridge.
+## How it is built (round 6)
 
-## How it is built
+- Geometry from the game's own files. The lowered bridge is `Land_HrlField_DrawBridge_A_01` at (0.0, 150.35, 34.02) in `HyruleField_Child_Static`. The chain centre line is at x = +-3.73 and runs from local (z 15, y 0) on the deck to (z -2.4, y 11.4) at the gatehouse (`PROFILE`, thirteen points read from the bridge model's vertex buffer).
+- One net strip per profile segment (12 per chain), placed in `HyruleField_Child_Dynamic` like the planks before it: rotated about x by (slope - 90 degrees) so the panel's long axis runs up the chain, its upper face on the chain line (centre 0.15 below it), scaled to 1.4 wide (x 1.4 / 5.48) and to the segment length plus 0.4 at each end (y), thickness unchanged. Each strip has a twin: the same strip turned half a turn about x and started from the far end, so both faces are covered. 48 actors in all.
+- Every strip copies the `Presence` of the lowered bridge (`IsHyruleFieldBridgeClose` false): the nets exist only while the bridge is down and vanish with it.
+- Slopes: 0 to 5 degrees on the deck, 27 at the foot of the chain, 50 at the top (`PROFILE`); Link walks on the shallow part and climbs the steep part, if the game lets him climb a net at that angle (only the game can tell).
+- Arrival and the way down: the top of the chain is the gatehouse wall at 11.4 above the deck. From the net Link can climb back down it, or let go and drop beside the bridge into the moat (water) or onto the deck. There is no void near the bridge.
+- Setting text: label "Climbable drawbridge chains", tip "The drawbridge chains can be climbed. Carefully." The build report line (`Opts::notes`) says exactly what is added. Setting off: nothing is written; default settings string and seeds unchanged. The adult castle has a broken bridge and no chains: nothing changes there.
 
-Data only, nothing runtime-specific (no code patch).
+## History
 
-- Geometry from the game's own files. The lowered bridge is the actor `Land_HrlField_DrawBridge_A_01` at (0.0, 150.35, 34.02) in `HyruleField_Child_Static`. Its model `Model/Land_HrlField_DrawBridge_A.Land_HrlField_DrawBridge_A_01.bfres.zs` holds two chains as one vertex buffer of 37888 vertices; read at the model's own scale, the chain centre line is at x = +-3.73 and runs from local (z 11.2, y 0.45) at the end of the deck to (z -2.4, y 11.4) at the gatehouse, sagging a little (`PROFILE` in `chains.rs`, eleven points taken from that buffer). Map coordinates are the actor position plus the local ones.
-- The ramp pieces are `FldObj_AirWall_Player` actors (a 4 x 4 x 4 box that only the player hits, scaled and rotated by the map actor), one per segment of the profile, pitched to the segment's slope, with the top face on the chain line.
-- Each ramp piece copies the `Presence` property of the lowered bridge actor, so it appears and disappears with the bridge.
-- The top: two `Area` actors and two bolt actors, grouped in a new `AiGroups` entry whose logic module is a graph built from the gates graph (`Logic/Gimmick_ChainTop_<tag>.logic.module.ainb`): Area, player sensor, AND ("inside"), and the bolt node with `Logic_Create` and `RespawnTrigger` linked to "inside". The bolt sits 1.6 units inward of the chain so that its knock-back pushes outward.
-- Setting: `climbable_drawbridge_chains`, number 158 (152, 153, 155, 156 and 157 are taken, 154 is night lightning on its own branch), label "Climbable drawbridge chains", tooltip "The drawbridge chains can be climbed. Carefully." The tooltip is deliberately plain: the lightning is the surprise. It is described in the build report (`Opts::notes`), in this document and in the pull request.
+- Round 1 (21 Nov): invisible `FldObj_AirWall_Common_Cube`, then `FldObj_AirWall_Player` boxes: not solid when placed (no baked collision). A lightning trigger at the top was built but never fired.
+- Rounds 3 to 5 (22 to 23 Nov): scaled `Obj_MovableBox_A_01` planks in the `_Dynamic` map: solid, continuous, on the chain line within 0.25 (drop tests), vanish with the bridge, maps load. Walking up failed: slides at the foot, very slow mid-ramp. Lightning trigger dropped.
+- Round 6 (24 Nov, this build): climbable Spirit Temple wire net along each chain, doubled back to back.
 
-## Tested
+## How it was tested
 
-- `cargo test -p ootrr-core difficulty` (302) and `settings` (113) pass, plus six new tests in `chains.rs` (profile, piece geometry, names, graph audit, written files, presence copied).
-- In the game (21 Nov, one child save, noon, 3 hearts): the mod loads and Hyrule Field (child) loads; the lowered bridge and chains are there. With the first build (`FldObj_AirWall_Common_Cube`) Link walked along the chain line at deck height and was not blocked: that box does not stop the player. The `FldObj_AirWall_Player` version, and the pitch sign of the pieces, were built but not played: the test copy had to be closed because more than two game copies were running.
-- Not tested at all: climbing, the lightning at the top (note: the night lightning branch found that a bolt created from logic did not appear on cue, so this trigger may not work either), landing in the moat, swimming out.
-- The adult castle has a broken bridge and no chains, so nothing was built for it.
+`cargo test -p ootrr-core chains` (with `OOTRR_ROMFS`): the profile rises steadily and stays under 60 degrees; every net strip runs along its segment (direction within 1e-4), both segment end points lie on its upper face (within 1e-3) and inside its length, consecutive strips overlap, the strips sit on x = +-3.73 and mirror each other; each twin covers the same strip facing the other way; every face looks up; only the child field `_Dynamic` map is written, with exactly 48 new nets, all carrying the bridge's `Presence`, hashes unique, the old actors unchanged. Then `difficulty`, `settings`, `cargo test --workspace`, the default build compared byte for byte with main, and `flow-loads` (results in the MR draft).
+
+Not tested in the game yet.
 
 ## How to test it in the game
 
-Turn the setting on. As a child, by day, go to the Hyrule Field entrance of the castle town (`warp 0 151 50` is the bridge's south end), walk along the bridge edge and up a chain. Expect: the ramp holds you if you stay on the chain, you reach the gatehouse top, a green bolt strikes, you lose one heart and are thrown into the moat.
+Child, by day (bridge down), Hyrule Field. Warp to the deck end of a chain (x +-3.73, y about 152, z 47.5) and push the stick toward the castle. Expect: Link walks onto the net and, where it steepens, climbs it, up to about y 161.7 at z about 32. Then climb down, or drop into the moat. At night (bridge raised) the nets are gone. The Market and the castle load as before. A tester script and plan are kept with the playtest scratch (see `TESTING.md`).
+
+## Notes for the next feature
+
+- Solid added props must create their own body: look for `Ptm_ObjKinematic*` or `Ptm_ObjDynamic*` controller sets in the pack; `*_StaticBody` ones are baked into the map and do nothing when placed.
+- Climbable surfaces carry `Wall_Climb` or `AirWallForClimb` in their `ShapeParam` `MaterialPresets`; when the shape is a `.phsh` mesh the material is not in the params.
+- The game lays one-sided climbing nets as back-to-back pairs.
+
+## MR Drafts
+
+### Initial MR Draft
+
+**Title:** New Difficulty > Climbable drawbridge chains Feature: climb the castle drawbridge chains
+
+As a child, while the Hyrule Castle drawbridge is down, each of its two chains carries a strip of the game's own climbable wire net (the Spirit Temple's), so Link can climb from the bridge to the gatehouse. The nets vanish with the bridge at night. Default off; data edits only (48 placed actors in the child field map).
+
+For details about implementation and testing, see difficulty-mod/docs/features/43-drawbridge-chains.md.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
