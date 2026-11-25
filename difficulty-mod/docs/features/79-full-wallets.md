@@ -21,28 +21,29 @@ Not matched: SoH's child wallet (99) and Tycoon's Wallet (999) do not exist in t
 
 ## How it works
 
-1. Wallet upgrades. The pouch table `RSDB/PouchActorInfo.Product.111.rstbl.byml.zs` already marks every bomb bag, bullet bag, nut bag, stick bag and quiver with `IsItemStockMaxIfGet = true`, which fills that bag on get. No wallet row has it. With the setting on, a last build step adds `IsItemStockMaxIfGet = true` to every row whose `MaxNumGameData` is `Rupee` and whose `AfterExpansionMaxNum` is above 200. In the vanilla table that is `Item_Wallet_Medium`, `Item_Wallet_Large`, `Pouch_Wallet_Medium` and `Pouch_Wallet_Large`; in a seed it also covers the rows the build clones from them (the `Obj_Wallet_*` pickup packs, shop shelf actors). Ice-trap rows (`OOTRR_*_Cold`) are left alone. The step runs after the shop and ice-trap steps, so it reads their output; it grows the resource size table entry when the table grows.
+1. Wallet upgrades. A last build step (after the shop and Ice Trap steps, so it reads their output) goes through every event flow the mod writes, plus the Gold Skulltula reward flow `GatheringTokenGold`. After each event that gives `Item_Wallet_Medium` or `Item_Wallet_Large` (an action or sub-flow call naming the wallet in `ContentName`, `ActorName`, `ReveiveItem`, `ReceiveItem`, `TakenRewardActor` or `Actor`), it inserts `PouchSystemActor.EventTriggerIncreaseRupee` with `Value` 500 or 1000, then continues to the give's own next event. The flow has no "set to full" action, so the step adds the new capacity and relies on the game capping the count at the wallet's capacity. No message is added. Questions and display-only names (`DisplayItemActor`) are left alone, and the step skips a give that already has its rupees, so running it twice changes nothing.
 2. The starting wallet. With the setting on, the new-game save defaults set `PlayerStatus.CurrentRupee` to the capacity of the best wallet the new game holds: 200, or 500/1000 with the starting-item wallets.
+
+Give paths covered: chests (each tier's give in `Dm_SY_Treasurebox` and `Dm_SY_TreasureboxSmall` from the progressive wrap), flow rewards whose grant the build rewrites (people, Gold Skulltula rewards, other event rewards), the vanilla Kakariko Gold Skulltula rewards, and shop deals sold tier by tier (the shelf hook adds each tier with `EventTriggerAddOrRemovePouchContent`).
+Not covered: a wallet lying on the ground or in a pot (`Obj_Wallet_*` pickups, given by the pickup routine without a named give in a flow), and Archipelago grants, which come through the bridge.
 
 Logic is unchanged: placement and shop price rules count `Progressive_Wallet` items, never rupees, so the spoiler and item placement are the same with the setting on or off.
 
 Off: neither step runs, so nothing is written.
 
+## History
+
+The first version (commit ae95b3da) set `IsItemStockMaxIfGet = true` on the wallet rows of `RSDB/PouchActorInfo.Product.111.rstbl.byml.zs`, the column that fills every bag on get. Game test on that build (26 Nov, scripted: Mido's top left chest and the man on the Kakariko roof, Adult's and Giant's Wallet): the count stayed 37 -> 37 in all four, as in the off control. The game ignores the column for rupees, so it was dropped.
+
 ## Unproven (game test needed)
 
-- Whether the engine honours `IsItemStockMaxIfGet` for rupees (`MaxNumGameData = Rupee`). It does for bags. If it does not, the fallback is a flow splice after the get (`EventTriggerIncreaseRupee`, as in `progressive.rs`), planned for a second round.
-- Whether it fills to the new capacity on the second upgrade (500 to 1000).
+- That `EventTriggerIncreaseRupee` caps at the new capacity (37 + 500 should read 500, not 537), and that the counter shows the new count straight away.
 - Whether the start-module push of the vanilla wallet, which runs after the save defaults, clamps or resets the start count.
-- Archipelago grants arrive through the bridge, not the pouch add, and are not expected to fill.
 
 ## Tested
 
-- Unit tests (`cargo test -p ootrr-core full_wallet`, 3 of 3 passed with `OOTRR_ROMFS` set): only wallet rows above 200 rupees gain the column and no other column or row changes; the step is idempotent; a new game's count is 200, 500 or 1000; against the real game table the constants 200/500/1000 match `AfterExpansionMaxNum`, the bomb bag carries `IsItemStockMaxIfGet = true` as a boolean, exactly 4 rows change, and the table round-trips.
-- `cargo test -p ootrr-core settings`: 113 passed, 0 failed.
-- `cargo test --workspace` on ae95b3da with `OOTRR_ROMFS` set: 2404 passed, 0 failed.
-- Built mods (commit ae95b3da, same seed text, time savers, plando: both Progressive Wallets at "KF Midos Top Left Chest" and "Kak Man on Roof"): `ootrr flow-loads` finds no missing loads on four mods (on, off, Adult's Wallet start, Giant's Wallet start). On differs from off in exactly 3 files: `GameData/GameDataList.Product.110.byml.zs` (the start count), `RSDB/PouchActorInfo.Product.111.rstbl.byml.zs` and the resource size table.
-- Setting off: the seed file and every mod file are byte-identical to the nightly reference build 1e7d9943 with the same preset. The preset reaches the pouch table: the default Ice Trap step rewrites it in both builds.
-- Not played. No game test has run.
+- Unit tests (`cargo test -p ootrr-core full_wallet`, 4 of 4 passed with `OOTRR_ROMFS` set): only upgrade-wallet gives count (not the small wallet, not questions, not `DisplayItemActor`); in the real `GatheringTokenGold` flow exactly 2 gives get 500 and 1000, each rupee action leads to the give's old next event, every other event is unchanged, a second run changes nothing and the flow round-trips; in both real chest flows the progressive wallet wrap gets exactly 2 rupee actions; a new game's count is 200, 500 or 1000.
+- Not played. The first version's game test is under History.
 
 ## How to test in the game
 

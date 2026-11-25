@@ -1,12 +1,11 @@
 use std::fs;
 use std::path::{Path as P, PathBuf as PB};
 
-use crate::byml::{Byml, Node};
+use crate::bfevfl::flow::NONE;
+use crate::bfevfl::{Bf, Cont, Event, Flow, Kind, Val};
 use crate::error::{Error as E, Res};
 use crate::flow_locations::dict_id;
 use crate::modpack::{Host, Pack};
-use crate::pickup_pack::ammo::{KIND, MAX};
-use crate::pickup_pack::rows::{self, POUCH_INFO};
 use crate::pickup_pack::write::start;
 use crate::romfs::Romfs;
 use crate::rsizetable::{self, Rst, TABLE_PATH};
@@ -18,40 +17,65 @@ use crate::TITLE_ID;
 
 pub const SETTING: &str = "full_wallets";
 pub const NUM: u16 = 610;
-pub const FILL: &str = "IsItemStockMaxIfGet";
-pub const RUPEE: &str = "Rupee";
 pub const COUNT: &str = "PlayerStatus.CurrentRupee";
 pub const FIRST: (&str, i32) = ("Item_Wallet_Small", 200);
 pub const CAPS: [(&str, i32); 2] = [("Item_Wallet_Medium", 500), ("Item_Wallet_Large", 1000)];
-pub const NOTE: &str = "Full Wallets: a new game starts with as many rupees as its best wallet holds, and every Adult's or Giant's Wallet row of the pouch table (with its pickup, shop and reward copies) carries IsItemStockMaxIfGet, so the wallet should come filled. Not yet seen in the game.";
+pub const POUCH: &str = "PouchSystemActor";
+pub const ADD: &str = "EventTriggerIncreaseRupee";
+pub const GIVE_KEYS: [&str; 6] = ["ContentName", "ActorName", "ReveiveItem", "ReceiveItem", "TakenRewardActor", "Actor"];
+pub const FLOWS: &str = "Event/EventFlow";
+pub const VANILLA: [&str; 1] = ["Event/EventFlow/GatheringTokenGold.bfevfl.zs"];
+const PREFIX: &str = "OOTRRFullWallet";
+pub const NOTE: &str = "Full Wallets: a new game starts with as many rupees as its best wallet holds, and every flow that gives Adult's or Giant's Wallet adds that wallet's capacity in rupees right after the give, which the game should cap at the new capacity. Wallets on the ground are not covered. Not yet seen in the game.";
 
-fn num(n: &Node) -> Option<i64> {
-    match n {
-        Node::I32(v) => Some(i64::from(*v)),
-        Node::U32(v) => Some(i64::from(*v)),
-        Node::I64(v) => Some(*v),
+pub fn cap(actor: &str) -> Option<i32> {
+    CAPS.iter().find(|(a, _)| *a == actor).map(|(_, n)| *n)
+}
+
+pub fn wallet_of(k: &Kind) -> Option<i32> {
+    let c: &Cont = match k {
+        Kind::Action { params: Some(c), .. } | Kind::Sub { params: Some(c), .. } => c,
+        _ => return None,
+    };
+    c.items.iter().filter(|(key, _)| GIVE_KEYS.contains(&key.as_str())).find_map(|(_, v)| match v {
+        Val::Str(s) => cap(s),
+        _ => None,
+    })
+}
+
+fn next_of(k: &Kind) -> Option<u16> {
+    match k {
+        Kind::Action { next, .. } | Kind::Sub { next, .. } => Some(*next),
         _ => None,
     }
 }
 
-fn fake(id: &str) -> bool {
-    id.starts_with("OOTRR_") && id.ends_with("_Cold")
-}
-
-pub fn fills(r: &Node) -> bool {
-    r.get(KIND).and_then(|v| v.as_str()) == Some(RUPEE) && r.get(MAX).and_then(num).is_some_and(|n| n > i64::from(FIRST.1)) && !rows::id(r).is_some_and(fake)
-}
-
-pub fn fill_all(y: &mut Byml) -> Res<Vec<String>> {
-    let list: &mut Vec<Node> = y.root.as_arr_mut().ok_or(E::Format("actor table: the root is not a row list"))?;
-    let mut out: Vec<String> = Vec::new();
-    for r in list.iter_mut().filter(|r| fills(r)) {
-        if r.get(FILL) != Some(&Node::Bool(true)) {
-            r.set(FILL, Node::Bool(true));
-        }
-        out.push(rows::id(r).unwrap_or("").to_string());
+fn set_next(k: &mut Kind, to: u16) {
+    if let Kind::Action { next, .. } | Kind::Sub { next, .. } = k {
+        *next = to;
     }
-    Ok(out)
+}
+
+pub fn ours(f: &Flow, at: u16) -> bool {
+    at != NONE && f.events.get(usize::from(at)).is_some_and(|e| e.name.starts_with(PREFIX))
+}
+
+pub fn splice(f: &mut Flow) -> Res<usize> {
+    let hits: Vec<(usize, i32)> = f.events.iter().enumerate().filter_map(|(i, e)| wallet_of(&e.kind).map(|n| (i, n))).collect();
+    let mut n: usize = 0;
+    for (i, amount) in hits {
+        let then: u16 = next_of(&f.events[i].kind).ok_or(E::Format("full wallets: a wallet give has no next event"))?;
+        if ours(f, then) {
+            continue;
+        }
+        let (a, x): (u16, u16) = crate::start_state::slot(f, POUCH, ADD)?;
+        let at: u16 = u16::try_from(f.events.len()).map_err(|_| E::Format("full wallets: the flow has too many events"))?;
+        let c: Cont = Cont { items: vec![("Value".to_string(), Val::Int(amount))] };
+        f.events.push(Event { name: format!("{PREFIX}{at}"), kind: Kind::Action { next: then, actor: a, act: x, params: Some(c) } });
+        set_next(&mut f.events[i].kind, at);
+        n += 1;
+    }
+    Ok(n)
 }
 
 pub fn start_cap(k: &Kit) -> i32 {
@@ -62,6 +86,22 @@ pub fn start_sets(k: &Kit) -> Vec<Set> {
     vec![Set::Int(COUNT.to_string(), start_cap(k))]
 }
 
+fn flow_files(base: &P) -> Res<Vec<String>> {
+    let mut out: Vec<String> = VANILLA.iter().map(|s| s.to_string()).collect();
+    let dir: PB = FLOWS.split('/').fold(base.to_path_buf(), |a, s| a.join(s));
+    if dir.is_dir() {
+        for e in fs::read_dir(&dir)? {
+            let name: String = e?.file_name().to_string_lossy().to_string();
+            if name.ends_with(".bfevfl.zs") {
+                out.push(format!("{FLOWS}/{name}"));
+            }
+        }
+    }
+    out.sort();
+    out.dedup();
+    Ok(out)
+}
+
 pub fn after(on: bool, romfs: &P, load: &P, mod_name: &str, host: Host, mut b: Built) -> Res<Built> {
     if !on {
         return Ok(b);
@@ -70,73 +110,69 @@ pub fn after(on: bool, romfs: &P, load: &P, mod_name: &str, host: Host, mut b: B
     let base: PB = b.root.join("romfs");
     let own: PB = base.join(TABLE_PATH);
     let mut rst: Rst = if own.is_file() { Rst::parse(&rf.zs.decompress(&fs::read(&own)?)?)? } else { rsizetable::load(&mut rf)? };
-    let modded: bool = POUCH_INFO.split('/').fold(base.clone(), |a, s| a.join(s)).is_file();
-    let first: Vec<u8> = start(&mut rf, Some(&base), POUCH_INFO)?;
-    let old: usize = if modded { first.len() } else { rf.read_zs(POUCH_INFO)?.len() };
-    let mut y: Byml = Byml::parse(&first)?;
-    let filled: Vec<String> = fill_all(&mut y)?;
-    if filled.is_empty() {
-        return Err(E::Msg(format!("full wallets: {POUCH_INFO} has no wallet row above {} rupees", FIRST.1)));
-    }
-    let raw: Vec<u8> = y.write()?;
     let pk: Pack = Pack::create_for(load, TITLE_ID, mod_name, host)?;
     if pk.root != b.root {
-        return Err(E::Msg(format!("the wallet table went to {} and not to the seed mod {}", pk.root.display(), b.root.display())));
+        return Err(E::Msg(format!("the wallet flows went to {} and not to the seed mod {}", pk.root.display(), b.root.display())));
     }
-    pk.write_romfs(POUCH_INFO, &zs::compress_raw(&raw, dict_id(&rf.read(POUCH_INFO)?))?)?;
-    if raw.len() > old {
-        rst.grow(POUCH_INFO, old as u64, raw.len() as u64, MARGIN)?;
-        pk.write_romfs(TABLE_PATH, &rst.to_zs()?)?;
+    let mut lines: Vec<String> = Vec::new();
+    for path in flow_files(&base)? {
+        let modded: bool = path.split('/').fold(base.clone(), |a, s| a.join(s)).is_file();
+        let first: Vec<u8> = start(&mut rf, Some(&base), &path)?;
+        let mut bf: Bf = Bf::parse(&first)?;
+        let mut n: usize = 0;
+        for f in bf.flows.iter_mut() {
+            n += splice(f)?;
+        }
+        if n == 0 {
+            continue;
+        }
+        let raw: Vec<u8> = bf.write()?;
+        let old: usize = if modded { first.len() } else { rf.read_zs(&path)?.len() };
+        pk.write_romfs(&path, &zs::compress_raw(&raw, dict_id(&rf.read(&path)?))?)?;
+        if raw.len() > old {
+            rst.grow(&path, old as u64, raw.len() as u64, MARGIN)?;
+        }
+        lines.push(format!("{path} ({n})"));
+        b.counts.files += usize::from(!modded);
     }
-    b.counts.files += 1;
-    b.report.push_str(&format!("Full Wallets: {} wallet rows fill on get ({})\n", filled.len(), filled.join(", ")));
+    pk.write_romfs(TABLE_PATH, &rst.to_zs()?)?;
+    b.report.push_str(&format!("Full Wallets: rupees added after {} wallet gives: {}\n", lines.len(), lines.join(", ")));
     Ok(b)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::pickup_pack::rows::find;
-    use crate::pickup_pack::rows::tests::{row, table};
 
-    fn s(x: &str) -> Node {
-        Node::Str(x.to_string())
+    fn flow(p: &P) -> Flow {
+        let raw: Vec<u8> = Romfs::open(p).unwrap().read_zs(VANILLA[0]).unwrap();
+        Bf::parse(&raw).unwrap().flows.remove(0)
     }
 
-    fn wallet(id: &str, n: i32) -> Node {
-        row(id, &[(KIND, s(RUPEE)), (MAX, Node::I32(n))])
+    fn real() -> Option<PB> {
+        let p: PB = ootrr_game::test_romfs::path();
+        if p.join("Pack").join("ZsDic.pack.zs").is_file() {
+            Some(p)
+        } else {
+            eprintln!("skipped, no RomFS dump at {} (set OOTRR_ROMFS)", p.display());
+            None
+        }
     }
 
-    fn sample() -> Byml {
-        table(vec![
-            row("Item_BombBag_Small", &[(KIND, s("Bomb")), (MAX, Node::I32(20)), (FILL, Node::Bool(true))]),
-            wallet("Item_Wallet_Large", 1000),
-            wallet("Item_Wallet_Medium", 500),
-            wallet("Item_Wallet_Small", 200),
-            wallet("OOTRR_Item_Wallet_Large_Cold", 1000),
-            wallet("Obj_Wallet_Medium", 500),
-            row("Obj_Rupee_Green", &[("BundleActorNum", Node::I32(1))]),
-            wallet("Pouch_Wallet_Small", 200),
-        ])
+    fn sub(key: &str, v: &str, next: u16) -> Kind {
+        Kind::Sub { next, params: Some(Cont { items: vec![(key.to_string(), Val::Str(v.to_string()))] }), flow: String::new(), entry: "Success_".to_string() }
     }
 
     #[test]
-    fn only_wallets_above_the_first_one_fill_and_nothing_else_changes() {
-        let was: Byml = sample();
-        let mut y: Byml = was.clone();
-        let got: Vec<String> = fill_all(&mut y).unwrap();
-        assert_eq!(got, vec!["Item_Wallet_Large", "Item_Wallet_Medium", "Obj_Wallet_Medium"]);
-        for id in &got {
-            let mut want: Node = find(&was, id).unwrap().clone();
-            want.set(FILL, Node::Bool(true));
-            assert_eq!(find(&y, id), Some(&want), "{id}");
-        }
-        for id in ["Item_BombBag_Small", "Item_Wallet_Small", "OOTRR_Item_Wallet_Large_Cold", "Obj_Rupee_Green", "Pouch_Wallet_Small"] {
-            assert_eq!(find(&y, id), find(&was, id), "{id}");
-        }
-        let again: Byml = y.clone();
-        assert_eq!(fill_all(&mut y).unwrap(), got);
-        assert_eq!(y, again);
+    fn only_upgrade_wallet_gives_count() {
+        assert_eq!(wallet_of(&sub("ContentName", "Item_Wallet_Medium", NONE)), Some(500));
+        assert_eq!(wallet_of(&sub("TakenRewardActor", "Item_Wallet_Large", 3)), Some(1000));
+        assert_eq!(wallet_of(&sub("ContentName", "Item_Wallet_Small", NONE)), None);
+        assert_eq!(wallet_of(&sub("DisplayItemActor", "Item_Wallet_Large", NONE)), None);
+        assert_eq!(wallet_of(&sub("ContentName", "Item_Hookshot", NONE)), None);
+        let q: Kind = Kind::Switch { actor: 0, query: 0, cases: Vec::new(), params: Some(Cont { items: vec![("ActorName".to_string(), Val::Str("Item_Wallet_Medium".to_string()))] }) };
+        assert_eq!(wallet_of(&q), None);
+        assert_eq!(cap(FIRST.0), None);
     }
 
     #[test]
@@ -150,41 +186,55 @@ mod tests {
         assert!(NUM >= 600);
     }
 
-    fn real() -> Option<PB> {
-        let p: PB = ootrr_game::test_romfs::path();
-        if p.join("Pack").join("ZsDic.pack.zs").is_file() {
-            Some(p)
-        } else {
-            eprintln!("skipped, no RomFS dump at {} (set OOTRR_ROMFS)", p.display());
-            None
+    #[test]
+    fn each_gold_skulltula_wallet_reward_adds_its_capacity_once_and_keeps_its_path() {
+        let Some(p) = real() else {
+            return;
+        };
+        let was: Flow = flow(&p);
+        let mut f: Flow = was.clone();
+        let gives: Vec<(usize, i32, u16)> = was.events.iter().enumerate().filter_map(|(i, e)| wallet_of(&e.kind).map(|n| (i, n, next_of(&e.kind).unwrap()))).collect();
+        assert_eq!(gives.iter().map(|g| g.1).collect::<Vec<i32>>(), vec![500, 1000], "{gives:?}");
+        assert_eq!(splice(&mut f).unwrap(), 2);
+        assert_eq!(f.events.len(), was.events.len() + 2);
+        for (i, n, then) in &gives {
+            let to: u16 = next_of(&f.events[*i].kind).unwrap();
+            assert!(ours(&f, to));
+            let Kind::Action { next, actor, act, params } = &f.events[usize::from(to)].kind else {
+                panic!("not an action");
+            };
+            assert_eq!(*next, *then);
+            assert_eq!(f.actors[usize::from(*actor)].name, POUCH);
+            assert_eq!(f.actors[usize::from(*actor)].actions[usize::from(*act)], ADD);
+            assert_eq!(params.as_ref().unwrap().items, vec![("Value".to_string(), Val::Int(*n))]);
         }
+        for (i, e) in was.events.iter().enumerate() {
+            if !gives.iter().any(|g| g.0 == i) {
+                assert_eq!(&f.events[i], e, "event {i}");
+            }
+        }
+        let again: Flow = f.clone();
+        assert_eq!(splice(&mut f).unwrap(), 0);
+        assert_eq!(f, again);
+        let mut bf: Bf = Bf::parse(&Romfs::open(&p).unwrap().read_zs(VANILLA[0]).unwrap()).unwrap();
+        bf.flows[0] = f.clone();
+        assert_eq!(Bf::parse(&bf.write().unwrap()).unwrap().flows[0], f);
     }
 
     #[test]
-    fn the_game_wallets_match_the_caps_and_fill_like_the_bags() {
+    fn the_chest_flows_give_each_tier_and_get_their_rupees() {
         let Some(p) = real() else {
             return;
         };
         let mut rf: Romfs = Romfs::open(&p).unwrap();
-        let was: Byml = Byml::parse(&rf.read_zs(POUCH_INFO).unwrap()).unwrap();
-        for (a, n) in std::iter::once(FIRST).chain(CAPS) {
-            for id in [a.to_string(), a.replace("Item_", "Pouch_")] {
-                let r: &Node = find(&was, &id).unwrap();
-                assert_eq!(r.get(KIND).and_then(|v| v.as_str()), Some(RUPEE), "{id}");
-                assert_eq!(r.get(MAX).and_then(num), Some(i64::from(n)), "{id}");
-                assert_eq!(r.get(FILL), None, "{id}");
-            }
+        for path in [crate::progressive::SMALL_FLOW, crate::progressive::BIG_FLOW] {
+            let mut bf: Bf = Bf::parse(&rf.read_zs(path).unwrap()).unwrap();
+            let f: &mut Flow = bf.flows.first_mut().unwrap();
+            assert_eq!(splice(f).unwrap(), 0, "{path} gives no wallet before the progressive wrap");
+            crate::progressive::wrap(f, "Wallet").unwrap();
+            assert_eq!(splice(f).unwrap(), 2, "{path}");
+            let back: Bf = Bf::parse(&bf.write().unwrap()).unwrap();
+            assert_eq!(back.flows[0].events.iter().filter(|e| e.name.starts_with(PREFIX)).count(), 2);
         }
-        assert_eq!(find(&was, "Item_BombBag_Small").unwrap().get(FILL), Some(&Node::Bool(true)));
-        let mut y: Byml = was.clone();
-        let got: Vec<String> = fill_all(&mut y).unwrap();
-        assert_eq!(got, vec!["Item_Wallet_Large", "Item_Wallet_Medium", "Pouch_Wallet_Large", "Pouch_Wallet_Medium"]);
-        let back: Byml = Byml::parse(&y.write().unwrap()).unwrap();
-        assert_eq!(back, y);
-        let all: &[Node] = was.root.as_arr().unwrap();
-        let now: &[Node] = back.root.as_arr().unwrap();
-        assert_eq!(all.len(), now.len());
-        let changed: usize = all.iter().zip(now).filter(|(a, b)| a != b).count();
-        assert_eq!(changed, 4);
     }
 }

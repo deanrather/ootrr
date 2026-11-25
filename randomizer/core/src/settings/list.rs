@@ -470,7 +470,6 @@ pub fn build() -> Schema {
         Setting::toggle(crate::first_pickups::NUM, crate::first_pickups::SETTING, "world", "Skip first pickup text", false)
             .tip("No \"You got X!\" box the first time you pick up a rupee, a heart, a magic jar, arrows, Deku seeds, a Deku Nut, a Deku Stick, a bomb or a bombchu. Chests and real items still show theirs."),
     );
-    s.push(Setting::toggle(crate::full_wallet::NUM, crate::full_wallet::SETTING, "world", "Full Wallets", false).tip("Start with a full wallet. All wallet upgrades come filled with rupees."));
     s.push(
         Setting::toggle(crate::area_intros::NUM, crate::area_intros::SETTING, "world", "Skip area intros", false)
             .tip("The short scene that shows off an area the first time you enter it is skipped."),
@@ -774,6 +773,7 @@ pub fn build() -> Schema {
     s.push(starting_items());
     s.push(starting_songs());
     s.extend(difficulty());
+    s.push(Setting::toggle(crate::full_wallet::NUM, crate::full_wallet::SETTING, "world", "Full Wallets", false).tip("Start with a full wallet. All wallet upgrades come filled with rupees."));
     s.sort_by_key(|x| x.num);
     Schema {
         version: SCHEMA_VERSION,
