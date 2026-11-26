@@ -72,6 +72,7 @@ Players reported that the castle sneaking area and Lon Lon Ranch kept their own 
 
 1. `moves` keys each wanted track by `SLinkUserName`. Where an event has the user's own name, its keys win over another event that shares the user.
 2. On a shared block, the caller the track is named after decides: the user whose name equals the key, else the user whose name is the longest `_` prefix of it. With no such caller, the callers still have to agree. The file keeps its size.
+3. Events that share a user which no event is named after (`BGM_LonLonRanch_Child` and `_Adult`) trade as one single track, so both ages hear the same new one. The child theme is built from layers and some of its calls are the adult's too, so it no longer trades as a layer set.
 
 ### Tracks that now move
 
@@ -173,7 +174,8 @@ wanted the same track.
 
 ## Change
 
-moves() keys by SLinkUserName. On a shared block the user the track is
+moves() keys by SLinkUserName, and the two Lon Lon events trade as one
+track. On a shared block the user the track is
 named after decides. Calls sharing its block follow it. Ganon's theme
 stays with grouped, as the only layered boss theme. A cosmetic seed now
 gives different grouped and anywhere music. The off and none choices and

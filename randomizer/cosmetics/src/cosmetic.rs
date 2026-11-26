@@ -139,13 +139,32 @@ fn events(y: &Byml, have: &dyn Fn(&str) -> bool) -> Vec<(String, String, Kind)> 
     let Some(Node::Map(all)) = y.root.get("BGM") else {
         return out;
     };
+    let one: BM<String, String> = one_track(all, have);
     for (name, e) in all {
-        let (Some(k), Some(key)) = (kind(name), asset_key(e, have)) else {
+        let (Some(k), Some(key)) = (kind(name), one.get(name).cloned().or_else(|| asset_key(e, have))) else {
             continue;
         };
         if have(&key) {
             out.push((name.clone(), key, k));
         }
+    }
+    out
+}
+
+fn one_track(all: &[(String, Node)], have: &dyn Fn(&str) -> bool) -> BM<String, String> {
+    let mut by: BM<&str, Vec<(&str, &Node)>> = BM::new();
+    for (name, e) in all.iter().filter(|(name, _)| kind(name).is_some()) {
+        by.entry(user(name, e)).or_default().push((name, e));
+    }
+    let mut out: BM<String, String> = BM::new();
+    for (shared, events) in by {
+        if events.len() < 2 || events.iter().any(|x| x.0 == shared) {
+            continue;
+        }
+        let Some(key) = events.iter().flat_map(|x| node_keys(x.1)).filter(|k| !side(k) && have(k)).min() else {
+            continue;
+        };
+        out.extend(events.iter().map(|x| (x.0.to_string(), key.to_string())));
     }
     out
 }
@@ -171,7 +190,8 @@ fn layered(y: &Byml, have: &dyn Fn(&str) -> bool) -> Vec<(String, Vec<String>, K
     let Some(Node::Map(all)) = y.root.get("BGM") else {
         return out;
     };
-    for (name, e) in all {
+    let one: BM<String, String> = one_track(all, have);
+    for (name, e) in all.iter().filter(|(name, _)| !one.contains_key(name)) {
         if let (Some(k), Some(set)) = (kind(name), stems(e, have)) {
             out.push((name.clone(), set, k));
         }
@@ -640,6 +660,7 @@ mod tests {
                 calls.entry(at).or_insert_with(|| (user.to_string(), BS::new())).1.insert(name.clone());
             }
         }
+        let ranch: u32 = crate::rsizetable::hash("BGM_LonLonRanch");
         for m in [Music::Grouped, Music::Anywhere] {
             let mut moved: BS<(u32, String)> = BS::new();
             for i in 0..60 {
@@ -647,6 +668,11 @@ mod tests {
                 shuffle_music(&mut y, m, &format!("move {i}"), &have);
                 let mut raw: Vec<u8> = vanilla.clone();
                 link.retarget(&mut raw, &moves(&old, &y)).unwrap();
+                let heard: BS<String> = link.calls.iter().filter(|c| c.user == ranch && calls.contains_key(&(c.user, c.key.clone()))).map(|c| {
+                    let now: String = link.asset(&raw, c).unwrap();
+                    if now == c.key { "its own".to_string() } else { now }
+                }).collect();
+                assert_eq!(heard.len(), 1, "{} seed {i}: {heard:?}", m.id());
                 for c in &link.calls {
                     if link.asset(&raw, c) != link.asset(&vanilla, c) {
                         moved.insert((c.user, c.key.clone()));
@@ -684,6 +710,22 @@ mod tests {
         let want: BM<(String, String), String> = moves(&table_of(["day", "night", "town", "town"]), &table_of(["x", "y", "pond", "town"]));
         let expect: BM<(String, String), String> = [("day", "x"), ("night", "y")].iter().map(|(k, n)| (("BGM_Ranch".to_string(), k.to_string()), n.to_string())).collect();
         assert_eq!(want, expect);
+    }
+
+    #[test]
+    fn events_with_a_user_and_no_owner_trade_as_one_track() {
+        let aliased = |name: &str, nodes: (String, Node)| -> (String, Node) {
+            let mut e: Node = nodes.1;
+            if let Node::Map(m) = &mut e {
+                m.push(("SLinkUserName".to_string(), Node::Str("BGM_Ranch".to_string())));
+            }
+            (name.to_string(), e)
+        };
+        let all: Vec<(String, Node)> = vec![aliased("BGM_Ranch_Adult", ev("a", "adult_1")), aliased("BGM_Ranch_Child", layered_ev("c", &["child_1", "child_2"]))];
+        let y: Byml = Byml { root: Node::Map(vec![("BGM".to_string(), Node::Map(all))]), version: 7, big: false };
+        let ev: Vec<(String, String, Kind)> = events(&y, &|_| true);
+        assert_eq!(ev.iter().map(|x| x.1.as_str()).collect::<Vec<_>>(), vec!["adult_1", "adult_1"]);
+        assert!(layered(&y, &|_| true).is_empty());
     }
 
     fn layered_ev(name: &str, keys: &[&str]) -> (String, Node) {
