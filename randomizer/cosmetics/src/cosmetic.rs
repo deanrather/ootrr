@@ -8,6 +8,7 @@ use crate::error::{Error as E, Res};
 use crate::rng::Rng;
 use crate::romfs::Romfs;
 use crate::sfx::{self, Sfx};
+use crate::silence;
 use crate::slink::{Link, SLINK};
 use crate::zs;
 
@@ -29,6 +30,7 @@ pub enum Music {
     Off,
     Grouped,
     Anywhere,
+    Silent,
 }
 
 impl Music {
@@ -37,6 +39,7 @@ impl Music {
             "off" => Some(Music::Off),
             "grouped" => Some(Music::Grouped),
             "anywhere" => Some(Music::Anywhere),
+            "none" => Some(Music::Silent),
             _ => None,
         }
     }
@@ -46,7 +49,12 @@ impl Music {
             Music::Off => "off",
             Music::Grouped => "grouped",
             Music::Anywhere => "anywhere",
+            Music::Silent => "none",
         }
+    }
+
+    pub fn shuffles(self) -> bool {
+        matches!(self, Music::Grouped | Music::Anywhere)
     }
 }
 
@@ -78,7 +86,7 @@ impl Cosmetics {
             None => matches!(self.colors, Colors::Random | Colors::Shared),
             Some(p) => *p == colors::Pick::Random && self.colors != Colors::Off,
         };
-        self.music != Music::Off || self.sfx != Sfx::Off || colors::ITEMS.iter().any(drawn)
+        self.music.shuffles() || self.sfx != Sfx::Off || colors::ITEMS.iter().any(drawn)
     }
 }
 
@@ -286,7 +294,7 @@ fn rewrite(y: &mut Byml, to: &BM<String, (String, String)>) -> usize {
 }
 
 pub fn shuffle_music(y: &mut Byml, m: Music, seed: &str, have: &dyn Fn(&str) -> bool) -> usize {
-    if m == Music::Off {
+    if !m.shuffles() {
         return 0;
     }
     let ev: Vec<(String, String, Kind)> = events(y, have);
@@ -350,6 +358,9 @@ fn apply_music(mod_root: &P, romfs: &P, c: &Cosmetics, text: &str) -> Res<Vec<St
         return Ok(notes);
     }
     let mut rf: Romfs = Romfs::open(romfs)?;
+    if c.music == Music::Silent {
+        return silence::apply(mod_root, &mut rf, &JINGLES);
+    }
     let old: Byml = rf.read_byml(BGM_FILE)?;
     let mut y: Byml = old.clone();
     let top: PB = rf.root.join(STREAM);
@@ -450,6 +461,8 @@ mod tests {
         let mut c: Byml = table(&ROWS);
         assert_eq!(shuffle_music(&mut c, Music::Off, "same", &|_| true), 0);
         assert_eq!(c, table(&ROWS));
+        assert_eq!(shuffle_music(&mut c, Music::Silent, "same", &|_| true), 0);
+        assert_eq!(c, table(&ROWS));
     }
 
     #[test]
@@ -503,10 +516,12 @@ mod tests {
 
     #[test]
     fn the_modes_parse_and_round_trip_their_ids() {
-        for m in [Music::Off, Music::Grouped, Music::Anywhere] {
+        for m in [Music::Off, Music::Grouped, Music::Anywhere, Music::Silent] {
             assert_eq!(Music::parse(m.id()), Some(m));
         }
         assert_eq!(Music::parse("loud"), None);
+        let quiet: Cosmetics = Cosmetics { music: Music::Silent, ..Cosmetics::default() };
+        assert!(quiet.any() && !quiet.rolls());
         assert!(!Cosmetics::default().any());
         let mut c: Cosmetics = Cosmetics::default();
         c.parts.insert("boots".into(), colors::Pick::Rgb([1, 2, 3]));

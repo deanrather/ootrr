@@ -6,6 +6,7 @@ use crate::rsizetable::hash;
 pub const SLINK: &str = "SLink2/slink2.Product.111.bslnk.zs";
 const CALL: usize = 0x30;
 const TEXT: u8 = 1;
+const GROUP: usize = 2;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Call {
@@ -102,6 +103,35 @@ impl Link {
     pub fn asset(&self, b: &[u8], c: &Call) -> Option<String> {
         let v: u32 = u32_at(b, c.block + 8)?;
         ((v >> 24) as u8 == TEXT).then(|| text(b, self.nt + (v & 0xFF_FFFF) as usize).map(|s| s.to_string()))?
+    }
+
+    fn group_word(&self, b: &[u8], c: &Call) -> Option<usize> {
+        let mask: u64 = u64_at(b, c.block)? as u64;
+        (mask & 1 == 1 && mask >> GROUP & 1 == 1).then(|| c.block + 8 + 4 * (mask & ((1 << GROUP) - 1)).count_ones() as usize)
+    }
+
+    pub fn group(&self, b: &[u8], c: &Call) -> Option<String> {
+        let v: u32 = u32_at(b, self.group_word(b, c)?)?;
+        ((v >> 24) as u8 == TEXT).then(|| text(b, self.nt + (v & 0xFF_FFFF) as usize).map(|s| s.to_string()))?
+    }
+
+    pub fn regroup(&self, b: &mut [u8], from: &str, to: &str, pick: &dyn Fn(&str) -> bool) -> Res<usize> {
+        let mut by_word: BM<usize, bool> = BM::new();
+        for c in &self.calls {
+            let Some(w) = self.group_word(b, c) else {
+                continue;
+            };
+            let wanted: bool = self.group(b, c).as_deref() == Some(from) && self.asset(b, c).is_some_and(|a| pick(&a));
+            *by_word.entry(w).or_insert(true) &= wanted;
+        }
+        let r: u32 = *self.names.get(to).ok_or(E::Format("slink2: the new sound group has no name in the file"))?;
+        let mut n: usize = 0;
+        for (w, _) in by_word.into_iter().filter(|x| x.1) {
+            let v: u32 = ((TEXT as u32) << 24) | r;
+            b.get_mut(w..w + 4).ok_or(E::Format("slink2: a parameter leaves the file"))?.copy_from_slice(&v.to_le_bytes());
+            n += 1;
+        }
+        Ok(n)
     }
 
     pub fn calls_of(&self, user: &str) -> Vec<&Call> {

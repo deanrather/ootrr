@@ -76,7 +76,7 @@ pub fn build(jobs: &Arc<Jobs>, b: &Json) -> Hr<Json> {
         if let Some(s) = pl.source.step() {
             c.begin(s);
         }
-        let game: Prepared = match game_source::prepare(&pl.source, cos.music != Music::Off || cos.sfx != Sfx::Off) {
+        let game: Prepared = match game_source::prepare(&pl.source, cos.music.shuffles() || cos.sfx != Sfx::Off) {
             Ok(g) => g,
             Err(e) => return fail(c, &e),
         };

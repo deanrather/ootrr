@@ -15,5 +15,6 @@ macro_rules! parts {
 pub mod colors;
 pub mod cosmetic;
 pub mod sfx;
+pub mod silence;
 pub mod slink;
 pub mod title_logo;
