@@ -98,11 +98,15 @@ enum Kind {
     Jingle,
 }
 
+pub fn is_jingle(name: &str) -> bool {
+    JINGLES.contains(&name) || ["Jingle", "ItemGet", "HeartGet", "ReadRiddle"].iter().any(|w| name.contains(w))
+}
+
 fn kind(name: &str) -> Option<Kind> {
     if name.starts_with("BGM_Dm_") {
         return None;
     }
-    if JINGLES.contains(&name) || ["Jingle", "ItemGet", "HeartGet", "ReadRiddle"].iter().any(|w| name.contains(w)) {
+    if is_jingle(name) {
         return Some(Kind::Jingle);
     }
     if name.starts_with("BGM_DungeonBoss") || name == "BGM_MiddleBoss" {
@@ -389,7 +393,7 @@ fn apply_music(mod_root: &P, romfs: &P, c: &Cosmetics, text: &str) -> Res<Vec<St
     }
     let mut rf: Romfs = Romfs::open(romfs)?;
     if c.music == Music::Silent {
-        return silence::apply(mod_root, &mut rf, &JINGLES);
+        return silence::apply(mod_root, &mut rf);
     }
     let old: Byml = rf.read_byml(BGM_FILE)?;
     let mut y: Byml = old.clone();

@@ -2,6 +2,7 @@ use std::fs;
 use std::path::{Path as P, PathBuf as PB};
 
 use crate::byml::{Byml, Node};
+use crate::cosmetic::is_jingle;
 use crate::error::{Error as E, Res};
 use crate::romfs::Romfs;
 use crate::rsizetable::{self, Rst};
@@ -14,8 +15,8 @@ pub const SCENE: &str = "DemoBgmDefault";
 const AREA: &str = "BgmDefault";
 const MARGIN: u32 = 0x400;
 
-pub fn is_scene_music(asset: &str, jingles: &[&str]) -> bool {
-    asset.starts_with("BGM_") && !jingles.contains(&asset)
+pub fn is_scene_music(asset: &str) -> bool {
+    asset.starts_with("BGM_") && !is_jingle(asset)
 }
 
 pub fn mute(y: &mut Byml) -> Res<()> {
@@ -37,11 +38,11 @@ fn put(mod_root: &P, rel: &str, data: &[u8]) -> Res<()> {
     Ok(())
 }
 
-pub fn apply(mod_root: &P, rf: &mut Romfs, jingles: &[&str]) -> Res<Vec<String>> {
+pub fn apply(mod_root: &P, rf: &mut Romfs) -> Res<Vec<String>> {
     let z: Vec<u8> = rf.read(SLINK)?;
     let mut raw: Vec<u8> = rf.zs.decompress(&z)?;
     let link: Link = Link::read(&raw)?;
-    let moved: usize = link.regroup(&mut raw, SCENE, AREA, &|a| is_scene_music(a, jingles))?;
+    let moved: usize = link.regroup(&mut raw, SCENE, AREA, &is_scene_music)?;
     if moved == 0 {
         return Err(E::Format("music: no scene track could be moved to the silent group"));
     }
@@ -97,10 +98,11 @@ mod tests {
 
     #[test]
     fn scene_music_is_a_bgm_track_that_is_not_a_jingle() {
-        let j: [&str; 1] = ["BGM_SleepInBed"];
-        assert!(is_scene_music("BGM_Shop_Desert", &j));
-        assert!(!is_scene_music("BGM_SleepInBed", &j));
-        assert!(!is_scene_music("ExampleMelody_SunSong", &j));
+        assert!(is_scene_music("BGM_Shop_Desert"));
+        assert!(is_scene_music("BGM_MiniGameOutro"));
+        assert!(!is_scene_music("BGM_SleepInBed"));
+        assert!(!is_scene_music("BGM_Dm_TimeTemple_0030_Jingle"));
+        assert!(!is_scene_music("ExampleMelody_SunSong"));
     }
 
     fn calls(link: &Link, raw: &[u8]) -> BM<(u32, String), (String, String)> {
@@ -114,28 +116,28 @@ mod tests {
         };
         let out: PB = std::env::temp_dir().join(format!("ootrr_silence_{}", std::process::id()));
         let _ = fs::remove_dir_all(&out);
-        let jingles: [&str; 3] = ["BGM_ItemGet_FromZelda", "BGM_SleepInBed", "BGM_SleepInBedToEnemyMuseum"];
         let mut rf: Romfs = Romfs::open(&root).unwrap();
-        apply(&out, &mut rf, &jingles).unwrap();
+        apply(&out, &mut rf).unwrap();
         let read = |rf: &mut Romfs, rel: &str| -> Vec<u8> { rf.zs.decompress(&fs::read(out.join("romfs").join(rel)).unwrap()).unwrap() };
 
         let was: Vec<u8> = rf.read_zs(SLINK).unwrap();
         let now: Vec<u8> = read(&mut rf, SLINK);
         assert_eq!(was.len(), now.len());
-        let before = calls(&Link::read(&was).unwrap(), &was);
-        let after = calls(&Link::read(&now).unwrap(), &now);
+        let before: BM<(u32, String), (String, String)> = calls(&Link::read(&was).unwrap(), &was);
+        let after: BM<(u32, String), (String, String)> = calls(&Link::read(&now).unwrap(), &now);
         assert_eq!(before.len(), after.len());
         let mut moved: usize = 0;
         for (k, (asset, group)) in &after {
-            let (a, g) = &before[k];
+            let (a, g): &(String, String) = &before[k];
             assert_eq!(a, asset);
             if g != group {
-                assert!(g == SCENE && group == AREA && is_scene_music(asset, &jingles), "{asset} {g} {group}");
+                assert!(g == SCENE && group == AREA && is_scene_music(asset), "{asset} {g} {group}");
                 moved += 1;
             }
             if asset.starts_with("BGM_") {
-                let kept: bool = group == "FanfareDefault" || group == "BgmActorPlaying" || (group == SCENE && jingles.contains(&asset.as_str()));
+                let kept: bool = group == "FanfareDefault" || group == "BgmActorPlaying" || (group == SCENE && is_jingle(asset));
                 assert!(QUIET.contains(&group.as_str()) || kept, "{asset} stays audible in {group}");
+                assert!(!(is_jingle(asset) && QUIET.contains(&group.as_str())), "{asset} is a jingle and is silenced");
             } else {
                 assert!(!QUIET.contains(&group.as_str()), "{asset} would be silenced in {group}");
             }

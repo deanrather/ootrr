@@ -13,7 +13,8 @@ The drop-down is **Music shuffle** on the Cosmetics page. It gains **No Music** 
 Choices made where the request does not say (each is a short change to reverse):
 
 - Cutscene music tracks (`BGM_Dm_`) are silenced too.
-- Fanfares and jingles are still heard: item, heart, medal and Spiritual Stone fanfares, the riddle chimes, game over, sleeping in a bed.
+- Fanfares and jingles are still heard: item, heart, medal and Spiritual Stone fanfares, the riddle chimes, game over, sleeping in a bed, and the Temple of Time cutscene jingle (`BGM_Dm_TimeTemple_0030_Jingle`). `cosmetic::is_jingle` is the one list, shared with the shuffle.
+- `BGM_MiniGameOutro` is silenced. It is the closing bars of the minigame theme (about 4 seconds, in the theme's own event and in the background music group), not a fanfare. Not heard.
 - Characters who perform are still heard (Malon singing), as are the ocarina, song example melodies, sound effects, voices and ambient sound.
 
 ## Decisions
@@ -28,7 +29,7 @@ The shuffle choices point each music call in `SLink2/slink2.Product.111.bslnk` a
 Every `BGM_` call names a sound group, and `Sound/Group/GroupSetting.Product.111.byml` gives each group a volume.
 
 1. `GroupParam/<group>/Default/Volume` becomes 0 for `BgmDefault`, `BgmEndReverb`, `BgmEnemyBattle` and `BgmInsideWorld`. These four groups hold only `BGM_` tracks.
-2. 46 music calls (cutscene tracks, the Wasteland carpet merchant and Business Scrub shop themes) are in `DemoBgmDefault`, a group that also holds song melodies and cutscene sounds. Their group name changes to `BgmDefault`, in place. The three jingles in that group (`BGM_ItemGet_FromZelda`, `BGM_SleepInBed`, `BGM_SleepInBedToEnemyMuseum`) stay.
+2. 45 music calls are in `DemoBgmDefault`, a group that also holds song melodies and cutscene sounds. Their group name changes to `BgmDefault`, in place. They are cutscene tracks (`BGM_Dm_`), the Wasteland carpet merchant (`BGM_Shop_Desert`) and Business Scrub (`BGM_Shop_ScrubBusiness`) themes, the Song of Time lesson's `BGM_ShrineOfTime_Child` and the owl's `BGM_Kaepora` and `BGM_Kaepora_Outro`. The jingles in that group (`BGM_ItemGet_FromZelda`, `BGM_SleepInBed`, `BGM_SleepInBedToEnemyMuseum`, `BGM_Dm_TimeTemple_0030_Jingle`) stay.
 3. The group file grows by 576 bytes (its groups no longer share one block), so its size table entry grows too.
 
 The mod gets three changed files: the sound link, the group file and the size table. No code patch.
@@ -83,14 +84,15 @@ Lon Lon Ranch (child and adult, which get the same new track), the castle ground
 
 A shared block holds one track, so these play whatever the deciding user got:
 
-| Follows | Deciding user |
-|---|---|
-| `BGM_SurfaceFair`, its `BGM_HyruleGarden` layer and shared Deku Tree layers | `BGM_HyruleGarden`, `BGM_InsideTheDekuTree` |
-| `BGM_WindmillHouse_Child`, its adult track | `BGM_WindmillHouse_Adult` |
-| `BGM_DungeonBoss_Volvagia`, its Dinosaur track | `BGM_DungeonBoss_Dinasour` |
-| `BGM_EnemyMuseum` and `BGM_Common_DekuTree` | `BGM_InsideTheDekuTree` |
+| Follows | Shared call | Deciding user |
+|---|---|---|
+| `BGM_SurfaceFair`, one layer | `BGM_HyruleGarden` | `BGM_HyruleGarden` |
+| `BGM_WindmillHouse_Child`, its adult track | `BGM_WindmillHouse_Adult` | `BGM_WindmillHouse_Adult` |
+| `BGM_DungeonBoss_Volvagia`, its Dinosaur track | `BGM_DungeonBoss_Dinasour` | `BGM_DungeonBoss_Dinasour` |
+| `BGM_DungeonBoss_KotakeKoume` | `BGM_DungeonBoss` | `BGM_DungeonBoss` |
+| `BGM_EnemyMuseum` and `BGM_Common_DekuTree` | the Deku Tree low and melody tracks | `BGM_InsideTheDekuTree` |
 
-So one layer of a layered theme can come from a different set than its other layers. Not heard.
+`BGM_SurfaceFair`'s other layers have their own calls and are shuffled apart from the Deku Tree. So one layer of that theme can come from a different set than the others. Not heard.
 
 ### Left unchanged on purpose
 
@@ -105,7 +107,7 @@ A cosmetic seed now gives different `grouped` and `anywhere` music than before. 
 ## Tested
 
 - Unit tests: the four groups are muted and the others are not, a missing group is refused, `none` parses and does not use the cosmetic seed, the web request accepts `none`.
-- Game-file test (`silence::the_real_files_leave_no_music_call_in_an_audible_music_group`): after the edit every `BGM_` call is in a muted group or is a fanfare, a kept jingle or a performer, no other sound is in a muted group, 46 calls change group and nothing else in the sound link changes.
+- Game-file test (`silence::the_real_files_leave_no_music_call_in_an_audible_music_group`): after the edit every `BGM_` call is in a muted group or is a fanfare, a kept jingle or a performer, no other sound is in a muted group, 45 calls change group and nothing else in the sound link changes.
 - `cargo test --workspace` with the game files: 2431 passed, 0 failed, 13 ignored.
 - Same seed, nightly `240af8b` against this change, Longshot host, one cosmetic seed: the mods with music `off` (283 files), `grouped` and `anywhere` (284 files) are byte-identical, and so is the seed file.
 - A `none` mod differs from an `off` mod in three files only, and `flow-loads` finds nothing missing.
