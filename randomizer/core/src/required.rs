@@ -96,6 +96,7 @@ pub fn unpack(d: &Data, sound: bool) -> Unpack {
     files.insert(crate::song_models::tex_file(crate::song_models::ALBEDO));
     files.insert(crate::difficulty::elink::FILE.to_string());
     files.insert(crate::open_world::trade_shuffle::POUCH_UI.to_string());
+    files.insert(crate::full_wallet::navi::FILE.to_string());
     if let Ok(p) = crate::title_logo::patch() {
         files.extend(crate::title_logo::touched(&p));
     }
