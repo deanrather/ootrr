@@ -79,15 +79,28 @@ The user played commit 19989b10, which also turned the Navi remark off, on 26 No
 
 - Chest (Mido's house): PASS. "mido's chest gave me a giant wallet and filled it and was perfect."
 
-Every other source is not yet played.
+Every other source is not yet played by hand.
+
+## Scripted game test (commit 02d4f5c2)
+
+26 Nov, 11 of 12 planned tests run, rupees set to 5 before each get. The test was partial: its own faults left the chest scenes without screenshots.
+
+| Source | Setting | Rupees | Counter seen in screenshots | Navi's "Your wallet is stuffed." |
+|---|---|---|---|---|
+| Person's gift (Adult's, Giant's) | on | 5 -> 500, 5 -> 1000 | yes | not seen |
+| Ground pickup | on | 5 -> 500 | yes, counting up | seen after the get |
+| Gold Skulltula reward | on | 5 -> 500 | yes | not seen |
+| Chest (Adult's, Giant's) | on | 5 -> 500, 5 -> 1000 | not tested | seen after the get |
+| Person's gift, ground pickup, chest | off | stays 5 | ground: none; gift and chest: not judged | not seen |
+
+No text other than the normal get boxes and the Navi remark was seen. A video of the Giant's Wallet chest with the setting on, made afterwards, shows the "You got a giant's wallet!" box, then the counter going from 5 to 1000, then the Navi remark. The Gold Skulltula reward with the setting off was not run.
 
 ## Unproven (game test needed)
 
-- The counter popup: whether `EventOpenRupeeDisplay` inside a chest, gift or pickup scene draws the same counter as a ground rupee, and whether it counts up visibly. The user's chest verdict (see Hands-on) does not name the counter.
-- The name check: that `UI_MessageTargetActorName` holds a wallet name at the pickup flows' add. The scripted tests read the count, so a miss shows as no fill.
+- The counter popup in a chest scene with the setting off, and in a person's gift scene with the setting off (no counter is expected).
 - The scrub sale and the shop: that the shop fill shows on the shop's open counter. Not played.
+- The Great Fairy and a pot: not played.
 - The starting wallet with and without "Adult's Wallet" or "Giant's Wallet": not played (see "The starting wallet").
-- The Navi remark after a wallet fill: whether it shows is not played.
 - Archipelago: covered offline only (the mailbox gives through `GetInEvent_NotTurn_NotNpc`); no Archipelago build was made.
 
 ## Tested
@@ -138,7 +151,7 @@ The setting was a stub. The pouch table column that fills bags on get (`IsItemSt
 - `cargo test --workspace`: 2421 passed, 0 failed, with 9 `full_wallet` tests among them.
 - Setting off: the seed file and every mod file are byte-identical to nightly 2746d256 with three presets (chest and person plando, shop deals and freestanding plando, pot and Gold Skulltula reward plando).
 - On: `ootrr flow-loads` finds no missing loads on 9 mods with the setting on.
-- Game: the chest give was played by hand on an earlier version of this change and filled the wallet. The shop, person, pickup, pot, scrub, reward and new-game gives are not yet played.
+- Game: a chest give played by hand on an earlier version filled the wallet. Scripted on this code: a person's gift, a ground pickup and the Gold Skulltula reward filled the wallet with the counter on screen, and a chest filled it. The shop, scrub, Great Fairy, pot and new-game gives are not yet played.
 
 Setting number 610.
 
