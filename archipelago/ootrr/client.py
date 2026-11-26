@@ -12,7 +12,7 @@ from NetUtils import ClientStatus
 
 from .tables import GAME, LOCATION_NAME_TO_ID, bundle
 
-ITEM_GET_FLAG = "HavePlayedGetEvent."
+ITEM_FLAGS = ("HavePlayedGetEvent.", "IsGet_SmallKey_GerudoFortress.")
 
 ITEMS_HANDLING = 0b101
 PENDING = "OOTRR.AP.Pending"
@@ -154,9 +154,14 @@ class OOTRRContext(CommonContext):
                 raw = {n: (list(v[0]), list(v[1])) for n, v in sd["detect"].items()}
             else:
                 raw = bundle(sd.get("preset", "default")).detect
+            uses: Dict[str, int] = {}
+            for f, k in raw.values():
+                for x in set(f) | set(k):
+                    uses[x] = uses.get(x, 0) + 1
             self.detect = {}
             for n, (f, k) in raw.items():
-                f = [x for x in f if not x.startswith(ITEM_GET_FLAG)]
+                f = [x for x in f if not x.startswith(ITEM_FLAGS) and uses[x] == 1]
+                k = [x for x in k if uses[x] == 1]
                 if f or k:
                     self.detect[n] = (f, k)
             self.status = "Connected. Waiting for the game."

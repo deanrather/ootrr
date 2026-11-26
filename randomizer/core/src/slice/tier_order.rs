@@ -69,6 +69,37 @@ pub fn fixed_spot(d: &Data, loc: &str) -> bool {
         || d.cat.by_name(loc).is_some_and(|l| crate::slice::pickups::is_world(l) || l.kind == "bossheart")
 }
 
+/// How an upgrade of family `f` placed at `loc` is handed out: through the tier wrapper
+/// (`Flow`, the next tier at run time) or as one fixed tier, which the seed's reach order must
+/// then put in the right order. `placed` is every location the seed fills.
+pub fn give_of(d: &Data, placed: &BM<String, String>, loc: &str, item: &str, f: &str) -> Give {
+    give_and_wrap(d, placed, loc, item, f).0
+}
+
+/// [`give_of`], and whether the spot puts the family's tier wrapper in use.
+fn give_and_wrap(d: &Data, placed: &BM<String, String>, loc: &str, item: &str, f: &str) -> (Give, bool) {
+    // A shelf deal of an upgrade names and gives the next tier at run time (shelf::hook), like
+    // a chest chain.
+    let shelf: bool = crate::shops::is_loc(loc) && crate::shops::jobs::tiered_family(d, item).is_some();
+    if shelf {
+        if covered(d, placed, f) { (Give::Flow, true) } else { (Give::Open, false) }
+    } else if fixed_spot(d, loc) || (crate::slice::flow_rules::priced_sale(d, loc) && !crate::scrubs_a::home(d, loc, item)) {
+        (Give::Open, false)
+    } else if is_sale(d, loc) {
+        if crate::scrubs_a::home(d, loc, item) {
+            (native(d, f, loc), false)
+        } else if d.flow_ok(loc) && covered(d, placed, f) {
+            (Give::Flow, true)
+        } else {
+            (Give::Open, false)
+        }
+    } else if covered(d, placed, f) {
+        (Give::Flow, true)
+    } else {
+        (Give::Open, false)
+    }
+}
+
 pub fn slots(d: &Data, placed: &BM<String, String>) -> Vec<Slot> {
     let mut out: Vec<Slot> = Vec::new();
     let mut used: BS<&'static str> = BS::new();
@@ -76,33 +107,10 @@ pub fn slots(d: &Data, placed: &BM<String, String>) -> Vec<Slot> {
         let Some(f) = d.family(item) else {
             continue;
         };
-        // A shelf deal of an upgrade names and gives the next tier at run time (shelf::hook), like
-        // a chest chain.
-        let shelf: bool = crate::shops::is_loc(loc) && crate::shops::jobs::tiered_family(d, item).is_some();
-        let give: Give = if shelf {
-            if covered(d, placed, f) {
-                used.insert(f);
-                Give::Flow
-            } else {
-                Give::Open
-            }
-        } else if fixed_spot(d, loc) || (crate::slice::flow_rules::priced_sale(d, loc) && !crate::scrubs_a::home(d, loc, item)) {
-            Give::Open
-        } else if is_sale(d, loc) {
-            if crate::scrubs_a::home(d, loc, item) {
-                native(d, f, loc)
-            } else if d.flow_ok(loc) && covered(d, placed, f) {
-                used.insert(f);
-                Give::Flow
-            } else {
-                Give::Open
-            }
-        } else if covered(d, placed, f) {
+        let (give, wraps): (Give, bool) = give_and_wrap(d, placed, loc, item, f);
+        if wraps {
             used.insert(f);
-            Give::Flow
-        } else {
-            Give::Open
-        };
+        }
         out.push(Slot { loc: loc.clone(), item: item.clone(), family: f, give });
     }
     for (f, _) in FAMILIES.iter().copied() {

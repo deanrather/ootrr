@@ -192,6 +192,7 @@ class OOTRRWorld(World):
                 continue
             self.get_location(loc).place_locked_item(self.create_item(item))
             pool.remove(item)
+        self.plando(pool, forced)
         local_dungeon = {n for n, m in self.b.meta.items() if m.get("local") and m.get("dungeon")}
         for n in pool:
             it: Item = self.create_item(n)
@@ -199,6 +200,21 @@ class OOTRRWorld(World):
                 self.pre_items.append(it)
             else:
                 self.multiworld.itempool.append(it)
+
+    def plando(self, pool: List[str], forced: Dict[str, str]) -> None:
+        who: str = self.player_name
+        for loc, item in dict(self.options.ootrr_plando.value or {}).items():
+            loc, item = str(loc).strip(), str(item).strip()
+            if loc not in self.b.free_names or loc in self.dead or loc in forced:
+                raise ValueError(f"OOTRR: {who}'s plandomizer names {loc!r}, which these settings do not shuffle")
+            if item not in pool:
+                raise ValueError(f"OOTRR: {who}'s plandomizer puts {item!r} at {loc!r}, but {item!r} is not in {who}'s item pool, or every copy of it is already placed")
+            spot: Location = self.get_location(loc)
+            it: Item = self.create_item(item)
+            if not spot.item_rule(it):
+                raise ValueError(f"OOTRR: {who}'s plandomizer puts {item!r} at {loc!r}, which OOTRR does not allow there")
+            spot.place_locked_item(it)
+            pool.remove(item)
 
     def get_pre_fill_items(self) -> List[Item]:
         return list(self.pre_items)
@@ -225,6 +241,21 @@ class OOTRRWorld(World):
             return
         self.random.shuffle(spots)
         mine: List[Item] = [it for it in self.multiworld.itempool if it.player == self.player and not it.advancement]
+        kinds: Dict[str, Item] = {}
+        for it in mine:
+            kinds.setdefault(it.name, it)
+        picky: List[Location] = [l for l in spots if not any(l.item_rule(x) for x in kinds.values())]
+        if picky:
+            fit: List[Item] = [it for it in self.multiworld.itempool if it.player == self.player and it.advancement and any(l.item_rule(it) for l in picky)]
+            self.random.shuffle(fit)
+            skip: Set[int] = {id(x) for x in fit}
+            self.multiworld.itempool = [it for it in self.multiworld.itempool if id(it) not in skip]
+            fill_restrictive(self.multiworld, self.own_state(skip), picky, fit, single_player_placement=True, lock=True, allow_partial=True, allow_excluded=True, name="OOTRR reward spots")
+            self.multiworld.itempool.extend(fit)
+            left: List[str] = [l.name for l in picky if l.item is None]
+            if left:
+                raise ValueError(f"OOTRR: {self.player_name}'s {', '.join(left)} take only some of {self.player_name}'s own items, and none of them fit there")
+            spots = [l for l in spots if l.item is None]
         need: int = len(spots) - len(mine)
         if need > 0:
             prog: List[Item] = [it for it in self.multiworld.itempool if it.player == self.player and it.advancement]

@@ -110,6 +110,18 @@ pub struct Place {
 pub fn plan(b: &Json) -> Hr<Plan> {
     let seed: SeedFile = SeedFile::parse(body::text(b, "seed_text")?)?;
     let pl: Place = place(b)?;
+    let cos: Cosmetics = cosmetics(b)?;
+    let spoiler: Option<String> = match body::opt_text(b, "spoiler_text")? {
+        None | Some("") => None,
+        Some(t) if t.len() > SPOILER_MAX => return Err(refuse("Spoiler: the spoiler log is too large.")),
+        Some(t) => Some(t.to_string()),
+    };
+    Ok(Plan { seed, load: pl.load, name: pl.name, target: pl.target, host: pl.host, cos, spoiler, source: pl.source, with_update: pl.with_update, delete_others: pl.delete_others })
+}
+
+/// The cosmetic choices of a build request: music, sound effects, colours and the title line.
+/// Shared by seed builds and Archipelago builds.
+pub fn cosmetics(b: &Json) -> Hr<Cosmetics> {
     let music: Music = match body::opt_text(b, "music")? {
         None | Some("") => Music::Off,
         Some(s) => Music::parse(s).ok_or_else(|| refuse("Music: use off, grouped or anywhere."))?,
@@ -139,13 +151,7 @@ pub fn plan(b: &Json) -> Hr<Plan> {
         }
     }
     let parts: colors::Picks = colors::parse_picks(&pairs).map_err(|e| refuse(&format!("Colours: {e}")))?;
-    let cos: Cosmetics = Cosmetics { music, sfx, colors, seed: seed_text, title, parts };
-    let spoiler: Option<String> = match body::opt_text(b, "spoiler_text")? {
-        None | Some("") => None,
-        Some(t) if t.len() > SPOILER_MAX => return Err(refuse("Spoiler: the spoiler log is too large.")),
-        Some(t) => Some(t.to_string()),
-    };
-    Ok(Plan { seed, load: pl.load, name: pl.name, target: pl.target, host: pl.host, cos, spoiler, source: pl.source, with_update: pl.with_update, delete_others: pl.delete_others })
+    Ok(Cosmetics { music, sfx, colors, seed: seed_text, title, parts })
 }
 
 pub fn place(b: &Json) -> Hr<Place> {

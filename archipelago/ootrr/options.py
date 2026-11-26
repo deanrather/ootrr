@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from Options import Choice, FreeText, PerGameCommonOptions
+from Options import Choice, FreeText, OptionDict, PerGameCommonOptions
 
 from .tables import presets
 
@@ -25,7 +25,16 @@ class SettingsString(FreeText):
     default = ""
 
 
+class OOTRRPlando(OptionDict):
+    """The OOTRR app's Plandomizer: puts one of your own items at one of your own locations, as location: item.
+
+    The OOTRR app writes it into the player file. It works whatever the host's plando setting is."""
+    display_name = "OOTRR plandomizer"
+    default = {}
+
+
 @dataclass
 class OOTRROptions(PerGameCommonOptions):
     preset: Preset
     settings_string: SettingsString
+    ootrr_plando: OOTRRPlando

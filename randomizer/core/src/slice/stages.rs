@@ -26,7 +26,7 @@ pub struct Ctx<'a> {
 
 pub type Stage = fn(&mut Romfs, &Ctx, &mut Vec<Out>) -> Res<()>;
 
-pub const STAGES: [(&str, Stage); 27] = [
+pub const STAGES: [(&str, Stage); 28] = [
     ("boss heart chests", boss_hearts),
     ("songs", songs),
     ("song models", song_models),
@@ -44,6 +44,7 @@ pub const STAGES: [(&str, Stage); 27] = [
     ("master sword pedestal", pedestal),
     ("bombchu alley", bombchu),
     ("water temple gate", water_gate),
+    ("lake hylia tree wall", lake_tree_wall),
     ("medallion gate", medal_gate),
     ("fire temple gorons", fire_gorons),
     ("start reward and flags", start_reward),
@@ -159,6 +160,10 @@ fn bombchu(rf: &mut Romfs, c: &Ctx, more: &mut Vec<Out>) -> Res<()> {
 
 fn water_gate(rf: &mut Romfs, c: &Ctx, more: &mut Vec<Out>) -> Res<()> {
     crate::water_gate::stage(rf, more, c.work)
+}
+
+fn lake_tree_wall(rf: &mut Romfs, c: &Ctx, more: &mut Vec<Out>) -> Res<()> {
+    crate::lake_tree_wall::stage(rf, more, c.work)
 }
 
 fn pedestal(rf: &mut Romfs, c: &Ctx, more: &mut Vec<Out>) -> Res<()> {

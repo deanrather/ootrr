@@ -768,7 +768,7 @@ pub const MENU: &[Page] = &[
         id: "tweaks",
         label: "Tweaks",
         heading: GAMEPLAY,
-        sections: &[sec("Time of day", &["time_always_passes", "early_beds"]), sec("Link and Navi", &["navi_return", "bunny_hood"])],
+        sections: &[sec("Time of day", &["time_always_passes", "early_beds"]), sec("Link and Navi", &["navi_return", "bunny_hood", "disable_low_health_warnings"])],
     },
     Page { id: "hints", label: "Hints", heading: GAMEPLAY, sections: &[sec("Hints", &["gossip_hints", "chests_match_contents", "misc_hints", "scrub_hint_text"])] },
     Page {

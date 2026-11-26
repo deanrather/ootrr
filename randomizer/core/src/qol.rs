@@ -5,6 +5,7 @@ pub mod dampe_dig;
 pub mod dampe_race;
 pub mod fishing;
 pub mod gear_cycle;
+pub mod low_health;
 pub mod night_skulls;
 pub mod scarecrow;
 pub mod skull_kid_session;
@@ -57,13 +58,14 @@ pub struct Opts {
     pub one_race: bool,
     pub first_dig: bool,
     pub gear_cycle: bool,
+    pub low_health: bool,
 }
 
 pub type Have<'a> = &'a dyn Fn(&str) -> Option<Vec<u8>>;
 
 impl Opts {
     pub fn any(&self) -> bool {
-        self.skip != Skip::Off || self.anju || self.poe || self.navi != navi_return::Mode::Off || self.bunny != bunny::Mode::Off || self.big_chests || self.blocks || self.owls
+        self.skip != Skip::Off || self.anju || self.poe || self.navi != navi_return::Mode::Off || self.bunny != bunny::Mode::Off || self.big_chests || self.blocks || self.owls || self.low_health
     }
 
     pub fn logic(&self) -> Vec<(&'static str, &'static str)> {
@@ -142,6 +144,9 @@ impl Opts {
         if self.gear_cycle {
             out.push(gear_cycle::NOTE.to_string());
         }
+        if self.low_health {
+            out.push(low_health::NOTE.to_string());
+        }
         out
     }
 
@@ -183,6 +188,7 @@ pub fn read(s: &Settings, bad: &mut Vec<String>) -> Opts {
     let one_race: bool = true;
     let first_dig: bool = true;
     let gear_cycle: bool = true;
+    let low_health: bool = flag(low_health::SETTING);
     let navi: navi_return::Mode = match s.text(NAVI) {
         Ok("off") => navi_return::Mode::Off,
         Ok("dungeons") => navi_return::Mode::Dungeons,
@@ -209,7 +215,7 @@ pub fn read(s: &Settings, bad: &mut Vec<String>) -> Opts {
             bunny::Mode::Off
         }
     };
-    Opts { skip, anju, poe, navi, bunny, big_chests, blocks, owls, suns_skulls, any_fish, free_scarecrow, skip_escape, fast_session, one_race, first_dig, gear_cycle }
+    Opts { skip, anju, poe, navi, bunny, big_chests, blocks, owls, suns_skulls, any_fish, free_scarecrow, skip_escape, fast_session, one_race, first_dig, gear_cycle, low_health }
 }
 
 pub fn settings() -> Vec<crate::settings::Setting> {
@@ -221,6 +227,8 @@ pub fn settings() -> Vec<crate::settings::Setting> {
             .tip("Start with Scarecrow's Song and an instant scarecrow: take out the Ocarina at one of Pierre's spots and he appears there, with no song to record or play. The logic counts the song as known, like the OoTR option of the same name. Tested in the game."),
         Setting::toggle(tower_escape::NUM, tower_escape::SETTING, "goal", "Skip the tower escape", false)
             .tip("After Ganondorf falls, Link goes straight to the field below the collapsing tower and the Ganon fight, with no escape run down the tower, so the logic no longer needs the Longshot to finish. Without this, the logic needs the Longshot for the escape. Tested in the game."),
+        Setting::toggle(low_health::NUM, low_health::SETTING, "world", "Disable low-health warnings", false)
+            .tip("Suppress the low-health beep, Link's critical-health pose and expression, flashing hearts, and the red pulse on Link. Health and damage are unchanged. The red pulse change still needs playtesting."),
     ]
 }
 
@@ -285,6 +293,12 @@ pub fn stage(rf: &mut Romfs, o: &Opts, have: Have) -> Res<Vec<Out>> {
         // On top of the Bunny Hood edit when that option changed the same packs.
         for (file, _) in bunny::PACKS {
             stack(rf, &mut outs, have, file, gear_cycle::patch_boots_hop)?;
+        }
+    }
+    if o.low_health {
+        outs.extend(low_health::stage(rf, have)?);
+        for file in low_health::PACKS {
+            stack(rf, &mut outs, have, file, low_health::pulse_pack)?;
         }
     }
     Ok(outs)

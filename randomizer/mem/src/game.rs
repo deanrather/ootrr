@@ -1,6 +1,6 @@
 use ootrr_core::error::{Error as E, Res};
 
-use crate::win::{pids, Proc, Region, COMMIT, FREE};
+use crate::win::{open_hint, pids, Proc, Region, COMMIT, FREE};
 
 pub const EXE: &str = "longshot.exe";
 const MOD0: [u8; 16] = [0x4d, 0x4f, 0x44, 0x30, 0x54, 0x67, 0x03, 0x01, 0x24, 0xfb, 0x0f, 0x01, 0x6c, 0x34, 0x25, 0x01];
@@ -102,15 +102,20 @@ impl Game {
         if ids.is_empty() {
             return Err(E::Msg("game not running".to_string()));
         }
-        for pid in ids {
+        let mut opened: bool = false;
+        for pid in ids.iter().copied() {
             let Some(p): Option<Proc> = Proc::open(pid) else {
                 continue;
             };
+            opened = true;
             for a in arenas(&p) {
                 if let Some(m) = main_base(&p, a) {
                     return Ok(Game { p, arena: a, main: m });
                 }
             }
+        }
+        if !opened {
+            return Err(E::Msg(open_hint(ids[0])));
         }
         Err(E::Msg("the game is starting, its memory is not ready yet".to_string()))
     }

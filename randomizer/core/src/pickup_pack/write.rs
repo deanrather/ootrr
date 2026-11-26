@@ -836,10 +836,10 @@ mod tests {
             return;
         };
         let d: Done = run(&root, P::new("unused"), "unused", &hookshot(), &opts(vec![SPOT])).unwrap();
-        assert_eq!(d.files[0].raw.len(), 36132);
-        assert_eq!(crate::murmur::murmur3_32(&d.files[0].raw, 0), 0x63dc446d);
-        assert_eq!(d.files[0].z.len(), 36145);
-        assert_eq!(crate::murmur::murmur3_32(&d.files[0].z, 0), 0x48e36fa4);
+        assert_eq!(d.files[0].raw.len(), 36204);
+        assert_eq!(crate::murmur::murmur3_32(&d.files[0].raw, 0), 0x2176058b);
+        assert_eq!(d.files[0].z.len(), 36217);
+        assert_eq!(crate::murmur::murmur3_32(&d.files[0].z, 0), 0xdfe549f9);
         assert_eq!(d.files.len(), 5);
         assert!(d.kept.is_empty());
         assert!(!d.report.contains("layer:"));

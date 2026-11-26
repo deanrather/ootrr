@@ -14,6 +14,10 @@ pub fn pids(_name: &str) -> Vec<u32> {
     Vec::new()
 }
 
+pub fn open_hint(_pid: u32) -> String {
+    "reading the game's memory is not supported on this system yet".to_string()
+}
+
 pub struct Proc {
     pub pid: u32,
 }

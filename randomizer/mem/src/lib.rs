@@ -1,10 +1,14 @@
 pub mod game;
 pub mod gdm;
 pub mod reader;
+pub mod procmaps;
 pub mod snap;
 #[cfg(windows)]
 pub mod win;
-#[cfg(not(windows))]
+#[cfg(target_os = "linux")]
+#[path = "linux.rs"]
+pub mod win;
+#[cfg(not(any(windows, target_os = "linux")))]
 #[path = "nowin.rs"]
 pub mod win;
 

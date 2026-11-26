@@ -7,6 +7,8 @@ use std::sync::{Arc, Mutex};
 use ootrr_core::ap::build::{self as ap_build, Summary};
 use ootrr_core::ap::patch::Patch;
 use ootrr_core::ap::{export, world};
+use ootrr_core::cosmetic::{self, Cosmetics, Music};
+use ootrr_core::sfx::Sfx;
 use ootrr_core::json::Json;
 use ootrr_core::settings::Settings;
 use ootrr_core::slice::data::Data;
@@ -57,14 +59,15 @@ fn note(s: &Summary) -> String {
     )
 }
 
-/// `POST /api/ap/build {patch_text, game_dir, update_dir, include_update, mod_dir, mod_name, host, delete_others, title_logo}`.
+/// `POST /api/ap/build {patch_text, game_dir, update_dir, include_update, mod_dir, mod_name, host, delete_others, title_logo, music, sfx, colors, color_parts, cosmetic_seed}`.
 pub fn build(jobs: &Arc<Jobs>, b: &Json) -> Hr<Json> {
     let p: Patch = patch_of(b)?;
     let pl: Place = api_build::place(b)?;
     if jobs.running() > 0 || ap_build::running() {
         return Err(Fail::new(409, "Another build is running. Wait for it to finish, then build again."));
     }
-    let title: bool = b.get("title_logo").and_then(|x| x.as_bool()) != Some(false);
+    let cos: Cosmetics = api_build::cosmetics(b)?;
+    let title: bool = cos.title;
     let target: String = pathsafe::text(&pl.target);
     let n: usize = p.placements.len();
     let id: u64 = jobs.start(move |c: &Ctl| {
@@ -73,7 +76,7 @@ pub fn build(jobs: &Arc<Jobs>, b: &Json) -> Hr<Json> {
         if let Some(s) = pl.source.step() {
             c.begin(s);
         }
-        let game: Prepared = match game_source::prepare(&pl.source, false) {
+        let game: Prepared = match game_source::prepare(&pl.source, cos.music != Music::Off || cos.sfx != Sfx::Off) {
             Ok(g) => g,
             Err(e) => return fail(c, &e),
         };
@@ -95,6 +98,17 @@ pub fn build(jobs: &Arc<Jobs>, b: &Json) -> Hr<Json> {
         if title {
             c.begin("Draw the Randomizer line under the title logo");
             match ootrr_core::title_logo::apply(&built.root, &romfs) {
+                Ok(notes) => {
+                    for n in notes {
+                        built.report.push_str(&format!("{n}\n"));
+                    }
+                }
+                Err(e) => return fail(c, &e.to_string()),
+            }
+        }
+        if cos.any() {
+            c.begin("Write the cosmetic changes");
+            match cosmetic::apply(&built.root, &romfs, &cos) {
                 Ok(notes) => {
                     for n in notes {
                         built.report.push_str(&format!("{n}\n"));
@@ -287,6 +301,37 @@ fn slot(b: &Json, k: &str, must: bool) -> Hr<String> {
     Ok(t.to_string())
 }
 
+/// The app's Plandomizer entries as the apworld's own `ootrr_plando` option, which works whatever
+/// the host's plando setting is (Archipelago's `plando_items` is off unless the host turns it on).
+fn plando_yaml(b: &Json) -> Hr<String> {
+    let Some(v) = b.get("plando") else {
+        return Ok(String::new());
+    };
+    let a: &[Json] = v.as_arr().ok_or_else(|| refuse("Plandomizer: send a list of locations and items."))?;
+    if a.len() > 500 {
+        return Err(refuse("Plandomizer: too many entries."));
+    }
+    let mut out: String = String::new();
+    let mut seen: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    for e in a {
+        let (Some(l), Some(i)) = (e.get("location").and_then(|x| x.as_str()), e.get("item").and_then(|x| x.as_str())) else {
+            return Err(refuse("Plandomizer: each entry needs a location and an item."));
+        };
+        let (l, i) = (l.trim(), i.trim());
+        if l.is_empty() || i.is_empty() {
+            continue;
+        }
+        if l.len() > 120 || i.len() > 120 || l.chars().chain(i.chars()).any(char::is_control) {
+            return Err(refuse("Plandomizer: a location or item name is not allowed."));
+        }
+        if !seen.insert(l.to_string()) {
+            return Err(refuse(&format!("Plandomizer: {l} is named twice.")));
+        }
+        out.push_str(&format!("    {}: {}\n", yaml_text(l), yaml_text(i)));
+    }
+    Ok(if out.is_empty() { out } else { format!("  ootrr_plando:\n{out}") })
+}
+
 fn yaml_text(s: &str) -> String {
     format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""))
 }
@@ -317,7 +362,7 @@ pub fn player(b: &Json) -> Hr<Json> {
             format!("  settings_string: {}\n", yaml_text(&text))
         }
     };
-    let file: String = format!("name: {}\ngame: OOTRR\ndescription: Made by the OOTRR app {APP}\nOOTRR:\n{choice}", yaml_text(&name));
+    let file: String = format!("name: {}\ngame: OOTRR\ndescription: Made by the OOTRR app {APP}\nOOTRR:\n{choice}{}", yaml_text(&name), plando_yaml(b)?);
     Ok(Json::obj()
         .with("file_name", format!("{}.yaml", file_stem(&name)).as_str().into())
         .with("text", file.as_str().into())

@@ -50,6 +50,10 @@ unsafe extern "system" {
     fn CloseHandle(h: isize) -> i32;
 }
 
+pub fn open_hint(_pid: u32) -> String {
+    "the game is running but could not be opened. Run the OOTRR Client with the same rights as the game (not one of them as administrator)".to_string()
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Region {
     pub base: u64,

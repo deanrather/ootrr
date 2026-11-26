@@ -34,6 +34,16 @@ pub fn runtime(d: &Data, loc: &str, family: &str) -> bool {
     crate::slice::tier_order::fixed_spot(d, loc) && !crate::shops::is_loc(loc) && loc != crate::slice::treasure::LOC && !SKIPPED.contains(&family)
 }
 
+/// Whether a pack of `item` must play its get event every time. The tier hook lives in that
+/// event, and the game skips the event once the pack's identity has played it before, so a
+/// second upgrade from the ground would be added silently as the tier the player already has.
+pub fn replays(item: &str) -> bool {
+    crate::progressive::FAMILIES
+        .iter()
+        .filter(|(f, _)| !SKIPPED.contains(f))
+        .any(|(f, t)| t.contains(&item) || owners(f).is_ok_and(|o| o.contains(&item)))
+}
+
 pub fn base(family: &str) -> Res<&'static str> {
     let t: &[&str] = tiers(family)?;
     let at: Option<&&str> = if crate::slice::key_spots::TOP_ONLY.contains(&family) { t.last() } else { t.first() };
@@ -350,6 +360,16 @@ mod tests {
             assert_eq!(&other[k + 1..k + 3], [SET_NAME, "GetPouchContent:OpenGetWindow"], "{other:?}");
             let mut twice: Bf = b.clone();
             assert!(!patch(flow_mut(&mut twice, flow).unwrap(), i, name, &fams).unwrap());
+        }
+    }
+
+    #[test]
+    fn upgrade_packs_replay_their_get_event_and_others_do_not() {
+        for item in ["Item_Gauntlet_Goron", "Item_Gauntlet_Silver", "Item_Hookshot", "Item_BombBag_Small", "Item_StickBag_Large", "Item_Range_Bow", "Weapon_Range_Bow", "Item_Quiver_Medium", "Item_FairyBless_MP"] {
+            assert!(replays(item), "{item}");
+        }
+        for item in ["Item_Ocarina_Fairy", "Item_Ocarina_Time", "Item_Heart_Piece", "Obj_Rupee_Green", "Item_Arrow_Ice", "Weapon_Sword_Kokiri"] {
+            assert!(!replays(item), "{item}");
         }
     }
 

@@ -180,9 +180,14 @@ pub const SKULL_FLAG: &str = "IsGoldSkullDead.IsGoldSkullDead_";
 /// Set whenever an item's get plays, wherever it came from, so it tells nothing about one
 /// location once items are shuffled (a received Song of Time set Song from Ocarina of Time's).
 pub const ITEM_GET_FLAG: &str = "HavePlayedGetEvent.";
+/// Set by the Gerudo jail key actors themselves (Obj_Dungeon_SmallKey_GerudoFortress_01 to 04):
+/// the hideout's logic graphs only read them. A jail spot holding another item never sets it.
+pub const JAIL_KEY_FLAG: &str = "IsGet_SmallKey_GerudoFortress.";
 
+/// False for a flag that belongs to an item rather than a place, so it cannot tell whether one
+/// location was collected once items are shuffled.
 pub fn location_flag(f: &str) -> bool {
-    !f.starts_with(ITEM_GET_FLAG)
+    !f.starts_with(ITEM_GET_FLAG) && !f.starts_with(JAIL_KEY_FLAG)
 }
 
 pub struct Detect {
@@ -201,10 +206,33 @@ impl Detect {
         Ok(Detect { by })
     }
 
+    /// Flags and keys that more than one location would claim. The client counts a location as
+    /// found when any of its flags or keys is set, so a shared one would send every location
+    /// that names it (the KF House of Twins and Know it All House pots share map hashes, and
+    /// neighbouring Barinade pots share theirs). Every location the catalog or the tracker
+    /// knows is counted, shuffled or not, because an unshuffled pot still sets its key.
+    pub fn shared(&self, d: &Data) -> BS<String> {
+        let mut names: BS<&str> = d.cat.locs.iter().map(|l| l.name.as_str()).collect();
+        names.extend(self.by.keys().map(|k| k.as_str()));
+        let mut seen: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+        for n in names {
+            let (f, k) = self.of(d, n);
+            for x in f.into_iter().chain(k) {
+                *seen.entry(x).or_default() += 1;
+            }
+        }
+        seen.into_iter().filter(|(_, c)| *c > 1).map(|(x, _)| x).collect()
+    }
+
     pub fn of(&self, d: &Data, name: &str) -> (BS<String>, BS<String>) {
         let mut flags: BS<String> = BS::new();
         let mut keys: BS<String> = BS::new();
-        if let Some(c) = d.cat.by_name(name) {
+        if crate::slice::skulls::is_skull(d, name) {
+            for h in crate::slice::skull_names::hashes(d, name) {
+                keys.insert(h.to_string());
+                flags.insert(format!("{SKULL_FLAG}{h}"));
+            }
+        } else if let Some(c) = d.cat.by_name(name) {
             for r in &c.refs {
                 if c.kind == "chest" {
                     flags.insert(format!("{CHEST_FLAG}{}", r.hash));
@@ -328,16 +356,23 @@ pub fn export_with(d0: &Data, s: &Settings, preset: &str, seed: &str, n: usize) 
     let mut rows: Vec<Json> = Vec::with_capacity(free.len());
     let mut loose: usize = 0;
     let det: Detect = Detect::load()?;
+    let shared: BS<String> = det.shared(d);
+    let placed: std::collections::BTreeMap<String, String> = free.iter().map(|l| (w.locs[*l].name.clone(), String::new())).collect();
     let mut blind: Vec<String> = Vec::new();
     for l in &free {
         let name: &str = &w.locs[*l].name;
-        let tier: bool = crate::slice::tier_order::fixed_spot(d, name);
-        let deny: Vec<ItemId> = kinds.iter().copied().filter(|i| !allowed(d, &w, &p, *i, *l) || (tier && d.family(&w.items.names[*i]).is_some())).collect();
+        let fixed = |i: ItemId| {
+            let item: &str = &w.items.names[i];
+            d.family(item).is_some_and(|f| crate::slice::tier_order::give_of(d, &placed, name, item, f) != crate::slice::tier_order::Give::Flow)
+        };
+        let deny: Vec<ItemId> = kinds.iter().copied().filter(|i| !allowed(d, &w, &p, *i, *l) || fixed(*i)).collect();
         if deny.is_empty() {
             loose += 1;
         }
         let here: Option<&String> = w.regions[w.locs[*l].region].dungeon.as_ref();
-        let (flags, keys): (BS<String>, BS<String>) = det.of(d, name);
+        let (mut flags, mut keys): (BS<String>, BS<String>) = det.of(d, name);
+        flags.retain(|x| !shared.contains(x));
+        keys.retain(|x| !shared.contains(x));
         if flags.is_empty() && keys.is_empty() {
             blind.push(name.to_string());
         }
@@ -462,6 +497,62 @@ mod tests {
     }
 
     #[test]
+    fn jail_keys_are_not_seen_through_their_own_actor_flag() {
+        let d: Data = Data::load().unwrap();
+        let det: Detect = Detect::load().unwrap();
+        for n in ["Hideout 1 Torch Jail Gerudo Key", "Hideout 4 Torches Jail Gerudo Key"] {
+            assert!(det.of(&d, n).0.is_empty(), "{n}");
+        }
+        assert_eq!(det.of(&d, "Bottom of the Well Freestanding Key").0.into_iter().collect::<Vec<_>>(), vec!["BottomOfTheWell_Level_Room_03_Get_SmallKey".to_string()]);
+    }
+
+    /// The catalog had 24 Gold Skulltulas' hashes swapped in cycles (Fire Temple GS Boulder Maze
+    /// held Scarecrow Top's), so killing one sent another's check. A Skulltula is now seen through
+    /// the hash the build uses (crate::slice::skull_names), and every Skulltula keeps its signals.
+    #[test]
+    fn every_skulltula_is_seen_through_the_hash_the_build_uses() {
+        let d: Data = Data::load().unwrap();
+        let det: Detect = Detect::load().unwrap();
+        let shared: BS<String> = det.shared(&d);
+        let skulls: Vec<&str> = d.cat.locs.iter().map(|l| l.name.as_str()).filter(|n| crate::slice::skulls::is_skull(&d, n)).collect();
+        assert!(skulls.len() >= 90, "{}", skulls.len());
+        for n in skulls {
+            let want: Vec<String> = crate::slice::skull_names::hashes(&d, n).iter().map(|h| h.to_string()).collect();
+            let (f, k) = det.of(&d, n);
+            for h in &want {
+                assert!(k.contains(h) && !shared.contains(h), "{n}: {h} missing or shared");
+                assert!(f.contains(&format!("{SKULL_FLAG}{h}")), "{n}: no flag for {h}");
+            }
+        }
+        let (_, k) = det.of(&d, "Fire Temple GS Boulder Maze");
+        assert!(!k.contains("9172014785497046138"), "Boulder Maze still watches Scarecrow Top's hash");
+    }
+
+    /// Breaking one Barinade pot sent its neighbours' checks too: they shared map hashes.
+    #[test]
+    fn no_two_locations_share_a_flag_or_key() {
+        let d: Data = Data::load().unwrap();
+        for id in ["default", "full_shuffle"] {
+            let b: Json = export(&d, &preset(id), id).unwrap();
+            let locs: &[Json] = arr(b.get("world").unwrap(), "locs");
+            let mut owner: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+            for r in arr(&b, "free") {
+                let name: &str = locs[r.get("loc").unwrap().as_i64().unwrap() as usize].get("name").unwrap().as_str().unwrap();
+                for x in arr(r, "flags").iter().chain(arr(r, "keys")) {
+                    let x: String = x.as_str().unwrap().to_string();
+                    if let Some(o) = owner.insert(x.clone(), name.to_string()) {
+                        panic!("{id}: {o} and {name} both use {x}");
+                    }
+                }
+            }
+        }
+        let b: Json = export(&d, &preset("full_shuffle"), "full_shuffle").unwrap();
+        let blind: Vec<&str> = arr(&b, "blind").iter().filter_map(|x| x.as_str()).collect();
+        assert!(blind.contains(&"Jabu Jabus Belly Barinade Pot 1"));
+        assert!(!blind.contains(&"Jabu Jabus Belly Barinade Pot 6"));
+    }
+
+    #[test]
     fn keys_set_to_anywhere_may_go_to_other_worlds() {
         let d: Data = Data::load().unwrap();
         let ks: Json = export(&d, &preset("keysanity"), "keysanity").unwrap();
@@ -497,5 +588,21 @@ mod tests {
             done += 1;
         }
         assert!(done >= 10, "only {done} rolled settings exported");
+    }
+
+    /// Song from Royal Familys Tomb is a sale spot without the tier wrapper, so the build gives
+    /// an upgrade there one fixed tier and refused the slot when the order did not hold. The
+    /// export now keeps upgrades off every spot the build would give a fixed tier.
+    #[test]
+    fn upgrades_stay_off_every_spot_that_gives_a_fixed_tier() {
+        let d: Data = Data::load().unwrap();
+        let mut s: Settings = preset("default");
+        s.set("shuffle_songs", crate::settings::model::Value::s("anywhere")).unwrap();
+        let b: Json = export(&d, &s.finish().unwrap(), "custom").unwrap();
+        let items: &[Json] = arr(b.get("world").unwrap(), "items");
+        let deny: Vec<&str> = arr(row(&b, "Song from Royal Familys Tomb"), "deny").iter().map(|i| items[i.as_i64().unwrap() as usize].get("name").unwrap().as_str().unwrap()).collect();
+        assert!(deny.contains(&"Bomb Bag"), "{deny:?}");
+        let chest: Vec<&str> = arr(row(&b, "KF Midos Top Left Chest"), "deny").iter().map(|i| items[i.as_i64().unwrap() as usize].get("name").unwrap().as_str().unwrap()).collect();
+        assert!(!chest.contains(&"Bomb Bag"));
     }
 }

@@ -208,9 +208,12 @@ pub fn make_with(p: &Pool, s: &Spec, l: &Layers) -> Res<Made> {
     if s.style == Style::Touch {
         pouch.set(AUTO_GET, Node::Bool(true));
     }
-    if let Some((deal, stock)) = deal_of(l, &s.name) {
+    let dealt: Option<(&str, bool)> = deal_of(l, &s.name);
+    if let Some((deal, stock)) = dealt {
         pouch.set(DEAL_PARAM, Node::U32(crate::flags::hash_name(deal)));
         pouch.set(STOCK_PARAM, Node::Bool(stock));
+    }
+    if dealt.is_some() || crate::pickup_tiers::replays(&s.item) {
         for k in [crate::pickup_pack::kit::MANY, crate::pickup_pack::kit::AT_MAX] {
             pouch.set(k, Node::Bool(true));
         }

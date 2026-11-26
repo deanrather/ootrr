@@ -420,6 +420,26 @@ pub fn sweep_except(y: &mut Byml, file: &str, skip: &BS<u64>) -> Res<usize> {
     Ok(n)
 }
 
+/// The game derives this row while the player holds the Bow and normal arrows. The vanilla row
+/// is a copy of the Ice Arrow row and names the Ice Arrow slot, so the item menu shows an Ice
+/// Arrow under the Bow that the player does not own. Every other arrow pairing names its own slot.
+pub const BOW_NORMAL: &str = "Pouch_Range_BowAndArrow_Normal";
+pub const SLOT: &str = "AssignableItem";
+pub const BOW_SLOT: &str = "Bow";
+
+pub fn bow_slot(y: &mut Byml) -> Res<bool> {
+    let list: &mut Vec<Node> = y.root.as_arr_mut().ok_or(Error::Format("pouch table: the root is not a row list"))?;
+    let r: &mut Node = list
+        .iter_mut()
+        .find(|r| crate::pickup_pack::rows::id(r) == Some(BOW_NORMAL))
+        .ok_or_else(|| Error::Msg(format!("pouch table: no {BOW_NORMAL} row, the game files differ")))?;
+    if text(r, SLOT) == BOW_SLOT {
+        return Ok(false);
+    }
+    r.set(SLOT, Node::Str(BOW_SLOT.to_string()));
+    Ok(true)
+}
+
 pub fn stage_pouch(rf: &mut Romfs, roam: bool) -> Res<Out> {
     rewrite(rf, POUCH_TABLE, |raw: &[u8]| {
         let mut y: Byml = Byml::parse(raw)?;
@@ -427,6 +447,7 @@ pub fn stage_pouch(rf: &mut Romfs, roam: bool) -> Res<Out> {
             quiet_pouch(&mut y)?;
         }
         crate::pickup_pack::meter::strip_all(&mut y)?;
+        bow_slot(&mut y)?;
         y.write()
     })
 }
@@ -856,6 +877,10 @@ mod tests {
                 let mut c: Node = n.clone();
                 if meter::loses(&c) {
                     meter::strip(&mut c);
+                }
+                if text(&c, "__RowId") == BOW_NORMAL {
+                    assert_eq!(text(&c, SLOT), "IceArrow");
+                    c.set(SLOT, Node::Str(BOW_SLOT.to_string()));
                 }
                 c
             })

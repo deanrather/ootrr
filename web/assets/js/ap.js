@@ -1,6 +1,6 @@
 import { h, fill, notice, save_text, debounce } from "./dom.js";
 import { get, get_blob, post, q } from "./api.js";
-import { state } from "./store.js";
+import { state, color_request } from "./store.js";
 import { effective, match_preset } from "./rules.js";
 import { gen_missing, update_used } from "./config.js";
 import { pick_folder } from "./picker.js";
@@ -176,7 +176,7 @@ function player_section() {
     if (!ap.name.trim()) return fill(out, notice("warn", "Type your player name first."));
     save_btn.disabled = true;
     try {
-      const r = await post("/api/ap/player", { name: ap.name.trim(), settings: effective(state.schema, state.vals) });
+      const r = await post("/api/ap/player", { name: ap.name.trim(), settings: effective(state.schema, state.vals), plando: state.plando });
       save_text(r.file_name, r.text, "text/yaml");
       fill(
         out,
@@ -239,6 +239,10 @@ async function build() {
       mod_name: ap.sum.mod_name,
       host: p.host || "eden",
       title_logo: state.cosmetic.title !== false,
+      music: state.cosmetic.music,
+      sfx: state.cosmetic.sfx,
+      ...color_request(state.cosmetic),
+      cosmetic_seed: state.cosmetic.seed,
       delete_others: !!state.delete_others,
     });
     ap.target = r.target || "";

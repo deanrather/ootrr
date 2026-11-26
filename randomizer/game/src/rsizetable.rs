@@ -29,8 +29,12 @@ const fn make_crc() -> [u32; 256] {
 const CRC: [u32; 256] = make_crc();
 
 pub fn hash(p: &str) -> u32 {
+    crc32(p.as_bytes())
+}
+
+pub fn crc32(bytes: &[u8]) -> u32 {
     let mut c: u32 = 0xFFFF_FFFF;
-    for b in p.bytes() {
+    for &b in bytes {
         c = CRC[((c ^ b as u32) & 0xFF) as usize] ^ (c >> 8);
     }
     !c

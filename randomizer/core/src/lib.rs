@@ -30,6 +30,7 @@ pub mod bombchu_open;
 pub mod door_fix;
 pub mod door_gate;
 pub mod water_gate;
+pub mod lake_tree_wall;
 pub mod door_open;
 pub mod dungeon_fixes;
 pub mod dungeon_credit;

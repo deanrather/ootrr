@@ -85,6 +85,7 @@ impl Unpack {
 
 pub fn unpack(d: &Data, sound: bool) -> Unpack {
     let mut files: BS<String> = list(d).into_iter().collect();
+    files.extend(crate::qol::low_health::FILES.iter().map(|s| s.to_string()));
     files.extend(crate::colors::files());
     files.extend(crate::gerudo_card::MEMBERS.iter().map(|n| crate::gerudo_card::schedule_path(n)));
     files.extend(crate::open_world::fortress::CARPENTERS.iter().map(|n| crate::open_world::fortress::own_schedule(n)));
@@ -133,6 +134,7 @@ mod tests {
         let u: Unpack = unpack(&d, false);
         assert!(list(&d).iter().all(|f| u.wants(f)));
         assert!(crate::colors::files().iter().all(|f| u.wants(f)));
+        assert!(crate::qol::low_health::FILES.iter().all(|f| u.wants(f)));
         assert!(u.wants("Pack/Actor/Anything.pack.zs") && u.wants("Banc/X/y.zs"));
         assert!(!u.wants("Packed/x") && !u.wants("Pack") && !u.wants("Sound/Resource/Stream/SE_A.bwav"));
         assert!(unpack(&d, true).wants("Sound/Resource/Stream/SE_A.bwav"));

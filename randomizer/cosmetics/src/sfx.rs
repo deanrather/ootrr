@@ -321,6 +321,15 @@ pub fn rewrite_short(raw: &mut [u8], bars: &str, map: &BM<String, String>, sh: &
     Ok(n)
 }
 
+fn check_bank_layout(old: &[u8], edited: &[u8]) -> Res<()> {
+    let n: usize = entries(old)?.len();
+    let table: usize = 0x10 + 12 * n;
+    if edited.len() != old.len() || edited.get(..table) != old.get(..table) {
+        return Err(E::Format("sound effects: an existing sound bank has a different layout and cannot be safely shuffled"));
+    }
+    Ok(())
+}
+
 pub fn apply(mod_root: &P, romfs: &P, m: Sfx, seed: &str) -> Res<Vec<String>> {
     let mut notes: Vec<String> = Vec::new();
     if m == Sfx::Off {
@@ -358,11 +367,16 @@ pub fn apply(mod_root: &P, romfs: &P, m: Sfx, seed: &str) -> Res<Vec<String>> {
     touched.sort();
     touched.dedup();
     for r in &touched {
-        let z: Vec<u8> = rf.read(r)?;
+        let out: PB = mod_root.join("romfs").join(r.as_str());
+        let original: Vec<u8> = rf.read(r)?;
+        let z: Vec<u8> = if out.try_exists()? { fs::read(&out)? } else { original.clone() };
         let mut raw: Vec<u8> = rf.zs.decompress(&z)?;
+        if z != original {
+            let old: Vec<u8> = rf.zs.decompress(&original)?;
+            check_bank_layout(&old, &raw)?;
+        }
         rewrite(&mut raw, r, &map, &bank)?;
         rewrite_short(&mut raw, r, &short, &sh)?;
-        let out: PB = mod_root.join("romfs").join(r.as_str());
         if let Some(d) = out.parent() {
             fs::create_dir_all(d)?;
         }
@@ -520,6 +534,26 @@ mod tests {
         assert_eq!(le32(&raw, e[1].1 + 8), 11);
         assert_eq!(raw[e[0].1 + 0x80], 0xBB);
         assert_eq!(le32(&raw, e[2].1 + 8), 33);
+    }
+
+    #[test]
+    fn shuffling_keeps_other_edits_to_a_compatible_bank() {
+        let rows = [("SE_Player_A", bwav(11, 1, 28, 0xAA)), ("SE_Player_B", bwav(22, 1, 28, 0xBB)), ("SE_Sys_HeartAlert", bwav(33, 1, 28, 0xCC))];
+        let original = bars(&rows);
+        let e = entries(&original).unwrap();
+        let mut edited = original.clone();
+        edited[e[2].1 + 0x80] = 0;
+        check_bank_layout(&original, &edited).unwrap();
+        let cands = [real_cand("SE_Player_A", 11), real_cand("SE_Player_B", 22)];
+        let want = cands.iter().map(|c| (rsizetable::hash(&c.name), c)).collect();
+        let mut bank = Bank::default();
+        read_bank(&original, "x.bars", &want, &mut bank).unwrap();
+        let map = [("SE_Player_A".to_string(), "SE_Player_B".to_string())].into_iter().collect();
+        rewrite(&mut edited, "x.bars", &map, &bank).unwrap();
+        assert_eq!(edited[e[0].1 + 0x80], 0xBB);
+        assert_eq!(edited[e[2].1 + 0x80], 0);
+        edited[0x10] ^= 1;
+        assert!(check_bank_layout(&original, &edited).is_err());
     }
 
     #[test]
