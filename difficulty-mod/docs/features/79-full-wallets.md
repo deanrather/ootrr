@@ -79,8 +79,11 @@ Logic is unchanged: placement and shop price rules count `Progressive_Wallet` it
 
 - Chest (Mido's house), commit 19989b10, which also turned the Navi remark off: PASS. "mido's chest gave me a giant wallet and filled it and was perfect."
 - A wallet given by a person, commit 02d4f5c2: PASS. "it was perfect."
+- A wallet bought in a shop, commit 02d4f5c2: PASS. "looked perfect."
+- The Gold Skulltula House reward, commit 02d4f5c2: PASS. "skultulla house was perfect."
+- A wallet lying on the ground, commit 02d4f5c2: PASS. "ground perfect."
 
-Every other source is not yet played by hand.
+The scrub, the Great Fairy, a pot and the new-game count are not yet played by hand.
 
 ## Scripted game test (commit 02d4f5c2)
 
@@ -99,7 +102,7 @@ No text other than the normal get boxes and the Navi remark was seen. A video of
 ## Unproven (game test needed)
 
 - The counter popup in a chest scene with the setting off, and in a person's gift scene with the setting off (no counter is expected).
-- The scrub sale and the shop: that the shop fill shows on the shop's open counter. Not played.
+- The scrub sale: that the shop fill shows on its open counter. Not played.
 - The Great Fairy and a pot: not played.
 - The starting wallet with and without "Adult's Wallet" or "Giant's Wallet": not played (see "The starting wallet").
 - Archipelago: covered offline only (the mailbox gives through `GetInEvent_NotTurn_NotNpc`); no Archipelago build was made.
@@ -154,7 +157,7 @@ The setting was a stub. The pouch table column that fills bags on get (`IsItemSt
 - `cargo test --workspace`: 2437 passed, 0 failed, with 9 `full_wallet` tests among them.
 - Default settings, and setting off: the seed file and every mod file are byte-identical to nightly 240af8b2 with the default preset and three more (chest and person plando, shop deals and freestanding plando, pot and Gold Skulltula reward plando).
 - On: `ootrr flow-loads` finds no missing loads on 9 mods with the setting on.
-- Game: a person's gift and, on an earlier version, a chest were played by hand and filled the wallet. Scripted on this code: a person's gift, a ground pickup and the Gold Skulltula reward filled the wallet with the counter on screen, and a chest filled it. The shop, scrub, Great Fairy, pot and new-game gives are not yet played.
+- Game: a person's gift, a shop purchase, a ground pickup, the Gold Skulltula reward and, on an earlier version, a chest were played by hand and passed. The scrub, Great Fairy, pot and new-game gives are not yet played.
 
 Setting number 610.
 
