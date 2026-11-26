@@ -12,6 +12,7 @@ macro_rules! parts {
     };
 }
 
+pub mod collapse;
 pub mod colors;
 pub mod cosmetic;
 pub mod sfx;

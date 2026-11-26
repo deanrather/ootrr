@@ -22,6 +22,9 @@ Choices made where the request does not say (each is a short change to reverse):
 - User, 26 Nov: "'no music' should only mute the background music".
 - User, 26 Nov: cutscene music (`BGM_Dm_` tracks) is muted by No Music too ("Yes, mute it").
 - Hands-on by the user, 26 Nov, on bcccae41: No Music passed (title and file select, ocarina, the music-timed scene at Hyrule Castle, a boss, a shop, the sounds that stay). Shuffle failed in the Market: "it plays the market town intro music and THEN the random music... for a few seconds... then restarts the music". Not yet tried: the Deku Tree, the castle sneaking area, Lon Lon Ranch.
+- Hands-on by the user, 26 Nov: "when you enter market town, it plays the market town intro music and THEN the random music... for a few seconds... then restarts the music.... there must be some sort of music controller or something here. do way more research into that 'cause if this area has it others might too. music shuffle is still a FAIL".
+- User, 26 Nov: "i went lots of places and they all had random music. only error I noticed was what I just said about market".
+- Defaults taken (not yet confirmed by the user): the layered dungeon ambience is collapsed too; Ganon (`BGM_DungeonBoss_Ganon`) and the tower escape keep their own music; areas that are quiet at night stay quiet; themes that play once receive a track but are not handed out; Horse, minigame, Lost Woods, the fairy surface area and Sacred Forest Meadow keep their graphs.
 - The report that music shuffle "just straight up mutes the music" could not be tied to a version or seed (user: "no can do. it was ages ago"). It is not reproduced, and the shuffle fix below does not claim to answer it.
 
 ## How it works
@@ -80,7 +83,7 @@ Players reported that the castle sneaking area and Lon Lon Ranch kept their own 
 
 ### Tracks that now move
 
-Lon Lon Ranch (child and adult, which get the same new track), the castle grounds (`BGM_HyruleGarden`), the windmill as adult, King Dodongo (`BGM_DungeonBoss_Dinasour`), inside the Deku Tree, the Lost Woods ocarina layers and Ganon (`anywhere` only).
+Lon Lon Ranch (child and adult, which get the same new track), the castle grounds (`BGM_HyruleGarden`), the windmill as adult, King Dodongo (`BGM_DungeonBoss_Dinasour`), inside the Deku Tree and the Lost Woods ocarina layers.
 
 ### Calls that follow another user
 
@@ -90,7 +93,6 @@ A shared block holds one track, so these play whatever the deciding user got:
 |---|---|---|
 | `BGM_SurfaceFair`, one layer | `BGM_HyruleGarden` | `BGM_HyruleGarden` |
 | `BGM_WindmillHouse_Child`, its adult track | `BGM_WindmillHouse_Adult` | `BGM_WindmillHouse_Adult` |
-| `BGM_DungeonBoss_Volvagia`, its Dinosaur track | `BGM_DungeonBoss_Dinasour` | `BGM_DungeonBoss_Dinasour` |
 | `BGM_DungeonBoss_KotakeKoume` | `BGM_DungeonBoss` | `BGM_DungeonBoss` |
 | `BGM_EnemyMuseum` and `BGM_Common_DekuTree` | the Deku Tree low and melody tracks | `BGM_InsideTheDekuTree` |
 
@@ -98,13 +100,47 @@ A shared block holds one track, so these play whatever the deciding user got:
 
 ### Left unchanged on purpose
 
-- `BGM_DungeonBoss_Ganon` with `grouped`: it is the only boss theme built from layers, so it has nothing of its kind to trade with.
+- Ganon (`BGM_DungeonBoss_Ganon`) and the tower escape (`BGM_EscapeFromGanonTower`): the game steps through their parts, so they keep their own music and are not handed out.
 - Cutscene tracks (`BGM_Dm_`) and intro, outro, pad, roar and demo parts.
 - Music that is not in the music table, played by an object in the world: the shop and minigame shop speakers, Malon's singing and the owl's theme. The shuffle has never touched it.
 
 No Music is not affected: it mutes by sound group, so shared blocks and aliases are silent too.
 
 A cosmetic seed now gives different `grouped` and `anywhere` music than before. The seed, the settings string, `off` and `none` do not change.
+
+## Shuffle fix: area themes that restarted
+
+### Cause
+
+The music table (`Sound/Bgm/bgm.Product.111.byml`) gives each music event a graph of nodes. Many areas play an intro, then parts with fixed lengths, switching by time of day or at random. The shuffle only changed which track each part's call plays, so the new track was heard after the vanilla intro and started again at every part. 11 of the tracks it handed out were such parts, which play once.
+
+| Mechanism | Events | Evidence |
+|---|---|---|
+| Intro, then fixed-length parts by time of day | Market | heard by the user |
+| The same | Kakariko and fishing pond (both ages), Kokiri Forest, Gerudo | data only |
+| Short random phrases | Hyrule Field, castle grounds, Zora's Fountain | data only |
+| Intro, interval, outro | Lon Lon Ranch (both ages) | data only |
+| Intro, then loop | Spirit Temple, Volvagia | data only |
+| Layered random stems | Deku Tree family, cave family, Fire Temple, Ice Cavern, Jabu-Jabu, inside Ganon's Castle, Ganon's Tower | data only |
+| Left as they are | Horse, minigame, Lost Woods, fairy surface area, Sacred Forest Meadow (outro, position or sync play); Ganon, escape (game-driven parts) | data only |
+
+The user walked many places and noticed no fault but the Market.
+
+### Change
+
+- Only looping streams are handed out (jingles still trade among themselves). Every theme in a pool gets another track.
+- Each of the 25 events above whose track moves is rewritten in the music table to one node that plays one of its own keys until the event stops: no intro, no fixed length, no node change. The sound link points that key at the new track. Start conditions, stop conditions and fades stay. Market, Hyrule Field, castle grounds, Zora's Fountain and Lon Lon Ranch keep a silent night.
+- `collapse.rs` holds one list per family (`TOWNS`, `FIELDS`, `RANCH`, `SPIRIT`, `VOLVAGIA`, `DEKU_TREE`, `CAVES`, `DUNGEONS`). Removing one from `FAMILIES` drops that family's rewrite.
+- The mod now carries the music table and the size table. The table shrinks from 250432 to 109904 bytes. All other events keep their values (the Byml writer does not reproduce the game's bytes: written back unchanged the table is 268268 bytes with equal values).
+- Field music no longer changes when an enemy is near or Link stands still.
+
+### Unproven (engine behaviour)
+
+- The game accepts the one-node graph for these events (single-theme events such as Forest Temple use that shape).
+- Nothing waits on a removed part, counter or transition; battle music still suspends and resumes the area track.
+- The quiet-night graph (built from the game's own Day and Night conditions) switches both ways.
+- Malon's synchronised singing at the ranch, and the effect of the kept sync group.
+- Rail, distance and per-floor volumes are gone for collapsed events (full volume everywhere).
 
 ## Tested
 
@@ -119,9 +155,11 @@ A cosmetic seed now gives different `grouped` and `anywhere` music than before. 
 - After the jingle change (code commit `155d7e95`): the 21 cosmetic music, sound link and silence tests pass, `off`, `grouped` and `anywhere` bytes are as above, and the `none` mod differs from the earlier one in the sound link only. The workspace tests were not run again.
 - Not played, not heard. No game test has been run.
 
+Restart fix: the 4 new game-file and unit tests ran, 4 passed, 0 failed, in `build_gate.py --quick`. `every_moved_area_theme_is_one_looping_track_that_nothing_restarts` (4 seeds: 25 of 25 events rewritten; in the game's table all 25 have more than one part and 19 have fixed lengths; the earlier code wrote no table, so the test fails on it), `every_track_handed_out_loops_and_ganon_and_the_escape_keep_their_own`, `a_track_that_plays_once_is_given_a_new_one_and_never_given_away`. No call of a shuffled event keeps its track over 60 seeds (0 of 81). Not built as a mod for the game, not played, not heard. The byte comparison of `off`, `none` and default output with nightly was not run again, and the full workspace tests were not run.
+
 ## Test in the game
 
-For the shuffle, build with `--music anywhere` and a fixed `--cosmetic-seed`. Listen on the castle grounds, at Lon Lon Ranch as child and adult, in the windmill and at King Dodongo for music that is not the place's own, and walk the world for places with no music. For No Music:
+For the shuffle, build with `--music anywhere` and a fixed `--cosmetic-seed`. Walk into the child Market by day and stand 90 seconds: one new track from the first second, never starting again. Listen on the castle grounds, at Lon Lon Ranch as child and adult, in the windmill and at King Dodongo for music that is not the place's own, and walk the world for places with no music. For No Music:
 
 1. Build the same seed twice, with `--music none` and with `--music off`.
 2. Stand in a place with music (the Temple of Time). With No Music only effects and ambient sound are heard.
@@ -183,17 +221,48 @@ wanted the same track.
 
 moves() keys by SLinkUserName, and the two Lon Lon events trade as one
 track. On a shared block the user the track is
-named after decides. Calls sharing its block follow it. Ganon's theme
-stays with grouped, as the only layered boss theme. A cosmetic seed now
+named after decides. Calls sharing its block follow it. A cosmetic seed now
 gives different grouped and anywhere music. The off and none choices and
 the seed are unchanged.
 
 ## Checked
 
 A test over the real files counts calls that never move over 60 seeds:
-grouped 37 before and 8 after, anywhere 29 before and 0 after. Workspace
+grouped 37 before and 8 after, anywhere 29 before and 0 after at that
+commit. Workspace
 tests 2435 passed, 0 failed, 13 ignored. Off builds byte-identical to nightly for one seed. Not
 played or heard in the game.
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+```
+
+The restart fix is its own commit:
+
+```
+Shuffled area music plays one track without restarting
+
+With Cosmetics > Music shuffle on, the Market played its own intro, then
+the new track, and started it again after a few seconds.
+
+## Cause
+
+The area's graph in Sound/Bgm/bgm.Product.111 has an intro and parts of
+fixed length. The shuffle changed what each part plays and kept the graph,
+and could hand out a part that plays once.
+
+## Change
+
+Only looping streams are handed out. 25 area and ambience events whose
+track moves become one node playing one of their own keys, retargeted in
+SLink2; quiet nights stay quiet. Ganon and the tower escape keep their own
+music. The music table and its size entry are now written. The off and
+none choices run none of this.
+
+## Checked
+
+Game-file tests over four seeds: every rewritten event has one node, no
+fixed length and a looping track. The Market fault was heard by the user;
+the other events are read from the game's data. Not played in the game.
 
 Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
 ```

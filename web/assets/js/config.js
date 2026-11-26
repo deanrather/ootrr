@@ -68,7 +68,7 @@ export const FIELDS = [
   { id: "spoiler_log", page: CONFIG, section: "Seed", label: "Include Spoiler Log",
     tip: "Writes Spoiler.txt into the mod folder next to the mod. It lists the seed, the settings string, every setting used, the expected playthrough step by step, and the item at every location. Off, no spoiler is made and an old Spoiler.txt is removed." },
   { id: "music", page: COSMETICS, section: "Music and sound", label: "Music shuffle", choices: [...SHUFFLE("music"), { id: "none", label: "No Music" }],
-    tip: "Shuffles keep cutscene music, and jingles trade only with jingles. Day and night themes play one track all day. No Music silences music, cutscene music too, but not fanfares. The Lost Woods music then no longer guides you." },
+    tip: "Shuffles keep cutscene music, and jingles trade only with jingles. No Music silences music, cutscene music too, but not fanfares. The Lost Woods music then no longer guides you." },
   { id: "sfx", page: COSMETICS, section: "Music and sound", label: "Sound effect shuffle", choices: SHUFFLE("sounds"), tip: "Shuffles sound effects in the mod you build. The seed is not changed." },
   { id: "title_logo", page: COSMETICS, section: "Title screen", label: "Randomizer line under the logo",
     tip: "Draws a Randomizer line under the title screen logo. It changes the title screen files, so turn it off if another mod (a title screen, menu or UI mod) changes them too. The build stops and names the other mod when they clash. The seed is not changed." },
