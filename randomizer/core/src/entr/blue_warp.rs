@@ -1,12 +1,13 @@
-use std::collections::BTreeMap as BM;
+use std::collections::{BTreeMap as BM, HashMap as HM};
 use std::path::Path as P;
 
-use crate::bfevfl::{Bf, Case, Cont, Event, Flow, Kind, Val};
+use crate::bfevfl::{Actor, Bf, Case, Cont, Event, Flow, Kind, Val};
 use crate::byml::{Byml, Node};
 use crate::entr::build::actor;
 use crate::entr::data::{Cat, Door};
 use crate::entr::layout::Layout;
 use crate::entr::pools::{find, DUNGEONS};
+use crate::event_chests::resolve::{table, Row};
 use crate::error::{Error as E, Res};
 use crate::romfs::Romfs;
 use crate::staging::Out;
@@ -27,6 +28,9 @@ const PLAYER: &str = "Player_Event";
 const IS_CHILD: &str = "EventQueryPlayerIsChild";
 const SCENE: &str = "EventSystemActor";
 const TRANSITION: &str = "EventTransition";
+const CLOCK: &str = "EventWorldManagerController";
+const PRELOAD: &str = "EventTriggerBancRequestBeforehandLoad";
+pub const SCENE_WARPS: [(&str, &str, usize); 1] = [("Dm_InsideJabu_Jabu_0050", "Get_StoneOfWater_Complete", 2)];
 const TRUE: u32 = 0x8000_0001;
 const NONE: u16 = 0xFFFF;
 
@@ -190,7 +194,7 @@ fn writes_only(f: &mut Flow, i: u16, then: u16, done: &mut BM<u16, u16>, depth: 
     let out: u16 = match kind {
         Kind::Action { next, actor, act, params } => {
             let rest: u16 = writes_only(f, next, then, done, depth + 1)?;
-            if actor_name == DATA || actor_name == STEPS {
+            if actor_name == DATA || actor_name == STEPS || actor_name == CLOCK {
                 push(f, Kind::Action { next: rest, actor, act, params })?
             } else if actor_name == SCENE && named.as_ref().is_some_and(|n| n.1 == TRANSITION) {
                 let scene: String = text(f, i as usize, "EventName").ok_or(E::Format("blue warp: a scene has no name"))?;
@@ -208,7 +212,15 @@ fn writes_only(f: &mut Flow, i: u16, then: u16, done: &mut BM<u16, u16>, depth: 
             }
         }
         Kind::Join { next } => writes_only(f, next, then, done, depth + 1)?,
-        Kind::Fork { join, .. } => writes_only(f, join, then, done, depth + 1)?,
+        Kind::Fork { join, forks } => {
+            let mut head: u16 = writes_only(f, join, then, done, depth + 1)?;
+            for x in forks.iter().rev() {
+                let mut seen: BM<u16, u16> = done.clone();
+                seen.insert(join, head);
+                head = writes_only(f, *x, head, &mut seen, depth + 1)?;
+            }
+            head
+        }
         Kind::Switch { actor, query, cases, params } => {
             if actor_name != DATA {
                 return Err(E::Msg(format!("blue warp: an arrival event branches on {actor_name}, which is not known")));
@@ -245,59 +257,179 @@ fn retarget(kind: &mut Kind, to: &Landing) -> Res<()> {
     Ok(())
 }
 
-fn branch(f: &mut Flow, change: &Kind, boot: &str, to: &Landing) -> Res<u16> {
-    let mut k: Kind = change.clone();
-    if to.own {
-        let own_map: bool = k.params().and_then(|p| p.get("NextBanc")).is_some_and(|v| matches!(v, Val::Str(s) if s.ends_with("_Child") || s.ends_with("_Adult")));
-        if own_map {
-            if let Some(p) = k.params_mut() {
-                for (key, v) in p.items.iter_mut().filter(|x| x.0 == "NextBanc") {
-                    let Val::Str(s) = v else { return Err(E::Format("blue warp: a map name is not text")) };
-                    let age: &str = if to.banc.ends_with("_Child") { "_Child" } else { "_Adult" };
-                    let stem: &str = s.rsplit_once('_').map(|x| x.0).ok_or_else(|| E::Msg(format!("blue warp: {key} has no age")))?;
-                    *s = format!("{stem}{age}");
-                }
-            }
-        }
-        return push(f, k);
+fn arrival_writes(f: &mut Flow, rows: &HM<String, Row>, boot: &str, then: u16) -> Res<u16> {
+    if boot.is_empty() {
+        return Ok(then);
     }
-    retarget(&mut k, to)?;
+    let row: &Row = rows.get(boot).ok_or_else(|| E::Msg(format!("blue warp: the arrival event {boot} is not in the event table")))?;
+    if row.stem == ENDING_FLOW {
+        let main: u16 = entry(f, &row.entry).ok_or_else(|| E::Msg(format!("blue warp: the ending flow has no {}", row.entry)))?;
+        return writes_only(f, main, then, &mut BM::new(), 0);
+    }
+    if row.stem.starts_with("Dm_") {
+        return set_flag(f, &format!("HavePlayedEvent.{boot}"), then);
+    }
+    Err(E::Msg(format!("blue warp: the arrival event {boot} is in {}, which is not known", row.stem)))
+}
+
+fn own_change(change: &Kind, to: &Landing) -> Res<Kind> {
+    let mut k: Kind = change.clone();
+    if let Some(p) = k.params_mut() {
+        for (key, v) in p.items.iter_mut().filter(|x| x.0 == "NextBanc") {
+            let Val::Str(s) = v else { return Err(E::Format("blue warp: a map name is not text")) };
+            let age: &str = if to.banc.ends_with("_Child") { "_Child" } else { "_Adult" };
+            let stem: &str = s.rsplit_once('_').map(|x| x.0).ok_or_else(|| E::Msg(format!("blue warp: {key} has no age")))?;
+            *s = format!("{stem}{age}");
+        }
+    }
+    Ok(k)
+}
+
+fn preload_path(banc: &str) -> Res<String> {
+    let dir: &str = banc.rsplit_once('_').map(|x| x.0).ok_or(E::Format("blue warp: a map has no age"))?;
+    Ok(format!("Work/Banc/Scene/{dir}/{banc}.bcett.json"))
+}
+
+fn change_for(f: &mut Flow, change: &Kind, preload: Option<&Kind>, to: &Landing) -> Res<u16> {
+    let mut k: Kind = if to.own { own_change(change, to)? } else { change.clone() };
+    if !to.own {
+        retarget(&mut k, to)?;
+    }
+    let banc: Option<String> = k.params().and_then(|p| p.get("NextBanc")).and_then(|v| match v {
+        Val::Str(s) => Some(s.clone()),
+        _ => None,
+    });
+    let banc: String = banc.ok_or(E::Format("blue warp: a map change names no map"))?;
     let at: u16 = push(f, k)?;
-    match entry(f, boot) {
-        Some(main) => writes_only(f, main, at, &mut BM::new(), 0),
-        None if boot.starts_with("Dm_") => set_flag(f, &format!("HavePlayedEvent.{boot}"), at),
-        None => Ok(at),
+    let Some(p) = preload else {
+        return Ok(at);
+    };
+    let mut load: Kind = p.clone();
+    let path: String = preload_path(&banc)?;
+    let items: &mut Cont = load.params_mut().ok_or(E::Format("blue warp: a preload has no parameters"))?;
+    let x: &mut (String, Val) = items.items.iter_mut().find(|x| x.0 == "BancPath").ok_or(E::Format("blue warp: a preload names no map"))?;
+    x.1 = Val::Str(path);
+    let Kind::Action { next, .. } = &mut load else {
+        return Err(E::Format("blue warp: a preload is not an action"));
+    };
+    *next = at;
+    push(f, load)
+}
+
+fn repoint(f: &mut Flow, from: u16, to: u16) {
+    for e in f.events.iter_mut() {
+        let hit = |x: &mut u16| {
+            if *x == from {
+                *x = to;
+            }
+        };
+        match &mut e.kind {
+            Kind::Action { next, .. } | Kind::Join { next } | Kind::Sub { next, .. } => hit(next),
+            Kind::Switch { cases, .. } | Kind::SubSwitch { cases, .. } => cases.iter_mut().for_each(|c| hit(&mut c.ev)),
+            Kind::Fork { join, forks } => {
+                forks.iter_mut().for_each(hit);
+                hit(join);
+            }
+            Kind::Label { .. } => {}
+        }
+    }
+    for e in f.entries.iter_mut().filter(|e| e.main == from) {
+        e.main = to;
     }
 }
 
-pub fn patch(b: &mut Bf, to: &[[Landing; 2]]) -> Res<()> {
-    let f: &mut Flow = b.flows.iter_mut().find(|f| f.name == ENDING_FLOW).ok_or(E::Format("blue warp: the dungeon ending flow is missing"))?;
-    if f.events.iter().any(|e| e.name.starts_with(PREFIX)) {
-        return Err(E::Format("blue warp: the dungeon ending flow was already patched"));
+fn take_preload(f: &mut Flow, change: usize) -> Res<Option<Kind>> {
+    let at: u16 = idx(change)?;
+    let found: Vec<usize> = (0..f.events.len())
+        .filter(|&i| who(f, i) == Some((SYSTEM, PRELOAD)) && matches!(f.events[i].kind, Kind::Action { next, .. } if next == at))
+        .collect();
+    let mut kept: Option<Kind> = None;
+    for i in found {
+        kept = Some(f.events[i].kind.clone());
+        repoint(f, idx(i)?, at);
     }
-    let child: (u16, u16, Option<Cont>) = {
-        let (actor, query): (u16, u16) = query_slot(f, PLAYER, IS_CHILD)?;
-        let params: Option<Option<Cont>> = f.events.iter().find_map(|e| match &e.kind {
-            Kind::Switch { actor: a, query: q, params, .. } if *a == actor && *q == query => Some(params.clone()),
-            _ => None,
-        });
-        (actor, query, params.ok_or(E::Format("blue warp: the flow never asks Link's age, the game files differ"))?)
-    };
+    Ok(kept)
+}
+
+#[derive(Clone)]
+pub struct Ask {
+    actor: Actor,
+    params: Option<Cont>,
+}
+
+pub fn ask(b: &Bf) -> Res<Ask> {
+    let f: &Flow = b.flows.iter().find(|f| f.name == ENDING_FLOW).ok_or(E::Format("blue warp: the dungeon ending flow is missing"))?;
+    for e in &f.events {
+        if let Kind::Switch { actor, query, params, .. } = &e.kind {
+            let a: &Actor = f.actors.get(*actor as usize).ok_or(E::Format("blue warp: a switch has no actor"))?;
+            if a.name == PLAYER && a.queries.get(*query as usize).is_some_and(|q| q == IS_CHILD) {
+                return Ok(Ask { actor: a.clone(), params: params.clone() });
+            }
+        }
+    }
+    Err(E::Format("blue warp: the flow never asks Link's age, the game files differ"))
+}
+
+fn age_switch(f: &mut Flow, how: &Ask, young: u16, old: u16) -> Res<Kind> {
+    if !f.actors.iter().any(|a| a.name == PLAYER && a.sub.is_empty()) {
+        let mut a: Actor = how.actor.clone();
+        a.actions.clear();
+        a.queries.clear();
+        f.actors.push(a);
+    }
+    let (actor, query): (u16, u16) = query_slot(f, PLAYER, IS_CHILD)?;
+    Ok(Kind::Switch { actor, query, cases: vec![Case { val: 0, ev: young }, Case { val: 1, ev: old }], params: how.params.clone() })
+}
+
+fn fixed_changes(f: &Flow, among: impl IntoIterator<Item = usize>) -> Vec<usize> {
+    among
+        .into_iter()
+        .filter(|&i| who(f, i) == Some((SYSTEM, CHANGE)) && text(f, i, "NextBanc").is_some_and(|s| s.ends_with("_Child") || s.ends_with("_Adult")))
+        .collect()
+}
+
+fn untouched(f: &Flow) -> Res<()> {
+    if f.events.iter().any(|e| e.name.starts_with(PREFIX)) {
+        return Err(E::Msg(format!("blue warp: {} was already patched", f.name)));
+    }
+    Ok(())
+}
+
+pub fn patch(b: &mut Bf, to: &[[Landing; 2]], rows: &HM<String, Row>) -> Res<()> {
+    let how: Ask = ask(b)?;
+    let f: &mut Flow = b.flows.iter_mut().find(|f| f.name == ENDING_FLOW).ok_or(E::Format("blue warp: the dungeon ending flow is missing"))?;
+    untouched(f)?;
     let mut jobs: BM<usize, usize> = BM::new();
     for (boss, (_, name)) in BOSS_WARPS.iter().enumerate() {
         let main: u16 = entry(f, name).ok_or_else(|| E::Msg(format!("blue warp: the ending flow has no {name}")))?;
-        let mut found: usize = 0;
-        for i in reach(f, main) {
-            let map: bool = text(f, i, "NextBanc").is_some_and(|s| s.ends_with("_Child") || s.ends_with("_Adult"));
-            if who(f, i) == Some((SYSTEM, CHANGE)) && map {
-                if jobs.insert(i, boss).is_some_and(|x| x != boss) {
-                    return Err(E::Msg(format!("blue warp: two bosses share a map change at {name}")));
-                }
-                found += 1;
+        let found: Vec<usize> = fixed_changes(f, reach(f, main));
+        if found.is_empty() {
+            return Err(E::Msg(format!("blue warp: {name} changes to no map, the game files differ")));
+        }
+        for i in found {
+            if jobs.insert(i, boss).is_some_and(|x| x != boss) {
+                return Err(E::Msg(format!("blue warp: two bosses share a map change at {name}")));
             }
         }
-        if found == 0 {
-            return Err(E::Msg(format!("blue warp: {name} changes to no map, the game files differ")));
+    }
+    for (scene, boot, boss) in SCENE_WARPS {
+        let landing: &[Landing; 2] = to.get(boss).ok_or(E::Format("blue warp: a boss has no landing"))?;
+        let hits: Vec<usize> = (0..f.events.len())
+            .filter(|&i| who(f, i) == Some((SCENE, TRANSITION)) && text(f, i, "EventName").as_deref() == Some(scene))
+            .collect();
+        if hits.is_empty() {
+            return Err(E::Msg(format!("blue warp: no ending plays {scene}, the game files differ")));
+        }
+        for i in hits {
+            let moved: u16 = push(f, f.events[i].kind.clone())?;
+            let mut heads: [u16; 2] = [moved, moved];
+            for (head, land) in heads.iter_mut().zip(landing.iter()) {
+                if !land.own {
+                    *head = arrival_writes(f, rows, boot, moved)?;
+                }
+            }
+            let kind: Kind = age_switch(f, &how, heads[0], heads[1])?;
+            f.events[i] = Event { name: format!("{PREFIX}{i}"), kind };
         }
     }
     for (i, boss) in jobs {
@@ -305,16 +437,36 @@ pub fn patch(b: &mut Bf, to: &[[Landing; 2]]) -> Res<()> {
         if BOSSES[boss] == "Dodongos Cavern" && landing.iter().all(|x| x.own) {
             continue;
         }
+        let preload: Option<Kind> = take_preload(f, i)?;
         let change: Kind = f.events[i].kind.clone();
         let boot: String = text(f, i, "BootEventName").unwrap_or_default();
-        let young: u16 = branch(f, &change, &boot, &landing[0])?;
-        let old: u16 = branch(f, &change, &boot, &landing[1])?;
-        f.events[i] = Event {
-            name: format!("{PREFIX}{i}"),
-            kind: Kind::Switch { actor: child.0, query: child.1, cases: vec![Case { val: 0, ev: young }, Case { val: 1, ev: old }], params: child.2.clone() },
-        };
+        let mut heads: [u16; 2] = [0, 0];
+        for (head, land) in heads.iter_mut().zip(landing.iter()) {
+            let at: u16 = change_for(f, &change, preload.as_ref(), land)?;
+            *head = if land.own { at } else { arrival_writes(f, rows, &boot, at)? };
+        }
+        let kind: Kind = age_switch(f, &how, heads[0], heads[1])?;
+        f.events[i] = Event { name: format!("{PREFIX}{i}"), kind };
     }
     declare_subs(f);
+    Ok(())
+}
+
+pub fn patch_scene(b: &mut Bf, scene: &str, to: &[Landing; 2], how: &Ask) -> Res<()> {
+    let f: &mut Flow = b.flows.iter_mut().find(|f| f.name == scene).ok_or_else(|| E::Msg(format!("blue warp: no flow {scene}")))?;
+    untouched(f)?;
+    let found: Vec<usize> = fixed_changes(f, 0..f.events.len());
+    if found.is_empty() {
+        return Err(E::Msg(format!("blue warp: {scene} changes to no map, the game files differ")));
+    }
+    for i in found {
+        let preload: Option<Kind> = take_preload(f, i)?;
+        let change: Kind = f.events[i].kind.clone();
+        let young: u16 = change_for(f, &change, preload.as_ref(), &to[0])?;
+        let old: u16 = change_for(f, &change, preload.as_ref(), &to[1])?;
+        let kind: Kind = age_switch(f, how, young, old)?;
+        f.events[i] = Event { name: format!("{PREFIX}{i}"), kind };
+    }
     Ok(())
 }
 
@@ -332,7 +484,17 @@ fn declare_subs(f: &mut Flow) {
 
 pub fn stage(rf: &mut Romfs, cat: &Cat, l: &Layout, late: &mut Vec<Out>, work: &P) -> Res<()> {
     let to: Vec<[Landing; 2]> = landings(rf, cat, l)?;
-    crate::story_skip::stage_late(rf, late, work, ENDING_FLOW, |b| patch(b, &to))
+    let rows: HM<String, Row> = table(rf)?;
+    let mut how: Option<Ask> = None;
+    crate::story_skip::stage_late(rf, late, work, ENDING_FLOW, |b| {
+        how = Some(ask(b)?);
+        patch(b, &to, &rows)
+    })?;
+    let how: Ask = how.ok_or(E::Format("blue warp: the ending flow was not staged"))?;
+    for (scene, _, boss) in SCENE_WARPS {
+        crate::story_skip::stage_late(rf, late, work, scene, |b| patch_scene(b, scene, &to[boss], &how))?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -340,6 +502,7 @@ mod tests {
     use super::*;
     use crate::entr::data::load;
     use crate::story_skip::ENDING_FILE;
+    use std::collections::BTreeSet as BS;
     use std::path::PathBuf as PB;
 
     fn real() -> Option<Romfs> {
@@ -362,6 +525,87 @@ mod tests {
             .collect();
         crate::story_skip::patch_reward_gives(&mut b, &gives).unwrap();
         b
+    }
+
+    fn read(rf: &mut Romfs, name: &str) -> Bf {
+        Bf::parse(&rf.read_zs(&format!("Event/EventFlow/{name}.bfevfl.zs")).unwrap()).unwrap()
+    }
+
+    fn steps_done(f: &Flow, name: &str, age: u32) -> BS<String> {
+        let mut seen: Vec<bool> = vec![false; f.events.len()];
+        let mut todo: Vec<u16> = vec![entry(f, name).unwrap()];
+        let mut out: BS<String> = BS::new();
+        while let Some(i) = todo.pop() {
+            let i: usize = i as usize;
+            if i >= seen.len() || seen[i] {
+                continue;
+            }
+            seen[i] = true;
+            if text(f, i, "StepName").as_deref() == Some("Complete") {
+                out.insert(text(f, i, "ChallengeName").unwrap());
+            }
+            match (&f.events[i].kind, who(f, i)) {
+                (Kind::Switch { cases, .. }, Some((PLAYER, IS_CHILD))) => todo.extend(cases.iter().filter(|c| c.val == age).map(|c| c.ev)),
+                (Kind::Sub { next, flow, entry: sub, .. }, _) => {
+                    todo.push(*next);
+                    if flow.is_empty() {
+                        todo.extend(entry(f, sub));
+                    }
+                }
+                (k, _) => todo.extend(nexts(k)),
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn every_dungeon_still_counts_as_done_when_its_arrival_scene_is_left_out() {
+        let Some(mut rf) = real() else {
+            return;
+        };
+        let cat: Cat = load().unwrap();
+        let rows: HM<String, Row> = table(&mut rf).unwrap();
+        let quests: [&str; 8] = ["Get_StoneOfForest", "Get_StoneOfFire", "Get_StoneOfWater", "SageOfForest", "SageOfFire", "SageOfWater", "SageOfShadow", "SageOfSpirit"];
+        let l: Layout = Layout::vanilla();
+        let mut to: Vec<[Landing; 2]> = landings(&mut rf, &cat, &l).unwrap();
+        for x in to.iter_mut().flatten() {
+            x.own = false;
+        }
+        let mut b: Bf = vanilla(&mut rf);
+        patch(&mut b, &to, &rows).unwrap();
+        for (n, (_, name)) in BOSS_WARPS.iter().enumerate() {
+            for a in 0..2 {
+                let got: BS<String> = steps_done(flow(&b), name, a);
+                assert!(got.contains(quests[n]), "{name} {a}: {got:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn no_other_scene_a_blue_warp_plays_holds_a_map_change_of_its_own() {
+        let Some(mut rf) = real() else {
+            return;
+        };
+        let b: Bf = vanilla(&mut rf);
+        let f: &Flow = flow(&b);
+        let mut scenes: BS<String> = BS::new();
+        for (_, name) in BOSS_WARPS {
+            for i in reach(f, entry(f, name).unwrap()) {
+                if who(f, i) == Some((SCENE, TRANSITION)) {
+                    scenes.insert(text(f, i, "EventName").unwrap());
+                }
+            }
+        }
+        let mut holding: BS<String> = BS::new();
+        for scene in &scenes {
+            let Ok(raw) = rf.read_zs(&format!("Event/EventFlow/{scene}.bfevfl.zs")) else { continue };
+            let s: Bf = Bf::parse(&raw).unwrap();
+            if s.flows.iter().any(|g| !fixed_changes(g, 0..g.events.len()).is_empty()) {
+                holding.insert(scene.clone());
+            }
+        }
+        let known: BS<String> = SCENE_WARPS.iter().map(|x| x.0.to_string()).collect();
+        assert_eq!(holding, known);
     }
 
     fn flow(b: &Bf) -> &Flow {
@@ -411,8 +655,21 @@ mod tests {
         let cat: Cat = load().unwrap();
         let to: Vec<[Landing; 2]> = landings(rf, &cat, l).unwrap();
         let mut b: Bf = vanilla(rf);
-        patch(&mut b, &to).unwrap();
+        let rows: HM<String, Row> = table(rf).unwrap();
+        patch(&mut b, &to, &rows).unwrap();
         assert_eq!(Bf::parse(&b.write().unwrap()).unwrap(), b);
+        let how: Ask = ask(&b).unwrap();
+        for (scene, _, boss) in SCENE_WARPS {
+            let mut s: Bf = read(rf, scene);
+            patch_scene(&mut s, scene, &to[boss], &how).unwrap();
+            assert_eq!(Bf::parse(&s.write().unwrap()).unwrap(), s);
+            let g: &Flow = s.flows.iter().find(|f| f.name == scene).unwrap();
+            assert!(patch_scene(&mut s.clone(), scene, &to[boss], &how).is_err());
+            for i in fixed_changes(g, 0..g.events.len()) {
+                let map: String = text(g, i, "NextBanc").unwrap();
+                assert!(to[boss].iter().any(|x| x.banc == map), "{scene}: {map}");
+            }
+        }
         for (n, (_, name)) in BOSS_WARPS.iter().enumerate() {
             for (a, age) in AGES.iter().enumerate() {
                 let got: Vec<(String, String)> = lands(flow(&b), name, a as u32);
@@ -429,7 +686,7 @@ mod tests {
                 }
             }
         }
-        assert!(patch(&mut b, &to).is_err());
+        assert!(patch(&mut b, &to, &rows).is_err());
         b
     }
 

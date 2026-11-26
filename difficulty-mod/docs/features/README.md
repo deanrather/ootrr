@@ -36,6 +36,7 @@ All 19 are in rc 4 (`<builds>\rc-4\`).
 | 75 | [Return with Navi: saving after a locked room](75-navi-warp-keeps-saving.md) | `navi_return` (fix for #71, #72) | Reproduced in the game; fix not yet |
 | 77 | [Archipelago: a slot with Shopsanity builds](77-ap-shopsanity-build.md) | none (fix in `ap::patch::check`) | No, scripted command line only |
 | 78 | [Lake Hylia tree Gold Skulltula: the hookshot wall](78-lake-hylia-tree-wall.md) | none (fix in `lake_tree_wall`) | No, unit tests and a build only; test plan written, not run |
+| 79 | [Blue warps under dungeon shuffle](79-blue-warp-age.md) | none (fix, `shuffle_entrances=dungeons`) | No, unit tests and builds only |
 | 60 | [Kakariko Gate open: no dungeon item handed out at new game](60-new-game-dungeon-item-fix.md) | `open_kakariko` (fix) | No, from the generator and built data only |
 
 Features 01 to 08 I built directly. Features 09 to 19 were built by sub-agents; what those files say about investigation and testing comes from the agents' reports, which I did not re-run except where noted.

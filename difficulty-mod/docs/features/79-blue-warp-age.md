@@ -24,7 +24,11 @@ Where Link lands depends on the entrance the boss's dungeon sits behind:
 
 The game's own arrival scene plays only when the boss's dungeon is behind its own entrance and Link has the age the scene was made for (Dodongo's Cavern: either age). It never plays for the Forest Temple, whose own landing is in Kokiri Forest.
 
-Anywhere else, the scene is left out, because it moves Link and the camera to fixed spots. What it writes (quest steps, game data, scene played flags) is written in the boss room before the map changes.
+Anywhere else, the scene is left out, because it moves Link and the camera to fixed spots. What it writes (quest steps, game data, the clock, scene played flags) is written in the boss room before the map changes. The arrival scene is found as the game finds it, by name in `RSDB/EventSetting`.
+
+Jabu-Jabu's first clear changes map inside its own scene flow (`Dm_InsideJabu_Jabu_0050`), so that flow is patched too, and the arrival writes run before the scene starts.
+
+The map the boss room preloads is changed to the map Link lands on.
 
 When one age has no way to arrive outside an entrance (the entrance catalogue's `start_ok`), that age cannot have used it, and its branch shares the other age's landing.
 
@@ -35,14 +39,17 @@ With `shuffle_entrances` off, the build stages nothing here. Without a shuffle a
 1. Forest Temple entrance: SoH lands on the meadow's blue warp point, this lands at the temple's doorway.
 2. Adult at the Deku Tree entrance: the game has no adult warp point there, so Link arrives in the doorway. Whether an adult can walk out of it is not tested: the adult Deku Tree mouth is blocked by boulders.
 3. SoH also opens the Deku Tree to adults and the Fire Temple, Bottom of the Well and Gerudo Training Ground to the other age under dungeon shuffle. This does not.
-4. Boss shuffle and decoupled entrances do not exist here.
+4. Water Temple entrance: SoH lands at its Lake Hylia blue warp point, this lands at the remake's own warp point by the lake, where its blue warp already goes.
+5. Boss shuffle and decoupled entrances do not exist here.
 
 ## Tests
 
 `cargo test -p ootrr-core entr::` with `OOTRR_ROMFS` set:
 
 1. Every boss and both ages land on a map of that age that has the named start position, with the dungeons in place and in every two-dungeon swap that fits.
-2. A boss behind another entrance lands outside it, and the arrival scene's quest writes are present.
+2. A boss behind another entrance lands outside it.
+3. With every arrival scene left out, each of the 8 warps still completes its dungeon's quest, at both ages.
+4. No scene a blue warp plays holds a map change that is not patched.
 
 Not played in the game.
 
@@ -71,8 +78,10 @@ and the map sets Link's age. Only Dodongo's Cavern picks by age.
 entr/blue_warp.rs runs only for seeds with a dungeon layout, so default
 seeds are unchanged. Each warp's map change becomes a switch on
 EventQueryPlayerIsChild and lands outside the entrance the dungeon sits
-behind. Where the game's own arrival scene cannot play there, its quest
-writes happen in the boss room.
+behind. Jabu-Jabu's first clear changes map in
+Dm_InsideJabu_Jabu_0050, which is patched too. Where the game's own
+arrival scene cannot play, its writes happen in the boss room, and the
+boss room preloads the map Link lands on.
 
 ## Checked
 
