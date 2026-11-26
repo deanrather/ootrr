@@ -118,7 +118,9 @@ The scrub sale was not tested: the Hyrule Field grotto scrub asked for a passwor
 
 ## Tested
 
-Merged with nightly 240af8b2 (merge commit ea264d4a), all runs with `OOTRR_ROMFS` set: `cargo test --workspace` 2437 passed, 0 failed, 13 ignored; audits clean; the default preset and the three setting-off plandos build byte-identical to nightly 240af8b2. The game results below are from commit 02d4f5c2, before that merge. The merge brought a nightly change that makes upgrade pickups replay their get event; wallet pickups have not been played since.
+Merged with nightly 52db1a16 (merge commit fa14bb97, conflicts in `slice/edit.rs` and `slice/support.rs` resolved by keeping both sides), all runs with `OOTRR_ROMFS` set: `cargo test --workspace` 2445 passed, 0 failed, 13 ignored; audits clean; the default preset builds byte-identical to nightly 52db1a16 (286 files). No game run after this merge.
+
+Earlier, merged with nightly 240af8b2 (merge commit ea264d4a): `cargo test --workspace` 2437 passed, 0 failed, 13 ignored; audits clean; the default preset and the three setting-off plandos build byte-identical to nightly 240af8b2. The game results below are from commit 02d4f5c2, before that merge. The merge brought a nightly change that makes upgrade pickups replay their get event; wallet pickups have not been played since.
 
 Before the merge, code commit 02d4f5c2:
 
@@ -163,8 +165,8 @@ The setting was a stub. The pouch table column that fills bags on get (`IsItemSt
 
 ## Checked
 
-- `cargo test --workspace`: 2437 passed, 0 failed, with 9 `full_wallet` tests among them.
-- Default settings, and setting off: the seed file and every mod file are byte-identical to nightly 240af8b2 with the default preset and three more (chest and person plando, shop deals and freestanding plando, pot and Gold Skulltula reward plando).
+- `cargo test --workspace`: 2445 passed, 0 failed, with 9 `full_wallet` tests among them.
+- Default settings: every file built is byte-identical to nightly 52db1a16. Setting off: byte-identical to nightly 240af8b2 with three more (chest and person plando, shop deals and freestanding plando, pot and Gold Skulltula reward plando).
 - On: `ootrr flow-loads` finds no missing loads on 9 mods with the setting on.
 - Game: a person's gift, a shop purchase, a ground pickup, the Gold Skulltula reward, a new game with the Adult's Wallet and, on an earlier version, a chest were played by hand and passed. Scripted after the nightly merge: a pot and the Great Fairy's offering reward filled the wallet. The scrub sale is not yet seen.
 
