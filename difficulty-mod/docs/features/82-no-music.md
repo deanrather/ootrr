@@ -20,6 +20,7 @@ Choices made where the request does not say (each is a short change to reverse):
 ## Decisions
 
 - User, 26 Nov: "'no music' should only mute the background music".
+- User, 26 Nov: cutscene music (`BGM_Dm_` tracks) is muted by No Music too ("Yes, mute it").
 - The report that music shuffle "just straight up mutes the music" could not be tied to a version or seed (user: "no can do. it was ages ago"). It is not reproduced, and the shuffle fix below does not claim to answer it.
 
 ## How it works
