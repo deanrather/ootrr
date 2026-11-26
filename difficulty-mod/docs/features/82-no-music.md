@@ -21,6 +21,7 @@ Choices made where the request does not say (each is a short change to reverse):
 
 - User, 26 Nov: "'no music' should only mute the background music".
 - User, 26 Nov: cutscene music (`BGM_Dm_` tracks) is muted by No Music too ("Yes, mute it").
+- Hands-on by the user, 26 Nov, on bcccae41: No Music passed (title and file select, ocarina, the music-timed scene at Hyrule Castle, a boss, a shop, the sounds that stay). Shuffle failed in the Market: "it plays the market town intro music and THEN the random music... for a few seconds... then restarts the music". Not yet tried: the Deku Tree, the castle sneaking area, Lon Lon Ranch.
 - The report that music shuffle "just straight up mutes the music" could not be tied to a version or seed (user: "no can do. it was ages ago"). It is not reproduced, and the shuffle fix below does not claim to answer it.
 
 ## How it works
