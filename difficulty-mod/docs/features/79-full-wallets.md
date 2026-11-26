@@ -82,8 +82,9 @@ Logic is unchanged: placement and shop price rules count `Progressive_Wallet` it
 - A wallet bought in a shop, commit 02d4f5c2: PASS. "looked perfect."
 - The Gold Skulltula House reward, commit 02d4f5c2: PASS. "skultulla house was perfect."
 - A wallet lying on the ground, commit 02d4f5c2: PASS. "ground perfect."
+- A new game with the Adult's Wallet as a starting item, commit 02d4f5c2: PASS. "new-game success".
 
-The scrub, the Great Fairy, a pot and the new-game count are not yet played by hand.
+The scrub, the Great Fairy, a pot and a new game without a starting wallet are not yet played by hand.
 
 ## Scripted game test (commit 02d4f5c2)
 
@@ -104,7 +105,7 @@ No text other than the normal get boxes and the Navi remark was seen. A video of
 - The counter popup in a chest scene with the setting off, and in a person's gift scene with the setting off (no counter is expected).
 - The scrub sale: that the shop fill shows on its open counter. Not played.
 - The Great Fairy and a pot: not played.
-- The starting wallet with and without "Adult's Wallet" or "Giant's Wallet": not played (see "The starting wallet").
+- The starting count with no starting wallet, and with "Giant's Wallet": not played (see "The starting wallet").
 - Archipelago: covered offline only (the mailbox gives through `GetInEvent_NotTurn_NotNpc`); no Archipelago build was made.
 
 ## Tested
@@ -157,7 +158,7 @@ The setting was a stub. The pouch table column that fills bags on get (`IsItemSt
 - `cargo test --workspace`: 2437 passed, 0 failed, with 9 `full_wallet` tests among them.
 - Default settings, and setting off: the seed file and every mod file are byte-identical to nightly 240af8b2 with the default preset and three more (chest and person plando, shop deals and freestanding plando, pot and Gold Skulltula reward plando).
 - On: `ootrr flow-loads` finds no missing loads on 9 mods with the setting on.
-- Game: a person's gift, a shop purchase, a ground pickup, the Gold Skulltula reward and, on an earlier version, a chest were played by hand and passed. The scrub, Great Fairy, pot and new-game gives are not yet played.
+- Game: a person's gift, a shop purchase, a ground pickup, the Gold Skulltula reward, a new game with the Adult's Wallet and, on an earlier version, a chest were played by hand and passed. The scrub, Great Fairy and pot gives are not yet played.
 
 Setting number 610.
 
