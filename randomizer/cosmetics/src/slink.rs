@@ -141,23 +141,27 @@ impl Link {
 
     pub fn retarget(&self, b: &mut [u8], want: &BM<(String, String), String>) -> Res<usize> {
         let by_user: BM<(u32, &str), &String> = want.iter().map(|((u, k), n)| ((hash(u), k.as_str()), n)).collect();
-        let mut by_block: BM<usize, (Vec<usize>, Vec<Option<&String>>)> = BM::new();
+        let mut by_block: BM<usize, Vec<&Call>> = BM::new();
         for c in &self.calls {
-            let e = by_block.entry(c.block).or_insert((c.words.clone(), Vec::new()));
-            e.1.push(by_user.get(&(c.user, c.key.as_str())).copied());
+            by_block.entry(c.block).or_default().push(c);
         }
         let mut n: usize = 0;
-        for (words, all) in by_block.into_values() {
-            let Some(Some(new)) = all.first() else {
+        for all in by_block.into_values() {
+            let wants: Vec<Option<&String>> = all.iter().map(|c| by_user.get(&(c.user, c.key.as_str())).copied()).collect();
+            let decided: Option<&String> = match owner(&all) {
+                Some(i) => wants[i],
+                None => wants.first().copied().flatten().filter(|n| wants.iter().all(|x| *x == Some(*n))),
+            };
+            let (Some(new), words) = (decided, &all[0].words) else {
                 continue;
             };
-            if words.is_empty() || all.iter().any(|x| *x != Some(*new)) {
+            if words.is_empty() {
                 continue;
             }
-            let Some(r) = self.names.get(*new) else {
+            let Some(r) = self.names.get(new) else {
                 continue;
             };
-            for w in words {
+            for &w in words {
                 let v: u32 = ((TEXT as u32) << 24) | r;
                 b.get_mut(w..w + 4).ok_or(E::Format("slink2: a parameter leaves the file"))?.copy_from_slice(&v.to_le_bytes());
             }
@@ -165,6 +169,16 @@ impl Link {
         }
         Ok(n)
     }
+}
+
+fn owner(all: &[&Call]) -> Option<usize> {
+    let key: &str = &all.first()?.key;
+    let ends = std::iter::once(key.len()).chain(key.rmatch_indices('_').map(|x| x.0));
+    ends.filter_map(|end| {
+        let h: u32 = hash(&key[..end]);
+        all.iter().position(|c| c.user == h && c.key == key)
+    })
+    .next()
 }
 
 #[cfg(test)]
@@ -255,6 +269,24 @@ mod tests {
         let v: u32 = u32_at(&b, a.block + 8).unwrap();
         assert_eq!(text(&b, nt + (v & 0xFF_FFFF) as usize), Some("Key_B"));
         assert_eq!(again.calls_of("BGM_A")[1].words.len(), 2);
+    }
+
+    #[test]
+    fn on_a_shared_block_the_user_the_key_is_named_after_decides() {
+        for key in ["BGM_Garden", "BGM_Garden_Low_01"] {
+            let mut b: Vec<u8> = fixture(&[("BGM_Fair", &[key]), ("BGM_Garden", &[key]), ("BGM_C", &["BGM_X"]), ("BGM_D", &["BGM_Y"])]);
+            let mut l: Link = Link::read(&b).unwrap();
+            let fair: usize = l.calls.iter().position(|c| c.user == hash("BGM_Fair")).unwrap();
+            let garden: usize = l.calls.iter().position(|c| c.user == hash("BGM_Garden")).unwrap();
+            l.calls[fair].block = l.calls[garden].block;
+            l.calls[fair].words = l.calls[garden].words.clone();
+            let at = |u: &str, n: &str| -> ((String, String), String) { ((u.to_string(), key.to_string()), n.to_string()) };
+            let other: BM<(String, String), String> = [at("BGM_Fair", "BGM_X")].into_iter().collect();
+            assert_eq!(l.retarget(&mut b.clone(), &other).unwrap(), 0, "{key}: the owner keeps its track");
+            let both: BM<(String, String), String> = [at("BGM_Fair", "BGM_X"), at("BGM_Garden", "BGM_Y")].into_iter().collect();
+            assert_eq!(l.retarget(&mut b, &both).unwrap(), 1);
+            assert_eq!(l.asset(&b, &l.calls[garden]).as_deref(), Some("BGM_Y"), "{key}");
+        }
     }
 
     #[test]

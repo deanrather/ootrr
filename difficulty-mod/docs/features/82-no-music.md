@@ -59,6 +59,47 @@ Unproven, because they are engine behaviour that data does not show:
 - A track at volume 0 keeps playing and still reports its name, which **No bottles during combat** reads.
 - The volume stays at 0 after a loading zone or a reload.
 
+## Shuffle fix: tracks that never changed
+
+Players reported that the castle sneaking area and Lon Lon Ranch kept their own music with the music shuffled. With nightly `240af8b2`, 37 of 274 music calls could never change with `grouped` and 29 with `anywhere`, over 60 cosmetic seeds each. With the fix, 8 and 0.
+
+### Cause
+
+1. A music event's calls in the sound link belong to the user named by its `SLinkUserName`, and the shuffle looked for a user with the event's own name. `BGM_LonLonRanch_Child` and `BGM_LonLonRanch_Adult` both use `BGM_LonLonRanch`, so neither ever changed. `BGM_LostWood_LeadOcarina` uses `BGM_LostWood`.
+2. Several users' calls share one parameter block, and the shuffle left a block alone unless every caller wanted the same track.
+
+### Change
+
+1. `moves` keys each wanted track by `SLinkUserName`. Where an event has the user's own name, its keys win over another event that shares the user.
+2. On a shared block, the caller the track is named after decides: the user whose name equals the key, else the user whose name is the longest `_` prefix of it. With no such caller, the callers still have to agree. The file keeps its size.
+
+### Tracks that now move
+
+Lon Lon Ranch (child and adult, which get the same new track), the castle grounds (`BGM_HyruleGarden`), the windmill as adult, King Dodongo (`BGM_DungeonBoss_Dinasour`), inside the Deku Tree, the Lost Woods ocarina layers and Ganon (`anywhere` only).
+
+### Calls that follow another user
+
+A shared block holds one track, so these play whatever the deciding user got:
+
+| Follows | Deciding user |
+|---|---|
+| `BGM_SurfaceFair`, its `BGM_HyruleGarden` layer and shared Deku Tree layers | `BGM_HyruleGarden`, `BGM_InsideTheDekuTree` |
+| `BGM_WindmillHouse_Child`, its adult track | `BGM_WindmillHouse_Adult` |
+| `BGM_DungeonBoss_Volvagia`, its Dinosaur track | `BGM_DungeonBoss_Dinasour` |
+| `BGM_EnemyMuseum` and `BGM_Common_DekuTree` | `BGM_InsideTheDekuTree` |
+
+So one layer of a layered theme can come from a different set than its other layers. Not heard.
+
+### Left unchanged on purpose
+
+- `BGM_DungeonBoss_Ganon` with `grouped`: it is the only boss theme built from layers, so it has nothing of its kind to trade with.
+- Cutscene tracks (`BGM_Dm_`) and intro, outro, pad, roar and demo parts.
+- Music that is not in the music table, played by an object in the world: the shop and minigame shop speakers, Malon's singing and the owl's theme. The shuffle has never touched it.
+
+No Music is not affected: it mutes by sound group, so shared blocks and aliases are silent too.
+
+A cosmetic seed now gives different `grouped` and `anywhere` music than before. The seed, the settings string, `off` and `none` do not change.
+
 ## Tested
 
 - Unit tests: the four groups are muted and the others are not, a missing group is refused, `none` parses and does not use the cosmetic seed, the web request accepts `none`.
@@ -66,9 +107,13 @@ Unproven, because they are engine behaviour that data does not show:
 - `cargo test --workspace` with the game files: 2431 passed, 0 failed, 13 ignored.
 - Same seed, nightly `240af8b` against this change, Longshot host, one cosmetic seed: the mods with music `off` (283 files), `grouped` and `anywhere` (284 files) are byte-identical, and so is the seed file.
 - A `none` mod differs from an `off` mod in three files only, and `flow-loads` finds nothing missing.
+- Shuffle fix: `every_real_track_can_move_except_the_listed_ones` fails on the unfixed code (37 and 29 calls stuck) and passes with the fix. Unit tests cover the shared user and the shared block.
+- After the shuffle fix, same seed against nightly: the `off` mod is byte-identical, `grouped` and `anywhere` differ in the sound link only. The `none` mod is byte-identical to the one built before the fix.
 - Not played, not heard. No game test has been run.
 
 ## Test in the game
+
+For the shuffle, build with `--music anywhere` and a fixed `--cosmetic-seed`. Listen on the castle grounds, at Lon Lon Ranch as child and adult, in the windmill and at King Dodongo for music that is not the place's own, and walk the world for places with no music. For No Music:
 
 1. Build the same seed twice, with `--music none` and with `--music off`.
 2. Stand in a place with music (the Temple of Time). With No Music only effects and ambient sound are heard.
@@ -107,6 +152,39 @@ fanfare, kept jingle or performer. Workspace tests 2431 passed, 0 failed,
 13 ignored. Music off, grouped and anywhere build byte-identical to
 nightly for one seed. Not played in the game, so that the game applies
 the group volume is unproven.
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+```
+
+The shuffle fix is its own commit:
+
+```
+Lon Lon Ranch, castle grounds and windmill music now shuffle
+
+With Cosmetics > Music shuffle on, Lon Lon Ranch, the castle grounds, the
+windmill as adult, King Dodongo and the Deku Tree always kept their own
+music.
+
+## Cause
+
+Wanted tracks were looked up by event name, not by SLinkUserName, and a
+parameter block shared by several users was left alone unless they all
+wanted the same track.
+
+## Change
+
+moves() keys by SLinkUserName. On a shared block the user the track is
+named after decides. Calls sharing its block follow it. Ganon's theme
+stays with grouped, as the only layered boss theme. A cosmetic seed now
+gives different grouped and anywhere music. The off and none choices and
+the seed are unchanged.
+
+## Checked
+
+A test over the real files counts calls that never move over 60 seeds:
+grouped 37 before and 8 after, anywhere 29 before and 0 after. Workspace
+tests WSCOUNT. Off builds byte-identical to nightly for one seed. Not
+played or heard in the game.
 
 Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
 ```

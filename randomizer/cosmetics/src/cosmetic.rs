@@ -331,12 +331,22 @@ pub fn apply(mod_root: &P, romfs: &P, c: &Cosmetics) -> Res<Vec<String>> {
     Ok(notes)
 }
 
+fn user<'a>(name: &'a str, e: &'a Node) -> &'a str {
+    e.get("SLinkUserName").and_then(|u| u.as_str()).unwrap_or(name)
+}
+
+fn node_keys(e: &Node) -> impl Iterator<Item = &str> {
+    e.get("Node").and_then(|n| n.as_arr()).unwrap_or(&[]).iter().filter_map(|n| n.get("Key").and_then(|k| k.as_str()))
+}
+
 pub fn moves(old: &Byml, new: &Byml) -> BM<(String, String), String> {
     let mut out: BM<(String, String), String> = BM::new();
     let (Some(Node::Map(a)), Some(Node::Map(b))) = (old.root.get("BGM"), new.root.get("BGM")) else {
         return out;
     };
+    let owned: BS<(&str, &str)> = a.iter().filter(|(name, e)| user(name, e) == name).flat_map(|(name, e)| node_keys(e).map(move |k| (name.as_str(), k))).collect();
     for ((name, e), (_, f)) in a.iter().zip(b.iter()) {
+        let by: &str = user(name, e);
         let (Some(x), Some(y)) = (e.get("Node").and_then(|n| n.as_arr()), f.get("Node").and_then(|n| n.as_arr())) else {
             continue;
         };
@@ -344,8 +354,8 @@ pub fn moves(old: &Byml, new: &Byml) -> BM<(String, String), String> {
             let (Some(k), Some(n)) = (p.get("Key").and_then(|v| v.as_str()), q.get("Key").and_then(|v| v.as_str())) else {
                 continue;
             };
-            if k != n {
-                out.insert((name.clone(), k.to_string()), n.to_string());
+            if k != n && (by == name || !owned.contains(&(by, k))) {
+                out.insert((by.to_string(), k.to_string()), n.to_string());
             }
         }
     }
@@ -583,7 +593,8 @@ mod tests {
                 if now != was {
                     moved += 1;
                     assert!(in_bank.contains(&crate::rsizetable::hash(&now)), "{now}");
-                    let users: Vec<&String> = want.iter().filter(|((u, k), n)| crate::rsizetable::hash(u) == c.user && *k == c.key && **n == now).map(|x| &x.0 .0).collect();
+                    let sharing: BS<u32> = link.calls.iter().filter(|x| x.block == c.block).map(|x| x.user).collect();
+                    let users: Vec<&String> = want.iter().filter(|((u, k), n)| sharing.contains(&crate::rsizetable::hash(u)) && *k == c.key && **n == now).map(|x| &x.0 .0).collect();
                     assert!(!users.is_empty(), "{} {now}", c.key);
                 } else if want.keys().any(|(u, k)| crate::rsizetable::hash(u) == c.user && *k == c.key) {
                     kept += 1;
@@ -599,6 +610,80 @@ mod tests {
             let _ = fs::remove_dir_all(&out);
         }
         assert_ne!(outs[0], outs[1]);
+    }
+
+    #[test]
+    fn every_real_track_can_move_except_the_listed_ones() {
+        let Some(root) = real() else {
+            return;
+        };
+        let mut rf: Romfs = Romfs::open(&root).unwrap();
+        let old: Byml = rf.read_byml(BGM_FILE).unwrap();
+        let vanilla: Vec<u8> = rf.read_zs(SLINK).unwrap();
+        let link: Link = Link::read(&vanilla).unwrap();
+        let top: PB = root.join(STREAM);
+        let have = |k: &str| top.join(format!("{k}.bwav")).is_file();
+        let Some(Node::Map(all)) = old.root.get("BGM") else {
+            panic!();
+        };
+        let mut calls: BM<(u32, String), (String, BS<String>)> = BM::new();
+        for (name, e) in all {
+            if kind(name).is_none() {
+                continue;
+            }
+            let user: &str = e.get("SLinkUserName").and_then(|u| u.as_str()).unwrap();
+            for node in e.get("Node").and_then(|n| n.as_arr()).unwrap_or(&[]) {
+                let Some(k) = node.get("Key").and_then(|k| k.as_str()).filter(|k| have(k) && !side(k)) else {
+                    continue;
+                };
+                let at: (u32, String) = (crate::rsizetable::hash(user), k.to_string());
+                calls.entry(at).or_insert_with(|| (user.to_string(), BS::new())).1.insert(name.clone());
+            }
+        }
+        for m in [Music::Grouped, Music::Anywhere] {
+            let mut moved: BS<(u32, String)> = BS::new();
+            for i in 0..60 {
+                let mut y: Byml = old.clone();
+                shuffle_music(&mut y, m, &format!("move {i}"), &have);
+                let mut raw: Vec<u8> = vanilla.clone();
+                link.retarget(&mut raw, &moves(&old, &y)).unwrap();
+                for c in &link.calls {
+                    if link.asset(&raw, c) != link.asset(&vanilla, c) {
+                        moved.insert((c.user, c.key.clone()));
+                    }
+                }
+            }
+            let stuck: Vec<String> = calls.iter().filter(|(at, _)| !moved.contains(*at)).map(|(at, (user, events))| format!("{user}/{} {:?}", at.1, events)).collect();
+            println!("{}: {} of {} calls never move", m.id(), stuck.len(), calls.len());
+            for s in &stuck {
+                println!("STUCK {} {s}", m.id());
+            }
+            let left: BS<&str> = stuck.iter().filter_map(|s| s.split('/').next()).collect();
+            let want: BS<&str> = kept_on_purpose(m).iter().copied().collect();
+            assert_eq!(left, want, "{}", m.id());
+        }
+    }
+
+    fn kept_on_purpose(m: Music) -> &'static [&'static str] {
+        if m == Music::Grouped { &["BGM_DungeonBoss_Ganon"] } else { &[] }
+    }
+
+    #[test]
+    fn events_that_share_a_sound_user_move_its_calls_and_the_owner_wins() {
+        let aliased = |name: &str, user: &str, key: &str| -> (String, Node) {
+            let (n, mut e): (String, Node) = ev(name, key);
+            if let Node::Map(m) = &mut e {
+                m.push(("SLinkUserName".to_string(), Node::Str(user.to_string())));
+            }
+            (n, e)
+        };
+        let table_of = |keys: [&str; 4]| -> Byml {
+            let all: Vec<(String, Node)> = vec![aliased("BGM_Ranch_Child", "BGM_Ranch", keys[0]), aliased("BGM_Ranch_Adult", "BGM_Ranch", keys[1]), aliased("BGM_Pond", "BGM_Town", keys[2]), aliased("BGM_Town", "BGM_Town", keys[3])];
+            Byml { root: Node::Map(vec![("BGM".to_string(), Node::Map(all))]), version: 7, big: false }
+        };
+        let want: BM<(String, String), String> = moves(&table_of(["day", "night", "town", "town"]), &table_of(["x", "y", "pond", "town"]));
+        let expect: BM<(String, String), String> = [("day", "x"), ("night", "y")].iter().map(|(k, n)| (("BGM_Ranch".to_string(), k.to_string()), n.to_string())).collect();
+        assert_eq!(want, expect);
     }
 
     fn layered_ev(name: &str, keys: &[&str]) -> (String, Node) {
