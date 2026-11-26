@@ -804,6 +804,30 @@
     {
       "name": "ZR Open Grotto Chest",
       "state": "eligible"
+    },
+    {
+      "name": "Spirit Temple First Mirror Left Chest",
+      "state": "eligible"
+    },
+    {
+      "name": "Gerudo Training Ground Heavy Block Fourth Chest",
+      "state": "eligible"
+    },
+    {
+      "name": "Ganons Castle Water Trial Left Chest",
+      "state": "eligible"
+    },
+    {
+      "name": "Ganons Castle Light Trial First Right Chest",
+      "state": "eligible"
+    },
+    {
+      "name": "Ganons Castle Light Trial Second Left Chest",
+      "state": "eligible"
+    },
+    {
+      "name": "Ganons Castle Light Trial Third Right Chest",
+      "state": "eligible"
     }
   ]
 }

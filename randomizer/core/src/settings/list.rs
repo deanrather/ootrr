@@ -337,11 +337,12 @@ pub fn build() -> Schema {
         // traps. The two nightlies that had it hidden and on wrote no value either, so their seeds
         // now come out with the junk their traps had replaced.
         Setting::toggle(crate::frost::NUM, crate::frost::SETTING, "shuffle", "Ice Traps", false)
-            .tip("Some junk items in the pool become Ice Traps. A trap looks like a key item until you take it, then it freezes Link for a moment and gives nothing. Traps can be in chests, on the ground, in pots, at Gold Skulltulas, in shops and at NPC rewards, wherever those are shuffled. Experimental."),
+            .tip("Some junk items in the pool become Ice Traps. A trap looks like a key item until you take it, then it freezes Link for a moment and gives nothing. Traps can be in chests, on the ground, in pots, at Gold Skulltulas, in shops and at NPC rewards, wherever those are shuffled. The six trap chests of the Spirit Temple, Gerudo Training Ground and Ganon's Castle become normal chests with shuffled items. Experimental."),
     );
     s.push(
-        Setting::number(crate::frost::COUNT_NUM, crate::frost::COUNT, "shuffle", "Number of Ice Traps", crate::frost::MAX, 1, crate::frost::MAX)
-            .tip("How many junk items become Ice Traps. Fewer are placed when the seed has fewer junk items at spots that can hold a trap.")
+        Setting::number(crate::frost::COUNT_NUM, crate::frost::COUNT, "shuffle", "Number of Ice Traps", crate::frost::DEFAULT, 1, crate::frost::MAX)
+            .wire_as(Value::Int(crate::frost::MAX))
+            .tip("How many junk items become Ice Traps. The default of 6 matches the six trap chests that become normal chests. Fewer are placed when the seed has fewer junk items at spots that can hold a trap.")
             .when_on(crate::frost::SETTING),
     );
     s.push(

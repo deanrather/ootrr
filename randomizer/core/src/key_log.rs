@@ -60,7 +60,7 @@ pub const DUNGEONS: [Dungeon; 8] = [
     dg("ShadowTemple", "Shadow Temple", "Shadow Temple", true),
     dg("SpiritTemple", "Spirit Temple", "Spirit Temple", true),
     dg("BottomOfTheWell", "Bottom of the Well", "Bottom of the Well", false),
-    dg("GerudoTrainingGround", "Gerudo Training Ground", "Gerudo Training Ground", false),
+    dg("GerudoTrainingGround", "Gerudo Proving Grounds", "Gerudo Training Ground", false),
     dg("InsideGanonCastle", "Ganon's Castle", "Ganons Castle", true),
 ];
 
@@ -105,13 +105,15 @@ fn number_tag(name: &str) -> Res<String> {
 
 pub fn plan(d: &Data, seed: &SeedFile) -> Res<Plan> {
     let (w, pl): (World, Placement) = crate::slice::starts::rebuild(d, seed)?;
+    let away: Vec<(crate::gift_keys::Item, &'static str)> = crate::slice::data::extra_dungeon_items();
     let caps: Vec<u32> = DUNGEONS
         .iter()
         .map(|dn| {
-            let n: usize = match w.item(&format!("Small Key ({})", dn.logic)) {
+            let here: usize = match w.item(&format!("Small Key ({})", dn.logic)) {
                 Some(k) => w.real.iter().filter(|l| pl.get(**l) == Some(k)).count(),
                 None => 0,
             };
+            let n: usize = here + away.iter().filter(|(i, g)| *i == crate::gift_keys::Item::Small && *g == dn.data).count();
             u32::try_from(n).unwrap_or(u32::MAX)
         })
         .collect();

@@ -227,6 +227,7 @@ pub fn stage(rf: &mut Romfs, seed: &SeedFile, late: &mut Vec<Out>, work: &P) -> 
         return Ok(());
     }
     let l: Layout = Layout::from_map(&seed.entrances)?;
+    crate::entr::lake::stage(rf, &l, late, work)?;
     let cat: Cat = load()?;
     let Some(d) = dest(rf, &cat, &l)? else {
         return Ok(());
@@ -387,10 +388,16 @@ mod tests {
             .find(|g| Layout::from_map(&g.seed_file.entrances).is_ok_and(|l| l.at[j] != j))
             .unwrap();
         stage(&mut rf, &on.seed_file, &mut late, work).unwrap();
-        let paths: Vec<&str> = late.iter().map(|o| o.path.as_str()).collect();
-        assert_eq!(paths, vec![format!("Event/EventFlow/{FLOW}.bfevfl.zs").as_str()]);
-        let b: Bf = Bf::parse(&rf.zs.decompress(&late[0].z).unwrap()).unwrap();
         let l: Layout = Layout::from_map(&on.seed_file.entrances).unwrap();
+        let flow_path: String = format!("Event/EventFlow/{FLOW}.bfevfl.zs");
+        let mut want_paths: Vec<&str> = vec![flow_path.as_str()];
+        if crate::entr::lake::moved(&l).unwrap() {
+            want_paths.insert(0, crate::entr::lake::MODULE);
+        }
+        let paths: Vec<&str> = late.iter().map(|o| o.path.as_str()).collect();
+        assert_eq!(paths, want_paths);
+        let fl: &Out = late.iter().find(|o| o.path == flow_path).unwrap();
+        let b: Bf = Bf::parse(&rf.zs.decompress(&fl.z).unwrap()).unwrap();
         let want: &str = DUNGEONS[l.at[j]].map;
         assert!(changes(flow(&b), EAT).iter().all(|(m, ..)| m == want));
     }

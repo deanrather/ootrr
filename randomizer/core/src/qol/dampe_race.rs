@@ -11,12 +11,14 @@ pub const HEART_AT: [f32; 3] = [-3.157, 82.6, 75.47];
 const HEART_FROM: u64 = 2157466067026784951;
 
 pub const BLOCK: u64 = 7277816997830770002;
-pub const BLOCK_AT: [f32; 3] = [-19.6769, 84.1, 77.4768];
+pub const BLOCK_AT: [f32; 3] = [-22.4205, 84.1, 77.3269];
 pub const BLOCK_TURN: f32 = std::f32::consts::FRAC_PI_2;
 const BLOCK_ACTOR: &str = "Obj_SongOfTimeBlock_A_01";
 
+pub const RUPEE_CHESTS: [&str; 2] = ["Graveyard Dampe Race Low Rupee Chest", "Graveyard Dampe Race High Rupee Chest"];
+pub const RUPEE_WHY: &str = "each later Dampé race shows it again, so it keeps its rupees";
 
-pub const NOTE: &str = "One Dampé race: the first race gives the Hookshot chest as before, and the race's Heart Piece lies on the ground at the goal, across from Dampé, with no second race to win. A fast second race shows the rupee chest instead of the Heart Piece chest. A Song of Time block stands in the race course as an extra platform. Always on.";
+pub const NOTE: &str = "One Dampé race: the first race gives the Hookshot chest as before, and the race's Heart Piece lies on the ground at the goal, across from Dampé, with no second race to win. A later race shows a rupee chest instead of the Heart Piece chest, and the rupee chests always hold their vanilla rupees. A Song of Time block stands in the race course as an extra platform. Always on.";
 
 fn named(f: &Flow, name: &str) -> Res<usize> {
     let hits: Vec<usize> = (0..f.events.len()).filter(|&i| f.events[i].name == name).collect();

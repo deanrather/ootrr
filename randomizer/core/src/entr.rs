@@ -1,5 +1,6 @@
 pub mod build;
 pub mod data;
+pub mod lake;
 pub mod layout;
 pub mod logic;
 pub mod mode;

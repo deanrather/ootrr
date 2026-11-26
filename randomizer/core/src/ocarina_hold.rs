@@ -480,6 +480,9 @@ mod pickup_tests {
                     g.seed_file.placements.insert(at, there);
                     g.seed_file.placements.insert(chest.to_string(), "Ocarina".to_string());
                 }
+                if !crate::slice::tier_order::fixed_actors(&d, &g.seed_file).ok()?.bad.is_empty() {
+                    return None;
+                }
                 let t = crate::slice::chest_targets::targets(&d, &g.seed_file).ok()?;
                 Some((g, t))
             })

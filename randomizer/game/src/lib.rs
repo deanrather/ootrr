@@ -20,6 +20,7 @@ pub mod flags_scan;
 pub mod ips;
 pub mod items;
 pub mod json;
+pub mod long_paths;
 pub mod modpack;
 pub mod msbt;
 pub mod murmur;

@@ -22,12 +22,14 @@ pub struct Ctx<'a> {
     pub pots: &'a [u64],
     pub scrub_jobs: &'a [crate::scrubs_b::Job],
     pub scrub_rows: usize,
+    pub traps: &'a [u64],
 }
 
 pub type Stage = fn(&mut Romfs, &Ctx, &mut Vec<Out>) -> Res<()>;
 
-pub const STAGES: [(&str, Stage); 28] = [
+pub const STAGES: [(&str, Stage); 29] = [
     ("boss heart chests", boss_hearts),
+    ("trap chests", trap_chests),
     ("songs", songs),
     ("song models", song_models),
     ("hints", hints),
@@ -66,6 +68,10 @@ pub fn run(rf: &mut Romfs, c: &Ctx, more: &mut Vec<Out>) -> Res<()> {
         s(rf, c, more)?;
     }
     Ok(())
+}
+
+fn trap_chests(rf: &mut Romfs, c: &Ctx, more: &mut Vec<Out>) -> Res<()> {
+    crate::slice::trap_chests::stage(rf, more, c.work, c.traps)
 }
 
 fn boss_hearts(rf: &mut Romfs, c: &Ctx, more: &mut Vec<Out>) -> Res<()> {

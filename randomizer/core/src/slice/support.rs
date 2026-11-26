@@ -105,6 +105,7 @@ pub struct Plan {
     pub first_pickups: bool,
     pub area_intros: bool,
     pub full_wallet: bool,
+    pub trap_chests: bool,
 }
 
 pub use crate::slice::unsupported::not_yet;
@@ -348,6 +349,7 @@ pub fn plan(s: &Settings) -> Res<Plan> {
     }
     let ocarinas: bool = toggle(s, crate::slice::pick::OCARINAS, &mut bad);
     let kokiri_sword: bool = toggle(s, crate::slice::pick::SWORD, &mut bad);
+    let trap_chests: bool = toggle(s, crate::frost::SETTING, &mut bad);
     let excluded: Vec<String> = s.items("disabled_locations").map(|v| v.to_vec()).unwrap_or_default();
     if !bad.is_empty() {
         let lines: Vec<String> = bad.iter().map(|b| format!("  {b}")).collect();
@@ -468,7 +470,7 @@ pub fn plan(s: &Settings) -> Res<Plan> {
         notes.push(crate::medal_gate::LACS_NOTE.to_string());
     }
     let own_strict: Vec<(&'static str, &'static str)> = if matches!(chests, Mode::Dungeons | Mode::All) { OWN_STRICT.to_vec() } else { Vec::new() };
-    Ok(Plan { own_strict, chests, keys, rewards, hearts, world, songs, harp_colors, hints, fast, chest_sizes, intro, start, gates, excluded, notes, drops, skulls, remake, chus, qol, treasure, day_skulls, kit, open, npc, shops, bridge, debug_names, silver, lacs, rainbow, trials, door, nocturne, prelude, short, first_pickups, area_intros, full_wallet, story, endings, ocarinas, kokiri_sword, difficulty })
+    Ok(Plan { own_strict, chests, keys, rewards, hearts, world, songs, harp_colors, hints, fast, chest_sizes, intro, start, gates, excluded, notes, drops, skulls, remake, chus, qol, treasure, day_skulls, kit, open, npc, shops, bridge, debug_names, silver, lacs, rainbow, trials, door, nocturne, prelude, short, first_pickups, area_intros, full_wallet, story, endings, ocarinas, kokiri_sword, difficulty, trap_chests })
 }
 
 #[cfg(test)]

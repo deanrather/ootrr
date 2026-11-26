@@ -2,6 +2,7 @@ use std::fs;
 use std::path::{Component, Path as P, PathBuf as PB};
 
 use crate::error::{Error, Res};
+use crate::long_paths;
 
 pub struct Pack {
     pub root: PB,
@@ -127,6 +128,10 @@ impl Pack {
         if self.work == self.root {
             return Ok(());
         }
+        if let Some(l) = long_paths::find(&self.work, &self.root) {
+            fs::remove_dir_all(&self.work)?;
+            return Err(Error::Msg(long_paths::message(&l)));
+        }
         for d in ["romfs", "exefs"] {
             let old: PB = self.root.join(d);
             if old.is_dir() {
@@ -195,6 +200,25 @@ mod tests {
         let again: Pack = Pack::begin(&d, "0400486024DEC000", "Test Mod").unwrap();
         drop(again);
         assert_eq!(fs::read(old.root.join("romfs").join("New").join("File.bin")).unwrap(), b"new");
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn a_build_with_a_too_long_path_leaves_the_old_mod() {
+        let d: PB = std::path::absolute(tmp("long_commit")).unwrap();
+        let old: Pack = Pack::create(&d, "0400486024DEC000", "Long").unwrap();
+        old.write_romfs("Old/File.bin", b"old").unwrap();
+        let base: usize = old.root.join("romfs").join("x").as_os_str().to_string_lossy().encode_utf16().count();
+        let ok: Pack = Pack::begin(&d, "0400486024DEC000", "Long").unwrap();
+        ok.write_romfs(&"a".repeat(long_paths::LIMIT - 1 - base + 1), b"ok").unwrap();
+        ok.commit().unwrap();
+        let bad: Pack = Pack::begin(&d, "0400486024DEC000", "Long").unwrap();
+        bad.write_romfs(&"b".repeat(long_paths::LIMIT - base + 1), b"new").unwrap();
+        let e: String = bad.commit().unwrap_err().to_string();
+        assert!(e.starts_with("The mod was not written: 1 of its files"), "{e}");
+        assert!(e.contains(&format!("Longest ({} characters)", long_paths::LIMIT)), "{e}");
+        assert!(!old.root.join(WORK).exists());
+        assert!(old.root.join("romfs").join("a".repeat(long_paths::LIMIT - base)).is_file());
         let _ = fs::remove_dir_all(&d);
     }
 

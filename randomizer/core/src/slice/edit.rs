@@ -150,7 +150,7 @@ pub fn build_for_with(seed: &SeedFile, romfs: &P, load: &P, mod_name: &str, host
     let (seed, cold): (SeedFile, Vec<crate::frost::Trap>) = crate::frost::prepare(seed)?;
     let b: Built = crate::slice::seed_packs::build_hooked(&seed, romfs, load, mod_name, host, hook)?;
     let b: Built = crate::shelf::seed::after(&seed, romfs, load, mod_name, host, b)?;
-    let b: Built = crate::frost::after(&cold, romfs, load, mod_name, host, b)?;
+    let b: Built = crate::frost::after(&cold, &seed.seed, romfs, load, mod_name, host, b)?;
     let on: bool = crate::slice::support::plan(&seed.settings()?.settings)?.full_wallet;
     crate::full_wallet::after(on, romfs, load, mod_name, host, b)
 }
@@ -401,6 +401,7 @@ pub fn build_data(d: Data, seed: &SeedFile, romfs: &P, load: &P, mod_name: &str,
         crate::gift_keys::Item::Other(k) => Some((k, c.dungeon)),
         crate::gift_keys::Item::Small => None,
     }));
+    let traps: Vec<u64> = ts.iter().filter(|t| t.old_actor == crate::slice::trap_chests::ACTOR).map(|t| t.hash).collect();
     let c: crate::slice::stages::Ctx = crate::slice::stages::Ctx {
         d: &d,
         seed,
@@ -415,6 +416,7 @@ pub fn build_data(d: Data, seed: &SeedFile, romfs: &P, load: &P, mod_name: &str,
         pots: &pots,
         scrub_jobs: &scrub_jobs,
         scrub_rows,
+        traps: &traps,
     };
     crate::slice::stages::run(&mut rf, &c, &mut more)?;
     // Ground spots whose actor kept no saved row get one when another pickup stands there.

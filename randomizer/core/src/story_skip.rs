@@ -2244,7 +2244,10 @@ pub fn patch_burning(b: &mut Bf) -> Res<()> {
     // The flag of the flashback in place of the burning scene's transition.
     set_param(&mut f.events[scene].kind, "GameDataName", Val::Str("HavePlayedEvent.Dm_Kakariko_0040".to_string()))?;
     set_next(&mut f.events[log].kind, idx(scene)?)?;
-    transition_to_flag(f, BURN_PREFIX, BURN_FLASHBACK.0, BURN_FLASHBACK.1, None)?;
+    let flashback: usize = transition_to_flag(f, BURN_PREFIX, BURN_FLASHBACK.0, BURN_FLASHBACK.1, None)?;
+    let kinds: Vec<Kind> = vec![loading_wait(f)?, fade_in(f)?];
+    let first: u16 = chain(f, &format!("{BURN_PREFIX}Fade"), kinds, idx(onward)?)?;
+    set_next(&mut f.events[flashback].kind, first)?;
     Ok(())
 }
 
@@ -2911,7 +2914,11 @@ mod tests {
         let flashback: usize = f.entries.iter().find(|e| e.name == BURN_FLASHBACK_BOOT).unwrap().main as usize;
         let w2: Vec<String> = walk_joins(f, flashback as u16, 40);
         assert!(!w2.iter().any(|x| x.starts_with("EventSystemActor.EventTransition")), "{w2:?}");
-        assert!(w2.iter().any(|x| x == "GameDataActor.EventTriggerSetGameDataBool(HavePlayedEvent.Dm_Kakariko_0040)"), "{w2:?}");
+        let set: usize = w2.iter().position(|x| x == "GameDataActor.EventTriggerSetGameDataBool(HavePlayedEvent.Dm_Kakariko_0040)").expect(&format!("{w2:?}"));
+        let wait: usize = w2.iter().position(|x| x.starts_with("UISystemActor.EventWaitCloseLoadingFade")).expect(&format!("the change is reserved under the loading fade: {w2:?}"));
+        let fade: usize = w2.iter().position(|x| x.starts_with("UISystemActor.EventEventFadeIn")).expect(&format!("{w2:?}"));
+        let go: usize = w2.iter().position(|x| x.starts_with("GameSystemActor.EventReserveBancChange")).expect(&format!("{w2:?}"));
+        assert!(set < wait && wait < fade && fade < go, "{w2:?}");
         let onward: usize = find(f, BURN_FLASHBACK_CHANGE.0).unwrap();
         assert_eq!((text(&f.events[onward], "NextBanc"), text(&f.events[onward], "BootEventName")), (Some(BURN_ARRIVE_BANC), Some(BURN_BOOT)));
         Bf::parse(&b.write().unwrap()).unwrap();

@@ -133,8 +133,9 @@ mod tests {
         assert!(pick(&d, &w, &p).left.get(OFF).is_some_and(|n| *n >= all().len()));
         let q: Plan = plan(&on()).unwrap();
         let got: Vec<String> = pick(&d, &w, &q).free.iter().map(|l| w.locs[*l].name.clone()).collect();
+        let race: [&str; 2] = crate::qol::dampe_race::RUPEE_CHESTS;
         for n in all() {
-            assert!(got.iter().any(|g| g == n), "{n}");
+            assert_eq!(got.iter().any(|g| g == n), !race.contains(&n), "{n}");
         }
     }
 

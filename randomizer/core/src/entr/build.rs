@@ -211,6 +211,9 @@ pub fn apply(rf: &mut Romfs, seed: &SeedFile, edits: &mut Vec<Edited>) -> Res<Ve
     let st: Staged = stage(rf, &cat, &mv, edits)?;
     let mut notes: Vec<String> = text::report(&l).lines().map(|x| x.to_string()).collect();
     notes.push(format!("{} entrance actors were rewritten in {} map files for the dungeon entrances.", st.actors, st.files.len()));
+    if crate::entr::lake::moved(&l)? {
+        notes.push(crate::entr::lake::NOTE.to_string());
+    }
     Ok(notes)
 }
 

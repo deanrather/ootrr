@@ -6,10 +6,10 @@ use crate::placement::hash_of;
 
 const DROP: &str = "Drop__DropActor";
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Swap {
     Content(String),
-    Actor(String),
+    Actor(String, f32),
 }
 
 pub fn banc(raw: &[u8], hits: &BM<u64, Swap>) -> Res<(Vec<u8>, usize)> {
@@ -27,8 +27,13 @@ pub fn banc(raw: &[u8], hits: &BM<u64, Swap>) -> Res<(Vec<u8>, usize)> {
                 d.set(DROP, Node::Str(fake.clone()));
                 n += 1;
             }
-            Some(Swap::Actor(name)) => {
+            Some(Swap::Actor(name, dy)) => {
                 a.set("Gyaml", Node::Str(name.clone()));
+                if *dy > 0.0 {
+                    if let Some(Node::F32(v)) = a.get_mut("Translate").and_then(|t| t.as_arr_mut()).and_then(|t| t.get_mut(1)) {
+                        *v += *dy;
+                    }
+                }
                 n += 1;
             }
             None => {}

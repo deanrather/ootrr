@@ -43,6 +43,8 @@ pub fn edit_file_with(file: &str, raw: &[u8], ts: &[Target], keys: bool, small: 
                 hearts.push((t.hash, heart_ids(&y, t.hash)));
             }
             n
+        } else if t.old_actor == crate::slice::trap_chests::ACTOR {
+            crate::slice::trap_chests::open(&mut y, t.hash, &t.new_actor)?
         } else {
             match pu::swap_gyaml(&mut y, t.hash, &t.old_actor, &t.new_actor) {
                 0 => set_drop_ev(&mut y, t.hash, &t.old_actor, &t.new_actor, t.ev)?,
