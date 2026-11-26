@@ -94,7 +94,9 @@ Commit of this version: see `## Commit message`. All runs with `OOTRR_ROMFS` set
   - every grant of every supported or gated flow location (data/flow_locations.json) reaches a give point, by category: chest (both chest flows), npc_gift, trade, minigame, gs_reward, great_fairy, scrub_sale, shop, bottle, cutscene_gift, dungeon_reward, cow and potion_shop (with the build's bottle swap). The 5 cow clone flows are made by the build from the cow template. The Archipelago mailbox give reaches `GetPouchContent` too.
   - the Navi list: only the 4 value bytes of the one `MaxRupee000` entry change, a second patch is refused, and the file is in the game-package unpack list.
   - the capacities 200, 500, 1000 match `AfterExpansionMaxNum` in the pouch table, the fill (1000) is at least every capacity, and a new game's count is 200, 500 or 1000.
-- Mod builds, `ootrr flow-loads`, the byte comparison with nightly and `cargo test --workspace`: see `## Commit message`.
+- `cargo test --workspace` on commit ebe860a3: 2422 passed, 0 failed.
+- Mods built from commit ebe860a3, one per give category, two Progressive Wallets placed by plando where the category allows: chest and person (`on`), shop shelf (`shuffle_shops` deals_4) and freestanding Piece of Heart spot, pot (`shuffle_pots` overworld) and the Kakariko 10 Gold Skulltula reward, scrub (`shuffle_scrubs_a`, one wallet), Great Fairy (one wallet), minigame and cow (`shuffle_cows`), token spot (`shuffle_skulltulas` matched) and crate (`shuffle_crates` overworld), and both starting wallets. `ootrr flow-loads` finds no missing loads on all 11. On against off: 7 files differ (the 4 give-point flows, the Navi list, `GameDataList`, the size table), 8 with the shop (`DisplayShop`, 2 shelf tier adds).
+- Setting off: the seed file and every mod file are byte-identical to nightly 2746d256, with the chest and person plando and with the shop and freestanding plando.
 
 ## How to test in the game
 
@@ -125,8 +127,9 @@ The setting was a greyed stub. The pouch table column that fills bags on get (`I
 
 ## Checked
 
-- `cargo test -p ootrr-core full_wallet`: 10 of 10 passed. `cargo test --workspace`: not yet run on this commit.
-- Default output byte-identical to nightly 2746d256: not yet run on this commit.
+- `cargo test --workspace` on commit ebe860a3: 2422 passed, 0 failed (the 10 `full_wallet` tests among them).
+- Setting off: the seed file and every mod file are byte-identical to nightly 2746d256 with two presets, a chest and person plando and a shop deals and freestanding plando.
+- On: `ootrr flow-loads` finds no missing loads on 11 mods, one per give category (chest, person, shop, freestanding, pot, Gold Skulltula reward, scrub, Great Fairy, minigame, cow, token spot, crate, starting wallets).
 - Game: not played. The previous version's count result (scripted, chest and person, 37 -> 500 and 37 -> 1000, off unchanged) stands for the cap. The counter popup, the pickup and shop fills, the starting wallet and the Navi change are not yet seen in the game.
 
 Setting number 610.
