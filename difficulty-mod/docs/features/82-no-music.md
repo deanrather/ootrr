@@ -114,6 +114,7 @@ A cosmetic seed now gives different `grouped` and `anywhere` music than before. 
 - Shuffle fix: `every_real_track_can_move_except_the_listed_ones` fails on the unfixed code (37 and 29 calls stuck) and passes with the fix. Unit tests cover the shared user and the shared block.
 - After the shuffle fix, same seed against nightly: the `off` mod is byte-identical, `grouped` and `anywhere` differ in the sound link only. The `none` mod is byte-identical to the one built before the fix.
 - `cargo test --workspace` on the shuffle fix (code commit `5e80d4d8`): 2435 passed, 0 failed, 13 ignored.
+- After the jingle change (code commit `155d7e95`): the 21 cosmetic music, sound link and silence tests pass, `off`, `grouped` and `anywhere` bytes are as above, and the `none` mod differs from the earlier one in the sound link only. The workspace tests were not run again.
 - Not played, not heard. No game test has been run.
 
 ## Test in the game
@@ -153,8 +154,8 @@ required::unpack lists the new file.
 ## Checked
 
 Unit and game-file tests: every BGM_ call ends in a muted group or is a
-fanfare, kept jingle or performer. Workspace tests 2431 passed, 0 failed,
-13 ignored. Music off, grouped and anywhere build byte-identical to
+fanfare, jingle or performer. Workspace tests 2435 passed, 0 failed,
+13 ignored, before the last jingle was kept, then the music tests again. Music off, grouped and anywhere build byte-identical to
 nightly for one seed. Not played in the game, so that the game applies
 the group volume is unproven.
 
