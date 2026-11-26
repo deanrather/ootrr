@@ -229,6 +229,7 @@ pub fn stage(rf: &mut Romfs, seed: &SeedFile, late: &mut Vec<Out>, work: &P) -> 
     let l: Layout = Layout::from_map(&seed.entrances)?;
     crate::entr::lake::stage(rf, &l, late, work)?;
     let cat: Cat = load()?;
+    crate::entr::blue_warp::stage(rf, &cat, &l, late, work)?;
     let Some(d) = dest(rf, &cat, &l)? else {
         return Ok(());
     };
@@ -390,7 +391,7 @@ mod tests {
         stage(&mut rf, &on.seed_file, &mut late, work).unwrap();
         let l: Layout = Layout::from_map(&on.seed_file.entrances).unwrap();
         let flow_path: String = format!("Event/EventFlow/{FLOW}.bfevfl.zs");
-        let mut want_paths: Vec<&str> = vec![flow_path.as_str()];
+        let mut want_paths: Vec<&str> = vec![crate::story_skip::ENDING_FILE, flow_path.as_str()];
         if crate::entr::lake::moved(&l).unwrap() {
             want_paths.insert(0, crate::entr::lake::MODULE);
         }
