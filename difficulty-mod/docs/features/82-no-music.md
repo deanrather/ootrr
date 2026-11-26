@@ -18,7 +18,8 @@ Choices made where the request does not say (each is a short change to reverse):
 
 ## Decisions
 
-None from the user beyond the request.
+- User, 26 Nov: "'no music' should only mute the background music".
+- The report that music shuffle "just straight up mutes the music" could not be tied to a version or seed (user: "no can do. it was ages ago"). It is not reproduced, and the shuffle fix below does not claim to answer it.
 
 ## How it works
 
@@ -110,6 +111,7 @@ A cosmetic seed now gives different `grouped` and `anywhere` music than before. 
 - A `none` mod differs from an `off` mod in three files only, and `flow-loads` finds nothing missing.
 - Shuffle fix: `every_real_track_can_move_except_the_listed_ones` fails on the unfixed code (37 and 29 calls stuck) and passes with the fix. Unit tests cover the shared user and the shared block.
 - After the shuffle fix, same seed against nightly: the `off` mod is byte-identical, `grouped` and `anywhere` differ in the sound link only. The `none` mod is byte-identical to the one built before the fix.
+- `cargo test --workspace` on the shuffle fix (code commit `5e80d4d8`): 2435 passed, 0 failed, 13 ignored.
 - Not played, not heard. No game test has been run.
 
 ## Test in the game
@@ -185,7 +187,7 @@ the seed are unchanged.
 
 A test over the real files counts calls that never move over 60 seeds:
 grouped 37 before and 8 after, anywhere 29 before and 0 after. Workspace
-tests WSCOUNT. Off builds byte-identical to nightly for one seed. Not
+tests 2435 passed, 0 failed, 13 ignored. Off builds byte-identical to nightly for one seed. Not
 played or heard in the game.
 
 Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
