@@ -1,5 +1,4 @@
 pub mod fill;
-pub mod navi;
 pub mod sites;
 
 use std::fs;
@@ -24,7 +23,7 @@ pub const COUNT: &str = "PlayerStatus.CurrentRupee";
 pub const FIRST: (&str, i32) = ("Item_Wallet_Small", 200);
 pub const CAPS: [(&str, i32); 2] = [("Item_Wallet_Medium", 500), ("Item_Wallet_Large", 1000)];
 pub const FLOWS: &str = "Event/EventFlow";
-pub const NOTE: &str = "Full Wallets: the new-game save sets the rupee count to the best starting wallet's capacity; after each Adult's or Giant's Wallet give (chest, person, reward, shop, pickup) the event flows open the rupee counter and add 1000 rupees, which the game caps at the wallet's capacity; Navi's full-wallet balloon entry is blanked. Not yet seen in the game.";
+pub const NOTE: &str = "Full Wallets: the new-game save sets the rupee count to the best starting wallet's capacity; after each Adult's or Giant's Wallet give (chest, person, reward, shop, pickup) the event flows open the rupee counter and add 1000 rupees, which the game caps at the wallet's capacity. Seen in the game: the chest give. The other gives and the new-game count are not yet seen.";
 
 pub fn cap(actor: &str) -> Option<i32> {
     CAPS.iter().find(|(a, _)| *a == actor).map(|(_, n)| *n)
@@ -91,13 +90,8 @@ pub fn after(on: bool, romfs: &P, load: &P, mod_name: &str, host: Host, mut b: B
         lines.push(format!("{path} ({n})"));
         b.counts.files += usize::from(!modded);
     }
-    let navi: PB = local(&base, navi::FILE);
-    let fresh: bool = !navi.is_file();
-    let was: Vec<u8> = if fresh { rf.read(navi::FILE)? } else { fs::read(&navi)? };
-    pk.write_romfs(navi::FILE, &navi::quiet(&was)?)?;
-    b.counts.files += usize::from(fresh);
     pk.write_romfs(TABLE_PATH, &rst.to_zs()?)?;
-    b.report.push_str(&format!("Full Wallets: wallet fills added at {} give points: {}; Navi's full wallet balloon is off\n", lines.len(), lines.join(", ")));
+    b.report.push_str(&format!("Full Wallets: wallet fills added at {} give points: {}\n", lines.len(), lines.join(", ")));
     Ok(b)
 }
 
@@ -115,6 +109,27 @@ mod tests {
         assert_eq!(start_sets(&k), vec![Set::Int(COUNT.to_string(), 1000)]);
         assert!(NUM >= 600);
         assert_eq!(cap(FIRST.0), None);
+    }
+
+    #[test]
+    fn a_full_wallets_build_leaves_the_navi_table_alone() {
+        let navi: &str = "GameParameter/NaviMgrGlobalParam/GlobalGameParameterTable.game__navi__NaviMgrGlobalParam.bgyml";
+        let d: crate::slice::data::Data = crate::slice::data::Data::load().unwrap();
+        assert!(!crate::required::unpack(&d, false).wants(navi));
+        let p: PB = ootrr_game::test_romfs::path();
+        if !p.join("Pack").join("ZsDic.pack.zs").is_file() {
+            eprintln!("skipped, no RomFS dump at {} (set OOTRR_ROMFS)", p.display());
+            return;
+        }
+        let mut s: crate::settings::Settings = crate::settings::Settings::default();
+        s.set(SETTING, crate::settings::Value::Bool(true)).unwrap();
+        let g: crate::slice::generate::Generated = crate::slice::generate::generate_data(&d, &s, "full wallet navi", &crate::slice::generate::GenOpts::default()).unwrap();
+        let load: PB = std::env::temp_dir().join(format!("ootrr_full_wallet_navi_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&load);
+        let b: Built = crate::slice::edit::build_for(&g.seed_file, &p, &load, "fullwallet", Host::Eden).unwrap();
+        assert!(b.report.contains("Full Wallets: wallet fills added at"), "{}", b.report);
+        assert!(!local(&b.root.join("romfs"), navi).exists());
+        let _ = fs::remove_dir_all(&load);
     }
 
     #[test]
