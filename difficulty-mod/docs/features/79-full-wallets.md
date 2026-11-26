@@ -75,9 +75,10 @@ Logic is unchanged: placement and shop price rules count `Progressive_Wallet` it
 
 ## Hands-on
 
-The user played commit 19989b10, which also turned the Navi remark off, on 26 Nov.
+26 Nov, by the user:
 
-- Chest (Mido's house): PASS. "mido's chest gave me a giant wallet and filled it and was perfect."
+- Chest (Mido's house), commit 19989b10, which also turned the Navi remark off: PASS. "mido's chest gave me a giant wallet and filled it and was perfect."
+- A wallet given by a person, commit 02d4f5c2: PASS. "it was perfect."
 
 Every other source is not yet played by hand.
 
@@ -105,7 +106,9 @@ No text other than the normal get boxes and the Navi remark was seen. A video of
 
 ## Tested
 
-Code commit 02d4f5c2. All runs with `OOTRR_ROMFS` set.
+Merged with nightly 240af8b2 (merge commit ea264d4a), all runs with `OOTRR_ROMFS` set: `cargo test --workspace` 2437 passed, 0 failed, 13 ignored; audits clean; the default preset and the three setting-off plandos build byte-identical to nightly 240af8b2. The game results below are from commit 02d4f5c2, before that merge. The merge brought a nightly change that makes upgrade pickups replay their get event; wallet pickups have not been played since.
+
+Before the merge, code commit 02d4f5c2:
 
 - `cargo test -p ootrr-core full_wallet`: 9 of 9 passed.
   - each of the 4 give-point adds gets: the name write with its own argument, a 1-frame wait, one question per wallet name, all hits to one fill, the last miss to the old next event, the fill in the right shape (popup or shop) with `Value` 1000. Every other event is unchanged and a second run changes nothing.
@@ -148,10 +151,10 @@ The setting was a stub. The pouch table column that fills bags on get (`IsItemSt
 
 ## Checked
 
-- `cargo test --workspace`: 2421 passed, 0 failed, with 9 `full_wallet` tests among them.
-- Setting off: the seed file and every mod file are byte-identical to nightly 2746d256 with three presets (chest and person plando, shop deals and freestanding plando, pot and Gold Skulltula reward plando).
+- `cargo test --workspace`: 2437 passed, 0 failed, with 9 `full_wallet` tests among them.
+- Default settings, and setting off: the seed file and every mod file are byte-identical to nightly 240af8b2 with the default preset and three more (chest and person plando, shop deals and freestanding plando, pot and Gold Skulltula reward plando).
 - On: `ootrr flow-loads` finds no missing loads on 9 mods with the setting on.
-- Game: a chest give played by hand on an earlier version filled the wallet. Scripted on this code: a person's gift, a ground pickup and the Gold Skulltula reward filled the wallet with the counter on screen, and a chest filled it. The shop, scrub, Great Fairy, pot and new-game gives are not yet played.
+- Game: a person's gift and, on an earlier version, a chest were played by hand and filled the wallet. Scripted on this code: a person's gift, a ground pickup and the Gold Skulltula reward filled the wallet with the counter on screen, and a chest filled it. The shop, scrub, Great Fairy, pot and new-game gives are not yet played.
 
 Setting number 610.
 
