@@ -24,7 +24,7 @@ pub const COUNT: &str = "PlayerStatus.CurrentRupee";
 pub const FIRST: (&str, i32) = ("Item_Wallet_Small", 200);
 pub const CAPS: [(&str, i32); 2] = [("Item_Wallet_Medium", 500), ("Item_Wallet_Large", 1000)];
 pub const FLOWS: &str = "Event/EventFlow";
-pub const NOTE: &str = "Full Wallets: a new game starts with as many rupees as its best wallet holds; after every Adult's or Giant's Wallet get (chest, person, reward, shop, pickup on the ground or from a pot) the rupee counter opens and the wallet fills to its capacity; Navi's full-wallet remark is off.";
+pub const NOTE: &str = "Full Wallets: the new-game save sets the rupee count to the best starting wallet's capacity; after each Adult's or Giant's Wallet give (chest, person, reward, shop, pickup) the event flows open the rupee counter and add 1000 rupees, which the game caps at the wallet's capacity; Navi's full-wallet balloon entry is blanked. Not yet seen in the game.";
 
 pub fn cap(actor: &str) -> Option<i32> {
     CAPS.iter().find(|(a, _)| *a == actor).map(|(_, n)| *n)

@@ -103,15 +103,15 @@ Commit of this version: see `## Commit message`. All runs with `OOTRR_ROMFS` set
 The tester plan is `playtest/full-wallet/PLAN.md` in the local test folder. By hand:
 
 1. Build a seed with "Full Wallets" on, no wallet a starting item. New game: the counter (pause menu) reads 200.
-2. Hold 5 rupees. Get Adult's Wallet anywhere (chest, person, shop, a pot, the ground, the Gold Skulltula House): after the "You got" box the rupee counter opens, counts up to 500 and closes. No Navi remark, no other text.
-3. Get Giant's Wallet: the counter counts up to 1000.
+2. Hold 5 rupees. Get Adult's Wallet anywhere (chest, person, shop, a pot, the ground, the Gold Skulltula House). Expected, not yet seen: after the "You got" box the rupee counter opens, counts up to 500 and closes, with no Navi remark and no other text.
+3. Get Giant's Wallet. Expected: the counter counts up to 1000.
 4. Repeat with the setting off: a new game reads 0, the wallets add no rupees and no counter opens.
 
 ## Commit message
 
-Full Wallets: wallet upgrades fill with rupees, shown on the rupee counter
+Full Wallets: fill each wallet upgrade to its capacity and open the rupee counter
 
-With Full Wallets on, a new game starts with its best wallet full, and every Adult's Wallet and Giant's Wallet tops the rupee count up to its capacity. After the item box the rupee counter opens and counts up. This holds for wallets from chests, people, rewards, shops, scrubs, pots and the ground. Navi's full-wallet remark is off while the setting is on.
+With Full Wallets on, the new-game save starts the rupee count at the best starting wallet's capacity, and after each Adult's Wallet or Giant's Wallet give the event flows open the rupee counter and add rupees, which the game caps at the new capacity. The hooked gives cover chests, people, rewards, shops, scrubs and pickups from pots and the ground. Navi's full-wallet balloon entry is blanked. In the game only the cap has been seen (previous version, chest and person). The counter, the pickup and shop gives, the new-game count and the Navi change are not yet played.
 
 ## Cause
 
@@ -127,7 +127,7 @@ The setting was a greyed stub. The pouch table column that fills bags on get (`I
 
 ## Checked
 
-- `cargo test --workspace` on commit ebe860a3: 2422 passed, 0 failed (the 10 `full_wallet` tests among them).
+- `cargo test --workspace` on commit ebe860a3: 2422 passed, 0 failed (the 10 `full_wallet` tests among them). The next commit changes only the build report text `NOTE`; `cargo test -p ootrr-core full_wallet` reruns on it.
 - Setting off: the seed file and every mod file are byte-identical to nightly 2746d256 with two presets, a chest and person plando and a shop deals and freestanding plando.
 - On: `ootrr flow-loads` finds no missing loads on 11 mods, one per give category (chest, person, shop, freestanding, pot, Gold Skulltula reward, scrub, Great Fairy, minigame, cow, token spot, crate, starting wallets).
 - Game: not played. The previous version's count result (scripted, chest and person, 37 -> 500 and 37 -> 1000, off unchanged) stands for the cap. The counter popup, the pickup and shop fills, the starting wallet and the Navi change are not yet seen in the game.
