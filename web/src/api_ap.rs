@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 use ootrr_core::ap::build::{self as ap_build, Summary};
 use ootrr_core::ap::patch::Patch;
 use ootrr_core::ap::{export, world};
-use ootrr_core::cosmetic::{self, Cosmetics, Music};
+use ootrr_core::cosmetic::{self, Cosmetics};
 use ootrr_core::sfx::Sfx;
 use ootrr_core::json::Json;
 use ootrr_core::settings::Settings;
