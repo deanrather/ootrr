@@ -84,7 +84,7 @@ Logic is unchanged: placement and shop price rules count `Progressive_Wallet` it
 - A wallet lying on the ground, commit 02d4f5c2: PASS. "ground perfect."
 - A new game with the Adult's Wallet as a starting item, commit 02d4f5c2: PASS. "new-game success".
 
-The scrub, the Great Fairy, a pot and a new game without a starting wallet are not yet played by hand.
+The scrub, the Great Fairy, a pot and a new game without a starting wallet are not yet played by hand (for the pot and the Great Fairy see the scripted test below).
 
 ## Scripted game test (commit 02d4f5c2)
 
@@ -100,11 +100,19 @@ The scrub, the Great Fairy, a pot and a new game without a starting wallet are n
 
 No text other than the normal get boxes and the Navi remark was seen. A video of the Giant's Wallet chest with the setting on, made afterwards, shows the "You got a giant's wallet!" box, then the counter going from 5 to 1000, then the Navi remark. The Gold Skulltula reward with the setting off was not run.
 
+## Scripted game test after the nightly merge
+
+26 Nov, built from the merged code. A pot in the Know-It-All Brothers' house, child, no wallet upgrade, 5 rupees: the Adult's Wallet filled it to 500, the counter counted up inside the get scene (+495), and Navi said "Your wallet is stuffed." afterwards. No setting-off run of the pot.
+
+The Hyrule Castle Great Fairy, child: the Adult's Wallet filled it from 60 to 500 and the counter read 500 in the reward scene. This was the 50 rupee offering path (the test save counted as already rewarded); the first-visit reward was not run. No setting-off run.
+
+The scrub sale was not tested: the Hyrule Field grotto scrub asked for a password, and the Lost Woods bridge scrub attacked and was not defeated by the script, so nothing was bought.
+
 ## Unproven (game test needed)
 
 - The counter popup in a chest scene with the setting off, and in a person's gift scene with the setting off (no counter is expected).
 - The scrub sale: that the shop fill shows on its open counter. Not played.
-- The Great Fairy and a pot: not played.
+- The Great Fairy's first-visit reward: not run (only the offering path).
 - The starting count with no starting wallet, and with "Giant's Wallet": not played (see "The starting wallet").
 - Archipelago: covered offline only (the mailbox gives through `GetInEvent_NotTurn_NotNpc`); no Archipelago build was made.
 
@@ -158,7 +166,7 @@ The setting was a stub. The pouch table column that fills bags on get (`IsItemSt
 - `cargo test --workspace`: 2437 passed, 0 failed, with 9 `full_wallet` tests among them.
 - Default settings, and setting off: the seed file and every mod file are byte-identical to nightly 240af8b2 with the default preset and three more (chest and person plando, shop deals and freestanding plando, pot and Gold Skulltula reward plando).
 - On: `ootrr flow-loads` finds no missing loads on 9 mods with the setting on.
-- Game: a person's gift, a shop purchase, a ground pickup, the Gold Skulltula reward, a new game with the Adult's Wallet and, on an earlier version, a chest were played by hand and passed. The scrub, Great Fairy and pot gives are not yet played.
+- Game: a person's gift, a shop purchase, a ground pickup, the Gold Skulltula reward, a new game with the Adult's Wallet and, on an earlier version, a chest were played by hand and passed. Scripted after the nightly merge: a pot and the Great Fairy's offering reward filled the wallet. The scrub sale is not yet seen.
 
 Setting number 610.
 
