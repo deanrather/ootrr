@@ -63,6 +63,9 @@ Unproven, because they are engine behaviour that data does not show:
 
 - Unit tests: the four groups are muted and the others are not, a missing group is refused, `none` parses and does not use the cosmetic seed, the web request accepts `none`.
 - Game-file test (`silence::the_real_files_leave_no_music_call_in_an_audible_music_group`): after the edit every `BGM_` call is in a muted group or is a fanfare, a kept jingle or a performer, no other sound is in a muted group, 46 calls change group and nothing else in the sound link changes.
+- `cargo test --workspace` with the game files: 2431 passed, 0 failed, 13 ignored.
+- Same seed, nightly `240af8b` against this change, Longshot host, one cosmetic seed: the mods with music `off` (283 files), `grouped` and `anywhere` (284 files) are byte-identical, and so is the seed file.
+- A `none` mod differs from an `off` mod in three files only, and `flow-loads` finds nothing missing.
 - Not played, not heard. No game test has been run.
 
 ## Test in the game
@@ -100,8 +103,10 @@ required::unpack lists the new file.
 ## Checked
 
 Unit and game-file tests: every BGM_ call ends in a muted group or is a
-fanfare, kept jingle or performer. Not played in the game, so that the
-game applies the group volume is unproven.
+fanfare, kept jingle or performer. Workspace tests 2431 passed, 0 failed,
+13 ignored. Music off, grouped and anywhere build byte-identical to
+nightly for one seed. Not played in the game, so that the game applies
+the group volume is unproven.
 
 Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
 ```
