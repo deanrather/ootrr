@@ -391,7 +391,8 @@ mod tests {
         stage(&mut rf, &on.seed_file, &mut late, work).unwrap();
         let l: Layout = Layout::from_map(&on.seed_file.entrances).unwrap();
         let flow_path: String = format!("Event/EventFlow/{FLOW}.bfevfl.zs");
-        let mut want_paths: Vec<&str> = vec![crate::story_skip::ENDING_FILE, flow_path.as_str()];
+        let scene_path: String = format!("Event/EventFlow/{}.bfevfl.zs", crate::entr::blue_warp::SCENE_WARPS[0].0);
+        let mut want_paths: Vec<&str> = vec![crate::story_skip::ENDING_FILE, scene_path.as_str(), flow_path.as_str()];
         if crate::entr::lake::moved(&l).unwrap() {
             want_paths.insert(0, crate::entr::lake::MODULE);
         }
