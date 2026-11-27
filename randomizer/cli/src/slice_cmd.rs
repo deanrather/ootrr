@@ -111,7 +111,7 @@ pub fn build(a: &[String]) -> Res<()> {
         }
         if a[i] == "--music" {
             let v: &str = a.get(i + 1).map(|s| s.as_str()).ok_or(Error::Format("missing mode after --music"))?;
-            cos.music = Music::parse(v).ok_or(Error::Format("--music is off, grouped or anywhere"))?;
+            cos.music = Music::parse(v).ok_or(Error::Format("--music is off, grouped, anywhere or none"))?;
             i += 2;
             continue;
         }
@@ -169,7 +169,7 @@ pub fn build(a: &[String]) -> Res<()> {
     if update.is_some() && source.as_ref().is_some_and(|s| s.update.is_none()) {
         println!("--update is not needed: the game is already v1.1.1, so it is ignored");
     }
-    let sound: bool = cos.music != Music::Off || cos.sfx != Sfx::Off;
+    let sound: bool = cos.music.shuffles() || cos.sfx != Sfx::Off;
     let prepared: Option<Prepared> = match &source {
         Some(s) => {
             if let Some(step) = s.step() {
