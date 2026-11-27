@@ -4,7 +4,7 @@ use crate::error::{Fail, Hr};
 use crate::req::Req;
 use crate::resp::Resp;
 use crate::state::Shared;
-use crate::{update, api_ap, api_build, api_colors, api_fs, api_generate, api_info, api_items, api_open, api_seed, api_settings, api_tracker, api_validate, assets, body};
+use crate::{update, api_ap, api_build, api_colors, api_fs, api_generate, api_info, api_items, api_music, api_open, api_seed, api_settings, api_tracker, api_validate, assets, body};
 
 fn need(r: &Req, m: &str) -> Hr<()> {
     if r.method == m {
@@ -89,6 +89,10 @@ fn api(sh: &Shared, r: &Req) -> Hr<Resp> {
         "/api/pick-folder" => {
             need(r, "POST")?;
             crate::native_pick::api(sh.guard.lan, &body::json(r)?)?
+        }
+        "/api/music-file" => {
+            need(r, "POST")?;
+            api_music::run(&body::json(r)?)?
         }
         "/api/tracker/open" => {
             need(r, "POST")?;

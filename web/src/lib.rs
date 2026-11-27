@@ -6,6 +6,7 @@ mod api_fs;
 mod api_generate;
 mod api_info;
 mod api_items;
+mod api_music;
 mod api_open;
 mod api_seed;
 mod api_settings;

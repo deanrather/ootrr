@@ -10,6 +10,10 @@ the child sword fix and Sheik's new spot in every seed, Navi's lesson flags for 
 Parts of the logic engine (randomizer/logic/src: rules.rs, world.rs, search.rs, fill.rs, spoiler.rs and their helper modules)
 are ported from the design of the OoT Randomizer.
 
+The custom music player (randomizer/cosmetics/src: n64seq.rs, n64voice.rs, n64render.rs and n64rom.rs) follows the behaviour of
+the Ocarina of Time audio engine as documented by the zeldaret/oot decompilation and Ship of Harkinian (HarbourMasters).
+No game data and no code of theirs is included.
+
 Credits to all of you for the amazing work on OoTR! 💗
 
 MIT LICENSE

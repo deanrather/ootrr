@@ -124,7 +124,7 @@ pub fn plan(b: &Json) -> Hr<Plan> {
 pub fn cosmetics(b: &Json) -> Hr<Cosmetics> {
     let music: Music = match body::opt_text(b, "music")? {
         None | Some("") => Music::Off,
-        Some(s) => Music::parse(s).ok_or_else(|| refuse("Music: use off, grouped or anywhere."))?,
+        Some(s) => Music::parse(s).ok_or_else(|| refuse("Music: use off, grouped, anywhere or none."))?,
     };
     let sfx: Sfx = match body::opt_text(b, "sfx")? {
         None | Some("") => Sfx::Off,
@@ -151,7 +151,30 @@ pub fn cosmetics(b: &Json) -> Hr<Cosmetics> {
         }
     }
     let parts: colors::Picks = colors::parse_picks(&pairs).map_err(|e| refuse(&format!("Colours: {e}")))?;
-    Ok(Cosmetics { music, sfx, colors, seed: seed_text, title, parts })
+    let custom: &str = body::opt_text(b, "custom_music")?.unwrap_or("").trim();
+    let rom: &str = body::opt_text(b, "n64_rom")?.unwrap_or("").trim();
+    let mut custom_music: Vec<String> = Vec::new();
+    let mut n64_rom: String = String::new();
+    if !custom.is_empty() {
+        if !music.shuffles() {
+            return Err(refuse("Custom music pack: choose a Music shuffle of grouped or anywhere, or clear the pack."));
+        }
+        let file = |text: &str, what: &str| -> Hr<String> {
+            let p: PB = pathsafe::abs(text.trim_matches('"'))?;
+            if !p.is_file() {
+                return Err(refuse(&format!("{what}: that file does not exist.")));
+            }
+            Ok(p.to_string_lossy().to_string())
+        };
+        custom_music.push(file(custom, "Custom music pack")?);
+        if rom.is_empty() {
+            return Err(refuse("N64 ROM: custom music needs your Ocarina of Time N64 ROM."));
+        }
+        n64_rom = file(rom, "N64 ROM")?;
+        let packs: Vec<PB> = custom_music.iter().map(PB::from).collect();
+        ootrr_core::custom::check(&packs, PB::from(&n64_rom).as_path()).map_err(|e| refuse(&format!("Custom music: {e}")))?;
+    }
+    Ok(Cosmetics { music, sfx, colors, seed: seed_text, title, parts, custom_music, n64_rom })
 }
 
 pub fn place(b: &Json) -> Hr<Place> {
@@ -215,7 +238,7 @@ pub fn run(jobs: &Arc<Jobs>, b: &Json) -> Hr<Json> {
         if let Some(s) = p.source.step() {
             c.begin(s);
         }
-        let game: Prepared = match game_source::prepare(&p.source, p.cos.music != Music::Off || p.cos.sfx != Sfx::Off) {
+        let game: Prepared = match game_source::prepare(&p.source, p.cos.music.shuffles() || p.cos.sfx != Sfx::Off) {
             Ok(g) => g,
             Err(e) => {
                 c.mark("failed");
@@ -451,6 +474,7 @@ mod tests {
         assert_eq!(p.cos.music, Music::Grouped);
         assert_eq!(p.cos.seed, "tune");
         assert!(plan(&base().with("music", "loud".into())).is_err());
+        assert_eq!(plan(&base().with("music", "none".into())).unwrap().cos.music, Music::Silent);
         let c: Plan = plan(&base().with("colors", "shared".into())).unwrap();
         assert_eq!(c.cos.colors, Colors::Shared);
         assert!(c.cos.any());

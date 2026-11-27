@@ -6,6 +6,6 @@ pub enum Outcome {
     Failed(String),
 }
 
-pub fn pick(_start: &str, _title: &str, _file: bool, _dry: bool) -> Outcome {
+pub fn pick(_start: &str, _title: &str, _file: bool, _types: Option<(&str, &str)>, _dry: bool) -> Outcome {
     Outcome::Failed("the Windows picker only runs on Windows".into())
 }

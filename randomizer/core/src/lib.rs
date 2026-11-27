@@ -12,7 +12,7 @@ macro_rules! parts {
 
 pub use ootrr_game::{bfevfl, bfres, byml, catalog, catalog_json, chest_slot, dungeon_text, entrance_swap, entrances, error, flags, flags_build, flags_gen, flags_harvest, flags_keyed, flags_map, flags_names, flags_rel, flags_scan, ips, items, json, modpack, msbt, murmur, placement, rng, romfs, rsizetable, sarc, save, tex, zs};
 pub use ootrr_logic::{fill, logic_demo, logic_items, logic_json, logic_synth, logic_val, rule_ast, rules, search, spoiler, tier_chain, world};
-pub use ootrr_cosmetics::{colors, cosmetic, sfx, slink, title_logo};
+pub use ootrr_cosmetics::{colors, cosmetic, custom, sfx, silence, slink, title_logo};
 
 pub mod ap;
 pub mod ainb;

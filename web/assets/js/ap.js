@@ -240,6 +240,8 @@ async function build() {
       host: p.host || "eden",
       title_logo: state.cosmetic.title !== false,
       music: state.cosmetic.music,
+      custom_music: state.cosmetic.custom_music,
+      n64_rom: state.cosmetic.n64_rom,
       sfx: state.cosmetic.sfx,
       ...color_request(state.cosmetic),
       cosmetic_seed: state.cosmetic.seed,

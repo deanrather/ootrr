@@ -12,9 +12,20 @@ macro_rules! parts {
     };
 }
 
+pub mod bwav;
+pub mod collapse;
 pub mod colors;
 pub mod cosmetic;
+pub mod custom;
+pub mod fanfare;
+pub mod inflate;
+pub mod n64render;
+pub mod n64rom;
+pub mod n64seq;
+pub mod n64voice;
+pub mod pack;
 pub mod sfx;
+pub mod silence;
 pub mod slink;
 pub mod title_logo;
 

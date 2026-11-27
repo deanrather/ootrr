@@ -1,10 +1,11 @@
 import { h, fill, debounce } from "./dom.js";
-import { get, q } from "./api.js";
+import { get, post, q } from "./api.js";
 import { state, touch } from "./store.js";
 import { colour_editor } from "./cosmetics.js";
 import { pick_folder, pick_package } from "./picker.js";
 import { tip_button } from "./tooltip.js";
 import { marked } from "./controls.js";
+import { pick_file } from "./picker.js";
 
 const NAME_RE = /^[A-Za-z0-9 _\-!.]{1,64}$/;
 
@@ -67,8 +68,12 @@ export const FIELDS = [
     tip: "Type a seed to make the same game again. Left empty, Generate picks a random seed. This box is never filled in for you. The seed that was used is in the spoiler log and on the Seed page." },
   { id: "spoiler_log", page: CONFIG, section: "Seed", label: "Include Spoiler Log",
     tip: "Writes Spoiler.txt into the mod folder next to the mod. It lists the seed, the settings string, every setting used, the expected playthrough step by step, and the item at every location. Off, no spoiler is made and an old Spoiler.txt is removed." },
-  { id: "music", page: COSMETICS, section: "Music and sound", label: "Music shuffle", choices: SHUFFLE("music"),
-    tip: "Music changes only the mod you build, never the seed, so the same seed can be built with different music. Cutscene music keeps its own tracks. Themes built from stacked layers trade whole layer sets. Area themes that change with the time of day play one track all day. Jingles only trade with other jingles." },
+  { id: "music", page: COSMETICS, section: "Music and sound", label: "Music shuffle", choices: [...SHUFFLE("music"), { id: "none", label: "No Music" }],
+    tip: "Shuffles keep cutscene music, and fanfares trade only with fanfares. No Music silences background music, fanfares and cutscene music tracks. The Lost Woods music then no longer guides you." },
+  { id: "custom_music", page: COSMETICS, section: "Music and sound", label: "Custom music pack", hint: "Full path to a .otr music pack",
+    tip: "Shuffled music and fanfares play tunes from your Ship of Harkinian music pack. Needs Music shuffle and your N64 ROM." },
+  { id: "n64_rom", page: COSMETICS, section: "Music and sound", label: "N64 ROM", hint: "Full path to your Ocarina of Time ROM",
+    tip: "Your own Ocarina of Time N64 ROM (NTSC 1.0). The music pack plays with its instruments." },
   { id: "sfx", page: COSMETICS, section: "Music and sound", label: "Sound effect shuffle", choices: SHUFFLE("sounds"), tip: "Shuffles sound effects in the mod you build. The seed is not changed." },
   { id: "title_logo", page: COSMETICS, section: "Title screen", label: "Randomizer line under the logo",
     tip: "Draws a Randomizer line under the title screen logo. It changes the title screen files, so turn it off if another mod (a title screen, menu or UI mod) changes them too. The build stops and names the other mod when they clash. The seed is not changed." },
@@ -192,6 +197,69 @@ function found_text(r) {
   if (!r.update) return `${what} found at ${r.romfs}`;
   if (r.update === r.romfs) return `${what} found at ${r.romfs}, with its v1.1.1 update inside`;
   return `v1.0.0 game at ${r.romfs}, with the v1.1.1 update at ${r.update}`;
+}
+
+// The browser build turns this off: it has no way to hand over these two files.
+const FILE_CHECKS = true;
+
+const MUSIC_FILES = {
+  custom_music: { kind: "pack", ext: /\.otr$/i, aria: "Browse for the music pack", title: "Pick your music pack" },
+  n64_rom: { kind: "rom", ext: /\.(z64|n64|v64)$/i, aria: "Browse for the N64 ROM", title: "Pick your N64 ROM" },
+};
+
+// Where a file picker starts: the folder holding the file already named.
+function folder_of(v, ext) {
+  const t = v.trim().replace(/^"+|"+$/g, "");
+  if (!ext.test(t)) return t;
+  const i = Math.max(t.lastIndexOf("/"), t.lastIndexOf("\\"));
+  if (i < 0) return "";
+  const head = t.slice(0, i);
+  return !head || /^[A-Za-z]:$/.test(head) ? t.slice(0, i + 1) : head;
+}
+
+function music_file(f, terms) {
+  const cos = state.cosmetic;
+  const m = MUSIC_FILES[f.id];
+  const inp = h("input", { type: "text", id: `f_${f.id}`, value: cos[f.id], spellcheck: "false", autocomplete: "off", placeholder: f.hint });
+  const out = h("div", { class: "why", "aria-live": "polite" });
+  const stat = h("span", { class: "stat", role: "img", hidden: true });
+  const show = (kind, text) => {
+    set_status(stat, kind, text);
+    out.className = kind === "bad" ? "why err" : "hint";
+    out.textContent = kind === "ok" || kind === "bad" ? text : "";
+  };
+  const check = async () => {
+    const v = cos[f.id];
+    if (!v.trim()) return show("none", "");
+    show("wait", "Checking the file");
+    let r;
+    try {
+      r = await post("/api/music-file", { kind: m.kind, path: v });
+    } catch (e) {
+      r = { ok: false, message: e.message };
+    }
+    if (v === cos[f.id]) show(r.ok ? "ok" : "bad", r.message);
+  };
+  const later = debounce(check, 350);
+  const take = (v) => {
+    cos[f.id] = v;
+    touch();
+  };
+  inp.addEventListener("input", () => {
+    take(inp.value);
+    if (!FILE_CHECKS) return;
+    show("none", "");
+    later();
+  });
+  if (!FILE_CHECKS) return row(f, terms, inp);
+  const set = (v) => {
+    inp.value = v;
+    take(v);
+    check();
+  };
+  const browse = pick_button("Browse", m.aria, (start, title) => pick_file(start, title, m.kind), () => folder_of(inp.value, m.ext), m.title, set);
+  check();
+  return row(f, terms, h("div", { class: "pathrow" }, inp, browse), out, stat);
 }
 
 export function field_el(f, terms = []) {
@@ -319,6 +387,7 @@ export function field_el(f, terms = []) {
       touch();
     }));
   }
+  if (f.id === "custom_music" || f.id === "n64_rom") return music_file(f, terms);
   const inp = h("input", { type: "text", id: "f_cosseed", value: cos.seed, spellcheck: "false", autocomplete: "off", maxlength: "64", placeholder: "Leave empty for new music and colours each build" });
   inp.addEventListener("input", () => {
     cos.seed = inp.value;

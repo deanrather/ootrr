@@ -13,6 +13,31 @@ pub enum Pick {
     Unavailable(String),
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Types {
+    name: &'static str,
+    ends: &'static [&'static str],
+}
+
+const PACKAGE: Types = Types { name: "Game package", ends: &["nup", "nx"] };
+const PACK: Types = Types { name: "Music pack", ends: &["otr"] };
+const ROM: Types = Types { name: "N64 ROM", ends: &["z64", "n64", "v64"] };
+
+impl Types {
+    fn globs(&self, sep: &str) -> String {
+        self.ends.iter().map(|e| format!("*.{e}")).collect::<Vec<String>>().join(sep)
+    }
+}
+
+fn types_of(kind: Option<&str>) -> Hr<Option<Types>> {
+    match kind {
+        None => Ok(None),
+        Some("pack") => Ok(Some(PACK)),
+        Some("rom") => Ok(Some(ROM)),
+        Some(_) => Err(Fail::bad("kind: use pack or rom")),
+    }
+}
+
 fn quiet(c: &mut Command) -> &mut Command {
     #[cfg(windows)]
     {
@@ -22,9 +47,10 @@ fn quiet(c: &mut Command) -> &mut Command {
     c.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped())
 }
 
-fn run_windows(start: &str, title: &str, dry: bool, file: bool) -> Pick {
+fn run_windows(start: &str, title: &str, dry: bool, file: bool, types: Option<Types>) -> Pick {
     use ootrr_os::pick::Outcome;
-    match ootrr_os::pick::pick(start, title, file, dry) {
+    let spec: Option<(&str, String)> = types.map(|t| (t.name, t.globs(";")));
+    match ootrr_os::pick::pick(start, title, file, spec.as_ref().map(|s| (s.0, s.1.as_str())), dry) {
         Outcome::Chosen(p) => Pick::Chosen(p),
         Outcome::Cancelled => Pick::Cancelled,
         Outcome::Failed(why) => Pick::Unavailable(why),
@@ -66,13 +92,15 @@ fn run_mac(start: &str, title: &str, file: bool) -> Pick {
     }
 }
 
-fn run_linux(start: &str, title: &str, file: bool) -> Pick {
+fn run_linux(start: &str, title: &str, file: bool, types: Option<Types>) -> Pick {
+    let types: Types = types.unwrap_or(PACKAGE);
+    let globs: String = types.globs(" ");
     let begin: String = if start.is_empty() { String::new() } else { format!("{}/", start.trim_end_matches('/')) };
     let at: String = if start.is_empty() { ".".into() } else { start.to_string() };
     let tries: [(&str, Vec<String>); 2] = if file {
         [
-            ("zenity", vec!["--file-selection".into(), "--file-filter=Game package | *.nup *.nx".into(), format!("--title={title}"), format!("--filename={begin}")]),
-            ("kdialog", vec!["--getopenfilename".into(), at, "*.nup *.nx".into(), "--title".into(), title.to_string()]),
+            ("zenity", vec!["--file-selection".into(), format!("--file-filter={} | {globs}", types.name), format!("--title={title}"), format!("--filename={begin}")]),
+            ("kdialog", vec!["--getopenfilename".into(), at, globs.clone(), "--title".into(), title.to_string()]),
         ]
     } else {
         [
@@ -105,13 +133,13 @@ fn parse(out: &str, err: &str) -> Pick {
 }
 
 /// Opens the system picker for a folder, or with `file` for one file.
-pub fn pick(start: &str, title: &str, file: bool) -> Pick {
+fn pick(start: &str, title: &str, file: bool, types: Option<Types>) -> Pick {
     if cfg!(windows) {
-        run_windows(start, title, false, file)
+        run_windows(start, title, false, file, types)
     } else if cfg!(target_os = "macos") {
         run_mac(start, title, file)
     } else {
-        run_linux(start, title, file)
+        run_linux(start, title, file, types)
     }
 }
 
@@ -125,7 +153,8 @@ pub fn api(lan: bool, b: &Json) -> Hr<Json> {
         return Err(Fail::bad("start or title is not allowed"));
     }
     let file: bool = b.get("file").and_then(|x| x.as_bool()) == Some(true);
-    match pick(start, title, file) {
+    let types: Option<Types> = types_of(body::opt_text(b, "kind")?)?;
+    match pick(start, title, file, types) {
         Pick::Chosen(p) if (if file { p.is_file() } else { p.is_dir() }) => Ok(Json::obj().with("path", crate::pathsafe::text(&p).into())),
         Pick::Chosen(_) => Err(Fail::new(422, if file { "The picked file could not be found." } else { "The picked folder could not be found." })),
         Pick::Cancelled => Ok(Json::obj().with("cancelled", true.into())),
@@ -156,7 +185,16 @@ mod tests {
         if !cfg!(windows) {
             return;
         }
-        assert!(matches!(run_windows("", "Test", true, false), Pick::Chosen(p) if p == PB::from("DRY")));
-        assert!(matches!(run_windows("", "Test", true, true), Pick::Chosen(p) if p == PB::from("DRY")));
+        assert!(matches!(run_windows("", "Test", true, false, None), Pick::Chosen(p) if p == PB::from("DRY")));
+        assert!(matches!(run_windows("", "Test", true, true, None), Pick::Chosen(p) if p == PB::from("DRY")));
+        assert!(matches!(run_windows("", "Test", true, true, Some(ROM)), Pick::Chosen(p) if p == PB::from("DRY")));
+    }
+
+    #[test]
+    fn a_file_kind_limits_the_dialog_and_an_unknown_one_is_refused() {
+        assert_eq!(types_of(None).unwrap(), None);
+        assert_eq!(types_of(Some("pack")).unwrap().unwrap().globs(";"), "*.otr");
+        assert_eq!(types_of(Some("rom")).unwrap().unwrap().globs(" "), "*.z64 *.n64 *.v64");
+        assert_eq!(types_of(Some("exe")).unwrap_err().status, 400);
     }
 }

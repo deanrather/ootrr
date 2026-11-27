@@ -8,7 +8,7 @@ export async function pick_folder(start, title) {
     if (r && typeof r.path === "string") return r.path;
     return null;
   } catch {
-    return page_picker(start, title, false);
+    return page_picker(start, title, null, false);
   }
 }
 
@@ -20,16 +20,29 @@ export async function pick_package(start, title) {
     if (r && typeof r.path === "string") return r.path;
     return null;
   } catch {
-    return page_picker(start, title, true);
+    return page_picker(start, title, PACKAGE, false);
   }
 }
 
-function page_picker(start, title, file) {
+const KINDS = { pack: /\.otr$/i, rom: /\.(z64|n64|v64)$/i };
+
+export async function pick_file(start, title, kind) {
+  try {
+    const r = await post("/api/pick-folder", { start, title, file: true, kind });
+    if (r && typeof r.path === "string") return r.path;
+    return null;
+  } catch {
+    return page_picker(start, title, KINDS[kind], true);
+  }
+}
+
+// With `want`, files matching it can be picked; with `only`, other files are left out.
+function page_picker(start, title, want, only) {
   return new Promise((resolve) => {
     const opener = document.activeElement;
     const body = h("div", { class: "body" });
     const input = h("input", { type: "text", "aria-label": "Folder path", spellcheck: "false", autocomplete: "off" });
-    const use = h("button", { type: "button", class: "btn primary", hidden: file }, "Use this folder");
+    const use = h("button", { type: "button", class: "btn primary", hidden: !!want }, "Use this folder");
     const up = h("button", { type: "button", class: "btn" }, "Up");
     let here = "";
     let parent = "";
@@ -61,18 +74,19 @@ function page_picker(start, title, file) {
         for (const x of r.roots) {
           list.append(h("li", null, h("button", { type: "button", onclick: () => load(x.path) }, h("span", null, "▣"), x.label)));
         }
-        for (const e of r.entries) {
+        const ents = only ? r.entries.filter((e) => e.kind === "dir" || want.test(e.name)) : r.entries;
+        for (const e of ents) {
           const dir = e.kind === "dir";
           const full = here + (here.endsWith(state.info.sep) ? "" : state.info.sep) + e.name;
-          const pkg = file && !dir && PACKAGE.test(e.name);
+          const hit = !!want && !dir && want.test(e.name);
           list.append(
-            h("li", null, h("button", { type: "button", disabled: !dir && !pkg, onclick: () => (pkg ? close(full) : load(full)) }, h("span", { "aria-hidden": "true" }, dir ? "▸" : "·"), e.name)),
+            h("li", null, h("button", { type: "button", disabled: !dir && !hit, onclick: () => (hit ? close(full) : load(full)) }, h("span", { "aria-hidden": "true" }, dir ? "▸" : "·"), e.name)),
           );
         }
         fill(
           body,
           r.truncated ? notice("warn", "This folder is large, only the first entries are shown. Type the path above to go deeper.") : null,
-          r.roots.length === 0 && r.entries.length === 0 ? h("p", { class: "muted" }, "This folder is empty.") : list,
+          r.roots.length === 0 && ents.length === 0 ? h("p", { class: "muted" }, "This folder is empty.") : list,
         );
       } catch (e) {
         fill(body, notice("error", e.message));

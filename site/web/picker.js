@@ -52,6 +52,10 @@ export async function pick_folder(_start, title) {
   return at;
 }
 
+export async function pick_file() {
+  return null;
+}
+
 export async function pick_package(_start, title) {
   const kind = kind_of(title);
   const [f] = await pick_input(false, ".nup,.nx");

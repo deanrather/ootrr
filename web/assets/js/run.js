@@ -50,6 +50,8 @@ async function build(res) {
     mod_name: p.name,
     host: p.host || "eden",
     music: state.cosmetic.music,
+    custom_music: state.cosmetic.custom_music,
+    n64_rom: state.cosmetic.n64_rom,
     sfx: state.cosmetic.sfx,
     ...color_request(state.cosmetic),
     cosmetic_seed: state.cosmetic.seed,

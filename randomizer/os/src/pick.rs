@@ -44,6 +44,7 @@ const WS_EX_LAYERED: u32 = 0x8_0000;
 // Slots in the IFileDialog vtable (IUnknown, IModalWindow, then its own).
 const RELEASE: usize = 2;
 const SHOW: usize = 3;
+const SET_FILE_TYPES: usize = 4;
 const SET_OPTIONS: usize = 9;
 const GET_OPTIONS: usize = 10;
 const SET_FOLDER: usize = 12;
@@ -51,6 +52,12 @@ const SET_TITLE: usize = 17;
 const GET_RESULT: usize = 20;
 // Slot in the IShellItem vtable.
 const GET_DISPLAY_NAME: usize = 5;
+
+#[repr(C)]
+struct FilterSpec {
+    name: *const u16,
+    spec: *const u16,
+}
 
 #[link(name = "ole32")]
 unsafe extern "system" {
@@ -127,7 +134,7 @@ impl Drop for Owner {
     }
 }
 
-fn run(start: &str, title: &str, file: bool, dry: bool) -> Result<Outcome, String> {
+fn run(start: &str, title: &str, file: bool, types: Option<(&str, &str)>, dry: bool) -> Result<Outcome, String> {
     let mut p: *mut c_void = null_mut();
     hr("CoCreateInstance", unsafe { CoCreateInstance(&CLSID_FILE_OPEN_DIALOG, null_mut(), CLSCTX_INPROC_SERVER, &IID_FILE_DIALOG, &mut p) })?;
     let d: Com = Com(p);
@@ -138,6 +145,12 @@ fn run(start: &str, title: &str, file: bool, dry: bool) -> Result<Outcome, Strin
         hr("GetOptions", get_options(d.0, &mut o))?;
         let more: u32 = if file { FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST | FOS_FILEMUSTEXIST } else { FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST };
         hr("SetOptions", set_options(d.0, o | more))?;
+        if let Some((name, spec)) = types {
+            let set_types: extern "system" fn(*mut c_void, u32, *const FilterSpec) -> i32 = std::mem::transmute(d.slot(SET_FILE_TYPES));
+            let (name, spec): (Vec<u16>, Vec<u16>) = (wide(name), wide(spec));
+            let row: FilterSpec = FilterSpec { name: name.as_ptr(), spec: spec.as_ptr() };
+            hr("SetFileTypes", set_types(d.0, 1, &row))?;
+        }
         if !title.is_empty() {
             let set_title: extern "system" fn(*mut c_void, *const u16) -> i32 = std::mem::transmute(d.slot(SET_TITLE));
             let t: Vec<u16> = wide(title);
@@ -184,17 +197,20 @@ fn run(start: &str, title: &str, file: bool, dry: bool) -> Result<Outcome, Strin
     }
 }
 
-/// Opens the picker for a folder, or with `file` for one file. With `dry` it
-/// sets the dialog up and answers `DRY` without showing it.
-pub fn pick(start: &str, title: &str, file: bool, dry: bool) -> Outcome {
+/// Opens the picker for a folder, or with `file` for one file, which `types`
+/// (a name and a pattern list such as `*.a;*.b`) can limit. With `dry` it sets
+/// the dialog up and answers `DRY` without showing it.
+pub fn pick(start: &str, title: &str, file: bool, types: Option<(&str, &str)>, dry: bool) -> Outcome {
     let (start, title): (String, String) = (start.to_string(), title.to_string());
+    let types: Option<(String, String)> = types.map(|t| (t.0.to_string(), t.1.to_string()));
     // The dialog needs a single-threaded COM apartment, so it gets a thread.
     let t = std::thread::spawn(move || {
         let init: i32 = unsafe { CoInitializeEx(null_mut(), COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE) };
         if init < 0 {
             return Outcome::Failed(format!("CoInitializeEx failed (0x{:08X})", init as u32));
         }
-        let r: Outcome = run(&start, &title, file, dry).unwrap_or_else(Outcome::Failed);
+        let types: Option<(&str, &str)> = types.as_ref().map(|t| (t.0.as_str(), t.1.as_str()));
+        let r: Outcome = run(&start, &title, file, types, dry).unwrap_or_else(Outcome::Failed);
         unsafe { CoUninitialize() };
         r
     });
@@ -207,8 +223,9 @@ mod tests {
 
     #[test]
     fn the_dialog_is_set_up_without_showing() {
-        assert!(matches!(pick("", "Test", false, true), Outcome::Chosen(p) if p == PathBuf::from("DRY")));
-        assert!(matches!(pick("C:\\", "Test", true, true), Outcome::Chosen(p) if p == PathBuf::from("DRY")));
+        assert!(matches!(pick("", "Test", false, None, true), Outcome::Chosen(p) if p == PathBuf::from("DRY")));
+        assert!(matches!(pick("C:\\", "Test", true, None, true), Outcome::Chosen(p) if p == PathBuf::from("DRY")));
+        assert!(matches!(pick("C:\\", "Test", true, Some(("Things", "*.a;*.b")), true), Outcome::Chosen(p) if p == PathBuf::from("DRY")));
     }
 
     #[link(name = "user32")]
@@ -233,7 +250,7 @@ mod tests {
             }
             false
         });
-        let r: Outcome = pick("C:\\Windows", title, false, false);
+        let r: Outcome = pick("C:\\Windows", title, false, None, false);
         assert!(closer.join().unwrap(), "the dialog never appeared");
         r
     }

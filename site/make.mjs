@@ -119,6 +119,7 @@ edit(js("config.js"), (t) => {
   s = must(s, 'label: "Mod folder", tip: "The folder your emulator or loader reads mods from. Generate writes the mod here." }',
     'label: "Mod download", tip: "The browser builds the mod and offers it as a zip. Nothing is uploaded." }');
   s = must(s, "  return `${base}${base.endsWith(sep) ? \"\" : sep}${mid}${state.paths.name}`;", "  return `${mid}${state.paths.name}, in the zip`;");
+  s = must(s, "const FILE_CHECKS = true;", "const FILE_CHECKS = false;");
   s = must(s, 'import { pick_folder, pick_package } from "./picker.js";', 'import { pick_folder, pick_package } from "./picker.js";\nimport { drop_zone } from "./drop.js";');
   s = must(s, 'return row(f, terms, h("div", { class: "pathrow" }, inp, browse, pack), [out, upd && upd.el], stat);',
     'return row(f, terms, h("div", { class: "pathrow" }, inp, browse, pack), [out, f.id === "game" ? drop_zone(set) : null, upd && upd.el], stat);');

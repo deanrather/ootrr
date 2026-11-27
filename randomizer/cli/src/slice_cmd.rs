@@ -109,9 +109,19 @@ pub fn build(a: &[String]) -> Res<()> {
             i += 1;
             continue;
         }
+        if a[i] == "--custom-music" {
+            cos.custom_music.push(a.get(i + 1).cloned().ok_or(Error::Format("missing .otr file after --custom-music"))?);
+            i += 2;
+            continue;
+        }
+        if a[i] == "--n64-rom" {
+            cos.n64_rom = a.get(i + 1).cloned().ok_or(Error::Format("missing ROM file after --n64-rom"))?;
+            i += 2;
+            continue;
+        }
         if a[i] == "--music" {
             let v: &str = a.get(i + 1).map(|s| s.as_str()).ok_or(Error::Format("missing mode after --music"))?;
-            cos.music = Music::parse(v).ok_or(Error::Format("--music is off, grouped or anywhere"))?;
+            cos.music = Music::parse(v).ok_or(Error::Format("--music is off, grouped, anywhere or none"))?;
             i += 2;
             continue;
         }
@@ -169,7 +179,11 @@ pub fn build(a: &[String]) -> Res<()> {
     if update.is_some() && source.as_ref().is_some_and(|s| s.update.is_none()) {
         println!("--update is not needed: the game is already v1.1.1, so it is ignored");
     }
-    let sound: bool = cos.music != Music::Off || cos.sfx != Sfx::Off;
+    if !cos.custom_music.is_empty() {
+        let packs: Vec<std::path::PathBuf> = cos.custom_music.iter().map(std::path::PathBuf::from).collect();
+        ootrr_core::custom::check(&packs, P::new(cos.n64_rom.trim()))?;
+    }
+    let sound: bool = cos.music.shuffles() || cos.sfx != Sfx::Off;
     let prepared: Option<Prepared> = match &source {
         Some(s) => {
             if let Some(step) = s.step() {

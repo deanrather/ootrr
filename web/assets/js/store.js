@@ -11,7 +11,7 @@ export const state = {
   plando: [],
   paths: { game: "", update: "", mod: "", name: "My Seed", host: "eden" },
   include_update: false,
-  cosmetic: { music: "off", sfx: "off", seed: "", title: true, parts: {}, locks: {}, reroll: false, style: "random" },
+  cosmetic: { music: "off", custom_music: "", n64_rom: "", sfx: "off", seed: "", title: true, parts: {}, locks: {}, reroll: false, style: "random" },
   game_check: null,
   mod_check: null,
   result: null,
@@ -75,10 +75,11 @@ export function restore(schema) {
     if (!["eden", "hookshot", "longshot", "nx2navi"].includes(state.paths.host)) state.paths.host = "eden";
   }
   if (s && s.cosmetic && typeof s.cosmetic === "object") {
-    if (["off", "grouped", "anywhere"].includes(s.cosmetic.music)) state.cosmetic.music = s.cosmetic.music;
+    if (["off", "grouped", "anywhere", "none"].includes(s.cosmetic.music)) state.cosmetic.music = s.cosmetic.music;
     if (["off", "grouped", "anywhere"].includes(s.cosmetic.sfx)) state.cosmetic.sfx = s.cosmetic.sfx;
     if (typeof s.cosmetic.seed === "string") state.cosmetic.seed = s.cosmetic.seed.slice(0, 64);
     if (typeof s.cosmetic.title === "boolean") state.cosmetic.title = s.cosmetic.title;
+    for (const key of ["custom_music", "n64_rom"]) if (typeof s.cosmetic[key] === "string") state.cosmetic[key] = s.cosmetic[key].slice(0, 1024);
     restore_colors(s.cosmetic);
   }
   const r = take(sessionStorage, RKEY);
