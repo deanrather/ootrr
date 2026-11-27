@@ -217,6 +217,9 @@ fn start_items(rf: &mut Romfs, c: &Ctx, more: &mut Vec<Out>) -> Res<()> {
     if c.p.first_pickups {
         crate::start_items::stage::stage_list(rf, more, &crate::first_pickups::bag_sets(&c.p.kit))?;
     }
+    if c.p.full_wallet {
+        crate::start_items::stage::stage_list(rf, more, &crate::full_wallet::start_sets(&c.p.kit))?;
+    }
     crate::start_items::stage::stage(rf, more, &c.p.kit)
 }
 

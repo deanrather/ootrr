@@ -14,3 +14,4 @@ ruzstd = "0.9.1"
 
 [dev-dependencies]
 ootrr-game = { path = "../game", features = ["fixtures"] }
+mimalloc = { version = "0.1", default-features = false }

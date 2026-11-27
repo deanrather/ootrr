@@ -293,6 +293,14 @@ fn tier_of(d: &Data, item: &str, held: usize) -> Option<(String, bool)> {
     i.tiers.get(held).map(|t| (t.clone(), true))
 }
 
+/// Whether the gift at `loc` has Link hold up an item that has no animation (a song). The hold up
+/// plays Rotate_GetDemo on the item actor, and a stand-in is built on the actor it looks like, so
+/// Link reached up for nothing and the game crashed (a Bolero-look trap at the Kakariko Shooting
+/// Gallery). A real song there is handed out as its pickup actor (crate::ocarina_hold); a trap is not.
+fn held_without_anim(d: &Data, loc: &str, actor: &str) -> bool {
+    crate::ocarina_hold::no_anim(actor) && d.flow.by_name(loc).is_some_and(crate::slice::flow_rules::holds_up)
+}
+
 fn fits(d: &Data, place: Place, loc: &str, item: &str, actor: &str, tiered: bool) -> bool {
     if keys::is_key(d, item) {
         return matches!(place, Place::Shop(_));
@@ -301,7 +309,7 @@ fn fits(d: &Data, place: Place, loc: &str, item: &str, actor: &str, tiered: bool
     match place {
         Place::Chest => true,
         Place::Ground | Place::Holder => crate::slice::key_spots::resolve(d, item, tier).is_ok(),
-        Place::Flow => !tiered && (d.flow.usable(actor) || d.flow.by_name(loc).is_some_and(|l| l.name == crate::slice::flow_rules::SARIA || crate::slice::flow_rules::any_item(l))),
+        Place::Flow => !tiered && !held_without_anim(d, loc, actor) && (d.flow.usable(actor) || d.flow.by_name(loc).is_some_and(|l| l.name == crate::slice::flow_rules::SARIA || crate::slice::flow_rules::any_item(l))),
         Place::Skull => crate::slice::key_spots::resolve_kit(d, item, tier).is_ok_and(|p| p.hang_with().is_ok()),
         Place::Shop(_) => !tiered && d.item(item).is_some_and(|i| i.kind == "Item"),
     }
@@ -863,6 +871,24 @@ mod tests {
     use super::*;
     use crate::settings::{Settings, Value};
     use crate::slice::generate::{generate_data, GenOpts, Generated};
+
+    /// A song has no animation, so a song-look trap at a gift that holds the item up (the shooting
+    /// gallery prize) left Link reaching up for nothing until the game crashed.
+    #[test]
+    fn a_trap_at_a_gift_that_holds_the_item_up_never_looks_like_a_song() {
+        let d: Data = Data::load().unwrap();
+        let songs: Vec<String> = d.items.iter().filter(|i| i.kind == "Song").filter_map(|i| i.actor.clone()).collect();
+        assert!(!songs.is_empty());
+        let holds: Vec<String> = d.flow.locs.iter().filter(|l| crate::slice::flow_rules::holds_up(l) && flow_spot(&d, &l.name)).map(|l| l.name.clone()).collect();
+        assert!(holds.iter().any(|l| l == "Market Shooting Gallery Reward"), "{holds:?}");
+        for l in &holds {
+            for a in &songs {
+                assert!(!fits(&d, Place::Flow, l, "", a, false), "{l} can show a trap as {a}");
+            }
+        }
+        assert!(fits(&d, Place::Flow, "Market Shooting Gallery Reward", "Lens of Truth", "Item_GlassTruth", false));
+        assert!(fits(&d, Place::Chest, "", "Song of Time", "Item_Melody_TimeSong", false));
+    }
 
     fn real() -> Option<PB> {
         let p: PB = ootrr_game::test_romfs::path();

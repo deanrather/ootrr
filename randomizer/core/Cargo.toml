@@ -15,3 +15,4 @@ ootrr-cosmetics = { path = "../cosmetics" }
 
 [dev-dependencies]
 ootrr-game = { path = "../game", features = ["fixtures"] }
+mimalloc = { version = "0.1", default-features = false }

@@ -47,6 +47,7 @@ pub mod flow_locations;
 pub mod flow_extra;
 pub mod flow_sim;
 pub mod frost;
+pub mod full_wallet;
 pub mod hints;
 pub mod intro_skip;
 pub mod gift_keys;
@@ -105,3 +106,7 @@ pub mod teleport_sim;
 pub mod teleport_start;
 
 pub const TITLE_ID: &str = "0400486024DEC000";
+
+#[cfg(test)]
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;

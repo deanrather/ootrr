@@ -150,7 +150,9 @@ pub fn build_for_with(seed: &SeedFile, romfs: &P, load: &P, mod_name: &str, host
     let (seed, cold): (SeedFile, Vec<crate::frost::Trap>) = crate::frost::prepare(seed)?;
     let b: Built = crate::slice::seed_packs::build_hooked(&seed, romfs, load, mod_name, host, hook)?;
     let b: Built = crate::shelf::seed::after(&seed, romfs, load, mod_name, host, b)?;
-    crate::frost::after(&cold, &seed.seed, romfs, load, mod_name, host, b)
+    let b: Built = crate::frost::after(&cold, &seed.seed, romfs, load, mod_name, host, b)?;
+    let on: bool = crate::slice::support::plan(&seed.settings()?.settings)?.full_wallet;
+    crate::full_wallet::after(on, romfs, load, mod_name, host, b)
 }
 
 pub type Hook<'a> = dyn FnMut(&mut Romfs, &P, &mut Vec<crate::staging::Out>) -> Res<()> + 'a;

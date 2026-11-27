@@ -104,6 +104,7 @@ pub struct Plan {
     pub short: bool,
     pub first_pickups: bool,
     pub area_intros: bool,
+    pub full_wallet: bool,
     pub trap_chests: bool,
 }
 
@@ -339,6 +340,10 @@ pub fn plan(s: &Settings) -> Res<Plan> {
         bad.push(e.to_string());
         false
     });
+    let full_wallet: bool = s.flag(crate::full_wallet::SETTING).unwrap_or_else(|e| {
+        bad.push(e.to_string());
+        false
+    });
     if lacs.is_some() && (!rewards.on || matches!(chests, Mode::Off | Mode::Overworld)) {
         bad.push(crate::lacs_key::NEEDS.to_string());
     }
@@ -457,12 +462,15 @@ pub fn plan(s: &Settings) -> Res<Plan> {
     if area_intros {
         notes.push(crate::area_intros::NOTE.to_string());
     }
+    if full_wallet {
+        notes.push(crate::full_wallet::NOTE.to_string());
+    }
     if lacs.is_some() {
         notes.push(crate::lacs_key::NOTE.to_string());
         notes.push(crate::medal_gate::LACS_NOTE.to_string());
     }
     let own_strict: Vec<(&'static str, &'static str)> = if matches!(chests, Mode::Dungeons | Mode::All) { OWN_STRICT.to_vec() } else { Vec::new() };
-    Ok(Plan { own_strict, chests, keys, rewards, hearts, world, songs, harp_colors, hints, fast, chest_sizes, intro, start, gates, excluded, notes, drops, skulls, remake, chus, qol, treasure, day_skulls, kit, open, npc, shops, bridge, debug_names, silver, lacs, rainbow, trials, door, nocturne, prelude, short, first_pickups, area_intros, story, endings, ocarinas, kokiri_sword, difficulty, trap_chests })
+    Ok(Plan { own_strict, chests, keys, rewards, hearts, world, songs, harp_colors, hints, fast, chest_sizes, intro, start, gates, excluded, notes, drops, skulls, remake, chus, qol, treasure, day_skulls, kit, open, npc, shops, bridge, debug_names, silver, lacs, rainbow, trials, door, nocturne, prelude, short, first_pickups, area_intros, full_wallet, story, endings, ocarinas, kokiri_sword, difficulty, trap_chests })
 }
 
 #[cfg(test)]

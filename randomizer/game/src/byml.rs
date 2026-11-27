@@ -214,37 +214,32 @@ impl<'a> Rd<'a> {
     }
 }
 
-struct Wr {
+struct Wr<'a> {
     out: Vec<u8>,
     be: bool,
-    keys: Vec<String>,
-    strs: Vec<String>,
+    keys: Vec<&'a str>,
+    strs: Vec<&'a str>,
     wides: HashMap<(u8, u64), u32>,
-    seen: HashMap<Vec<u8>, u32>,
+    ids: Ids,
+    seen: HashMap<u32, u32>,
 }
 
-fn fold(s: &str) -> Vec<(u8, char)> {
-    s.chars()
-        .map(|c| {
-            let cls: u8 = if c.is_alphabetic() {
-                2
-            } else if c.is_ascii_digit() {
-                1
-            } else {
-                0
-            };
-            (cls, c.to_lowercase().next().unwrap_or(c))
-        })
-        .collect()
+fn fold(s: &str) -> impl Iterator<Item = (u8, char)> + '_ {
+    s.chars().map(|c| {
+        let cls: u8 = if c.is_alphabetic() {
+            2
+        } else if c.is_ascii_digit() {
+            1
+        } else {
+            0
+        };
+        (cls, c.to_lowercase().next().unwrap_or(c))
+    })
 }
 
 fn order(m: &[(String, Node)]) -> Vec<usize> {
     let mut ix: Vec<usize> = (0..m.len()).collect();
-    ix.sort_by(|a, b| {
-        fold(&m[*a].0)
-            .cmp(&fold(&m[*b].0))
-            .then_with(|| m[*b].0.cmp(&m[*a].0))
-    });
+    ix.sort_by(|a, b| fold(&m[*a].0).cmp(fold(&m[*b].0)).then_with(|| m[*b].0.cmp(&m[*a].0)));
     ix
 }
 
@@ -267,7 +262,7 @@ fn gather(n: &Node, out: &mut Vec<(u8, u64)>) {
     }
 }
 
-fn ident(n: &Node, out: &mut Vec<u8>) {
+fn ident(n: &Node, out: &mut Vec<u8>, ids: &mut Ids) {
     match n {
         Node::Null => out.push(0xFF),
         Node::Bool(x) => out.extend_from_slice(&[0xD0, *x as u8]),
@@ -306,28 +301,46 @@ fn ident(n: &Node, out: &mut Vec<u8>) {
             out.extend_from_slice(d);
         }
         Node::Arr(a) => {
-            out.push(0xC0);
-            out.extend_from_slice(&(a.len() as u32).to_le_bytes());
+            let mut key: Vec<u8> = vec![0xC0];
+            key.extend_from_slice(&(a.len() as u32).to_le_bytes());
             for x in a {
-                ident(x, out);
+                ident(x, &mut key, ids);
             }
+            ids.close(n, key, 0xC0, out);
         }
         Node::Map(m) => {
-            out.push(0xC1);
-            out.extend_from_slice(&(m.len() as u32).to_le_bytes());
+            let mut key: Vec<u8> = vec![0xC1];
+            key.extend_from_slice(&(m.len() as u32).to_le_bytes());
             for e in m {
-                out.extend_from_slice(&(e.0.len() as u32).to_le_bytes());
-                out.extend_from_slice(e.0.as_bytes());
-                ident(&e.1, out);
+                key.extend_from_slice(&(e.0.len() as u32).to_le_bytes());
+                key.extend_from_slice(e.0.as_bytes());
+                ident(&e.1, &mut key, ids);
             }
+            ids.close(n, key, 0xC1, out);
         }
     }
 }
 
-fn collect(n: &Node, keys: &mut BTreeSet<String>, strs: &mut BTreeSet<String>) {
+#[derive(Default)]
+struct Ids {
+    of: HashMap<*const Node, u32>,
+    shapes: HashMap<Vec<u8>, u32>,
+}
+
+impl Ids {
+    fn close(&mut self, n: &Node, key: Vec<u8>, tag: u8, out: &mut Vec<u8>) {
+        let next: u32 = self.shapes.len() as u32;
+        let id: u32 = *self.shapes.entry(key).or_insert(next);
+        self.of.insert(n as *const Node, id);
+        out.push(tag);
+        out.extend_from_slice(&id.to_le_bytes());
+    }
+}
+
+fn collect<'a>(n: &'a Node, keys: &mut BTreeSet<&'a str>, strs: &mut BTreeSet<&'a str>) {
     match n {
         Node::Str(s) => {
-            strs.insert(s.clone());
+            strs.insert(s);
         }
         Node::Arr(a) => {
             for x in a {
@@ -336,7 +349,7 @@ fn collect(n: &Node, keys: &mut BTreeSet<String>, strs: &mut BTreeSet<String>) {
         }
         Node::Map(m) => {
             for (k, v) in m {
-                keys.insert(k.clone());
+                keys.insert(k);
                 collect(v, keys, strs);
             }
         }
@@ -344,7 +357,7 @@ fn collect(n: &Node, keys: &mut BTreeSet<String>, strs: &mut BTreeSet<String>) {
     }
 }
 
-impl Wr {
+impl Wr<'_> {
     fn p32(&mut self, v: u32) {
         let b: [u8; 4] = if self.be { v.to_be_bytes() } else { v.to_le_bytes() };
         self.out.extend_from_slice(&b);
@@ -384,6 +397,14 @@ impl Wr {
         }
     }
 
+    fn id(&self, n: &Node) -> Res<u32> {
+        self.ids
+            .of
+            .get(&(n as *const Node))
+            .copied()
+            .ok_or(Error::Format("byml: container missing from the shape table"))
+    }
+
     fn wide(&self, t: u8, v: u64) -> Res<u32> {
         self.wides
             .get(&(t, v))
@@ -391,7 +412,7 @@ impl Wr {
             .ok_or(Error::Format("byml: wide value missing from block"))
     }
 
-    fn table(&mut self, v: &[String]) {
+    fn table(&mut self, v: &[&str]) {
         let at: usize = self.out.len();
         self.out.push(0xC2);
         self.p24(v.len() as u32);
@@ -423,7 +444,7 @@ impl Wr {
             Node::Str(s) => {
                 let i: usize = self
                     .strs
-                    .binary_search(s)
+                    .binary_search(&s.as_str())
                     .map_err(|_| Error::Format("byml: string missing from table"))?;
                 Ok((0xA0, i as u32))
             }
@@ -436,8 +457,7 @@ impl Wr {
                 Ok((0xA1, at))
             }
             Node::Arr(a) => {
-                let mut id: Vec<u8> = Vec::new();
-                ident(n, &mut id);
+                let id: u32 = self.id(n)?;
                 if let Some(at) = self.seen.get(&id) {
                     return Ok((0xC0, *at));
                 }
@@ -466,8 +486,7 @@ impl Wr {
                 if !es.iter().all(|e| names.insert(e.0.as_str())) {
                     return Err(Error::Format("byml: duplicate map key"));
                 }
-                let mut id: Vec<u8> = Vec::new();
-                ident(n, &mut id);
+                let id: u32 = self.id(n)?;
                 if let Some(at) = self.seen.get(&id) {
                     return Ok((0xC1, *at));
                 }
@@ -485,7 +504,7 @@ impl Wr {
                     let e: &(String, Node) = es[i];
                     let k: usize = self
                         .keys
-                        .binary_search(&e.0)
+                        .binary_search(&e.0.as_str())
                         .map_err(|_| Error::Format("byml: key missing from table"))?;
                     let (t, v): (u8, u32) = self.emit(&e.1)?;
                     let p: usize = slots + 8 * i;
@@ -540,8 +559,8 @@ impl Byml {
     }
 
     pub fn write(&self) -> Res<Vec<u8>> {
-        let mut ks: BTreeSet<String> = BTreeSet::new();
-        let mut ss: BTreeSet<String> = BTreeSet::new();
+        let mut ks: BTreeSet<&str> = BTreeSet::new();
+        let mut ss: BTreeSet<&str> = BTreeSet::new();
         collect(&self.root, &mut ks, &mut ss);
         let mut w: Wr = Wr {
             out: Vec::new(),
@@ -549,8 +568,10 @@ impl Byml {
             keys: ks.into_iter().collect(),
             strs: ss.into_iter().collect(),
             wides: HashMap::new(),
+            ids: Ids::default(),
             seen: HashMap::new(),
         };
+        ident(&self.root, &mut Vec::new(), &mut w.ids);
         w.out.extend_from_slice(if self.big { b"BY" } else { b"YB" });
         let v: [u8; 2] = if self.big { self.version.to_be_bytes() } else { self.version.to_le_bytes() };
         w.out.extend_from_slice(&v);
@@ -561,12 +582,12 @@ impl Byml {
         let mut so: u32 = 0;
         if !w.keys.is_empty() {
             ko = w.out.len() as u32;
-            let k: Vec<String> = w.keys.clone();
+            let k: Vec<&str> = w.keys.clone();
             w.table(&k);
         }
         if !w.strs.is_empty() {
             so = w.out.len() as u32;
-            let s: Vec<String> = w.strs.clone();
+            let s: Vec<&str> = w.strs.clone();
             w.table(&s);
         }
         w.put_wides(&self.root);

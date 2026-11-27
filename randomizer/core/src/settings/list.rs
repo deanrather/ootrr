@@ -774,6 +774,7 @@ pub fn build() -> Schema {
     s.push(starting_items());
     s.push(starting_songs());
     s.extend(difficulty());
+    s.push(Setting::toggle(crate::full_wallet::NUM, crate::full_wallet::SETTING, "world", "Full Wallets", false).tip("Start with a full wallet. All wallet upgrades come filled with rupees."));
     s.sort_by_key(|x| x.num);
     Schema {
         version: SCHEMA_VERSION,

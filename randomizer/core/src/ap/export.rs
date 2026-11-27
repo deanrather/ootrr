@@ -162,6 +162,9 @@ fn keep(p: &Plan, kind: &str) -> Option<crate::slice::support::Keep> {
 /// its setting is Anywhere and the mailbox can hand it over (crate::ap::mailbox::dungeon_item).
 fn local_only(d: &Data, p: &Plan, name: &str) -> bool {
     let Some(i) = d.item(name) else { return false };
+    if crate::slice::silver::is_item(name) {
+        return true;
+    }
     if super::mailbox::LOCAL_KINDS.contains(&i.kind.as_str()) {
         return !(keep(p, &i.kind) == Some(crate::slice::support::Keep::Anywhere) && super::mailbox::dungeon_item(d, name).is_some());
     }
@@ -604,5 +607,17 @@ mod tests {
         assert!(deny.contains(&"Bomb Bag"), "{deny:?}");
         let chest: Vec<&str> = arr(row(&b, "KF Midos Top Left Chest"), "deny").iter().map(|i| items[i.as_i64().unwrap() as usize].get("name").unwrap().as_str().unwrap()).collect();
         assert!(!chest.contains(&"Bomb Bag"));
+    }
+    /// A Silver Rupee is counted by the flow of the chest it is found in, which the mailbox
+    /// cannot run, so a Silver Rupee placed in another world left this slot unbuildable.
+    #[test]
+    fn silver_rupees_stay_in_their_own_world() {
+        let d: Data = Data::load().unwrap();
+        let mut s: Settings = preset("full_shuffle");
+        s.set("shuffle_silver_rupees", crate::settings::model::Value::Bool(true)).unwrap();
+        let b: Json = export(&d, &s.finish().unwrap(), "custom").unwrap();
+        for r in &crate::slice::silver::ROOMS {
+            assert!(local(&b, r.item), "{}", r.item);
+        }
     }
 }

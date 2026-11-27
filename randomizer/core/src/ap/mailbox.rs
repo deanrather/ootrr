@@ -100,6 +100,14 @@ impl Record {
         Ok(Record { key: key.to_string(), item: item.to_string(), style })
     }
 
+    pub fn windowed(&self) -> bool {
+        match &self.style {
+            Style::Window(_) | Style::Dungeon(..) => true,
+            Style::Tiers(fam, _) => crate::progressive::tiers(fam).is_ok_and(|t| t.iter().any(|a| crate::ocarina_hold::no_anim(a))),
+            Style::Get(_) => false,
+        }
+    }
+
     pub fn recv(&self) -> String {
         format!("OOTRR.AP.Recv.{}", self.key)
     }
@@ -160,6 +168,19 @@ fn add_one(f: &mut Flow, r: &Record) -> Res<()> {
         Style::Get(actor) => {
             let give: u16 = push(f, format!("{name}_Give"), Kind::Sub { next: got, params: Some(give_params(actor)), flow: String::new(), entry: GIVE_ENTRY.to_string() })?;
             (give, vec![give])
+        }
+        Style::Tiers(fam, _) if r.windowed() => {
+            let mut gives: Vec<u16> = Vec::new();
+            let mut subs: Vec<u16> = Vec::new();
+            for (i, t) in crate::progressive::tiers(fam)?.iter().enumerate() {
+                let p: Cont = Cont { items: vec![("ActorName".to_string(), Val::Str(t.to_string()))] };
+                let window: u16 = push(f, format!("{name}_Show{i}"), Kind::Sub { next: got, params: Some(p), flow: WINDOW_FLOW.to_string(), entry: WINDOW_ENTRY.to_string() })?;
+                gives.push(crate::ocarina_hold::after(f, t, window)?);
+                subs.push(window);
+            }
+            let k: Kind = crate::progressive::chain_to(f, fam, &gives)?;
+            let main: u16 = push(f, format!("{name}_Tier"), k)?;
+            (main, subs)
         }
         Style::Tiers(fam, first) => {
             let give: u16 = push(f, format!("{name}_Give"), Kind::Sub { next: got, params: Some(give_params(first)), flow: String::new(), entry: GIVE_ENTRY.to_string() })?;
@@ -271,7 +292,7 @@ pub fn add_analyzed(y: &mut Byml, recs: &[Record], need: &Need) -> Res<usize> {
     let mut flows: BS<String> = need.flows.clone();
     flows.remove("");
     flows.remove(GIVE_FLOW);
-    if recs.iter().any(|r| matches!(r.style, Style::Window(_) | Style::Dungeon(..))) {
+    if recs.iter().any(|r| r.windowed()) {
         flows.insert(WINDOW_FLOW.to_string());
     }
     n.set("__RowId", Node::Str(DISPATCH.to_string()));
@@ -343,5 +364,32 @@ mod tests {
             }
         }
         assert_eq!(refused, Vec::<String>::new());
+    }
+
+    #[test]
+    fn a_progressive_ocarina_is_shown_in_the_window_and_never_held_up() {
+        use crate::bfevfl::Actor;
+        let d: Data = Data::load().unwrap();
+        let name: String = d.items.iter().find(|i| d.family(&i.name) == Some("Ocarina")).map(|i| i.name.clone()).unwrap();
+        let r: Record = Record::of(&d, "00000000a11e", &name).unwrap();
+        assert!(r.windowed());
+        assert!(!Record::of(&d, "00000000a11e", "Progressive Hookshot").unwrap().windowed());
+        let actor = |n: &str| Actor { name: n.to_string(), sub: String::new(), arg: String::new(), actions: Vec::new(), queries: Vec::new(), params: None, ep: 0, cut: 0 };
+        let mut f: Flow = Flow { name: GIVE_FLOW.to_string(), actors: vec![actor("EventSystemActor"), actor(HOLDER)], events: Vec::new(), entries: Vec::new() };
+        add_one(&mut f, &r).unwrap();
+        assert!(!f.events.iter().any(|e| matches!(&e.kind, Kind::Sub { entry, .. } if entry == GIVE_ENTRY)));
+        let e: &Entry = f.entries.iter().find(|e| e.name == r.event()).unwrap();
+        assert!(matches!(f.events[e.main as usize].kind, Kind::Switch { .. }));
+        let shown: Vec<Option<&Val>> = e.subs.iter().map(|s| match &f.events[*s as usize].kind {
+            Kind::Sub { params: Some(c), flow, entry, .. } if flow == WINDOW_FLOW && entry == WINDOW_ENTRY => c.get("ActorName"),
+            _ => None,
+        }).collect();
+        let want: Vec<Val> = crate::ocarina_hold::OCARINAS.iter().map(|t| Val::Str(t.to_string())).collect();
+        assert_eq!(shown, want.iter().map(Some).collect::<Vec<_>>());
+        for t in want {
+            let added: bool = f.events.iter().any(|e| matches!(&e.kind, Kind::Action { params: Some(c), .. } if c.get("Actor") == Some(&t)));
+            let equipped: bool = f.events.iter().any(|e| matches!(&e.kind, Kind::Action { params: Some(c), .. } if c.get("GameDataName") == Some(&Val::Str(crate::ocarina_hold::EQUIP.to_string())) && c.get("Value") == Some(&t)));
+            assert!(added && equipped, "{t:?}");
+        }
     }
 }
