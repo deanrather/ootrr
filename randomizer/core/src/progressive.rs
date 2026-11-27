@@ -182,6 +182,12 @@ fn ensure_query(f: &mut Flow) -> Res<(u16, u16)> {
     ensure(f, HOLDER, QUERY)
 }
 
+pub(crate) fn chain_to(f: &mut Flow, family: &str, gives: &[u16]) -> Res<Kind> {
+    let (a, q) = ensure_query(f)?;
+    let o: &[&str] = owners(family)?;
+    chain(f, a, q, family, o, gives)
+}
+
 pub(crate) fn ensure(f: &mut Flow, holder: &str, query: &str) -> Res<(u16, u16)> {
     let i: usize = match f.actors.iter().position(|a| a.name == holder && a.sub.is_empty()) {
         Some(i) => i,

@@ -42,7 +42,12 @@ class OOTRRSettings(settings.Group):
 
 def export_custom(exe: str, text: str, seed: str) -> Bundle:
     import Utils
-    key: str = hashlib.sha256(f"{text}\0{seed}".encode("utf-8")).hexdigest()[:20]
+    try:
+        st = os.stat(exe)
+        build: str = f"{st.st_size}:{st.st_mtime_ns}"
+    except OSError:
+        build = ""
+    key: str = hashlib.sha256(f"{text}\0{seed}\0{build}".encode("utf-8")).hexdigest()[:20]
     out: str = Utils.cache_path("ootrr", f"{key}.json")
     os.makedirs(os.path.dirname(out), exist_ok=True)
     if not os.path.isfile(out):

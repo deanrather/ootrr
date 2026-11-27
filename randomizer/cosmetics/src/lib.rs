@@ -17,3 +17,7 @@ pub mod cosmetic;
 pub mod sfx;
 pub mod slink;
 pub mod title_logo;
+
+#[cfg(test)]
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;

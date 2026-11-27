@@ -571,9 +571,8 @@ mod tests {
         let Some(root) = std::env::var("OOTRR_ROMFS").map(PB::from).ok().filter(|p| p.join("Pack").join("ZsDic.pack.zs").is_file()) else {
             return;
         };
-        let mut rf: Romfs = Romfs::open(&root).unwrap();
-        let mut maps: Vec<BM<String, u32>> = Vec::new();
-        for seed in ["first", "second"] {
+        let check = |seed: &str| -> BM<String, u32> {
+            let mut rf: Romfs = Romfs::open(&root).unwrap();
             let out: PB = std::env::temp_dir().join(format!("ootrr_sfx_{}_{seed}", std::process::id()));
             let _ = fs::remove_dir_all(&out);
             let notes: Vec<String> = apply(&out, &root, Sfx::Grouped, seed).unwrap();
@@ -615,9 +614,14 @@ mod tests {
             assert_eq!(checked.len(), streams.len());
             println!("{seed}: {} streamed and {shorts} short bank entries changed", streams.len());
             assert!(shorts > 2000, "{shorts}");
-            maps.push(streams);
             let _ = fs::remove_dir_all(&out);
-        }
+            streams
+        };
+        let check = &check;
+        let maps: Vec<BM<String, u32>> = std::thread::scope(|sc| {
+            let hs: Vec<std::thread::ScopedJoinHandle<BM<String, u32>>> = ["first", "second"].into_iter().map(|seed| sc.spawn(move || check(seed))).collect();
+            hs.into_iter().map(|h| h.join().unwrap()).collect()
+        });
         assert!(maps[0].len() > 1000);
         assert_ne!(maps[0], maps[1]);
     }
