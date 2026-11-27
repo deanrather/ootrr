@@ -1,24 +1,12 @@
 pub mod fill;
-pub mod sites;
 
-use std::fs;
-use std::path::{Path as P, PathBuf as PB};
-
-use crate::bfevfl::Bf;
-use crate::error::{Error as E, Res};
-use crate::flow_locations::dict_id;
-use crate::modpack::{Host, Pack};
-use crate::pickup_pack::write::start;
-use crate::romfs::Romfs;
-use crate::rsizetable::{self, Rst, TABLE_PATH};
-use crate::slice::edit::Built;
-use crate::staging::MARGIN;
+use crate::on_get::OnGet;
 use crate::start_items::{Kit, Set};
-use crate::zs;
-use crate::TITLE_ID;
 
 pub const SETTING: &str = "full_wallets";
 pub const NUM: u16 = 610;
+pub const WALLETS: [&str; 2] = ["Item_Wallet_Medium", "Item_Wallet_Large"];
+pub const ON_GET: OnGet = OnGet { title: "Full Wallets", on: |p| p.full_wallet, tag: fill::PREFIX, items: &WALLETS, run: fill::fill, start: start_sets };
 pub const COUNT: &str = "PlayerStatus.CurrentRupee";
 pub const FIRST: (&str, i32) = ("Item_Wallet_Small", 200);
 pub const CAPS: [(&str, i32); 2] = [("Item_Wallet_Medium", 500), ("Item_Wallet_Large", 1000)];
@@ -37,67 +25,15 @@ pub fn start_sets(k: &Kit) -> Vec<Set> {
     vec![Set::Int(COUNT.to_string(), start_cap(k))]
 }
 
-fn flow_files(base: &P) -> Res<Vec<String>> {
-    let mut out: Vec<String> = sites::fixed().iter().map(|f| sites::path_of(f)).collect();
-    let dir: PB = FLOWS.split('/').fold(base.to_path_buf(), |a, s| a.join(s));
-    if dir.is_dir() {
-        for e in fs::read_dir(&dir)? {
-            let name: String = e?.file_name().to_string_lossy().to_string();
-            if name.ends_with(".bfevfl.zs") {
-                out.push(format!("{FLOWS}/{name}"));
-            }
-        }
-    }
-    out.sort();
-    out.dedup();
-    Ok(out)
-}
-
-fn local(base: &P, path: &str) -> PB {
-    path.split('/').fold(base.to_path_buf(), |a, s| a.join(s))
-}
-
-pub fn after(on: bool, romfs: &P, load: &P, mod_name: &str, host: Host, mut b: Built) -> Res<Built> {
-    if !on {
-        return Ok(b);
-    }
-    let mut rf: Romfs = Romfs::open(romfs)?;
-    let base: PB = b.root.join("romfs");
-    let own: PB = base.join(TABLE_PATH);
-    let mut rst: Rst = if own.is_file() { Rst::parse(&rf.zs.decompress(&fs::read(&own)?)?)? } else { rsizetable::load(&mut rf)? };
-    let pk: Pack = Pack::create_for(load, TITLE_ID, mod_name, host)?;
-    if pk.root != b.root {
-        return Err(E::Msg(format!("the wallet flows went to {} and not to the seed mod {}", pk.root.display(), b.root.display())));
-    }
-    let mut lines: Vec<String> = Vec::new();
-    for path in flow_files(&base)? {
-        let modded: bool = local(&base, &path).is_file();
-        let first: Vec<u8> = start(&mut rf, Some(&base), &path)?;
-        let mut bf: Bf = Bf::parse(&first)?;
-        let mut n: usize = 0;
-        for f in bf.flows.iter_mut() {
-            n += sites::patch(f)?;
-        }
-        if n == 0 {
-            continue;
-        }
-        let raw: Vec<u8> = bf.write()?;
-        let old: usize = if modded { first.len() } else { rf.read_zs(&path)?.len() };
-        pk.write_romfs(&path, &zs::compress_raw(&raw, dict_id(&rf.read(&path)?))?)?;
-        if raw.len() > old {
-            rst.grow(&path, old as u64, raw.len() as u64, MARGIN)?;
-        }
-        lines.push(format!("{path} ({n})"));
-        b.counts.files += usize::from(!modded);
-    }
-    pk.write_romfs(TABLE_PATH, &rst.to_zs()?)?;
-    b.report.push_str(&format!("Full Wallets: wallet fills added at {} give points: {}\n", lines.len(), lines.join(", ")));
-    Ok(b)
-}
-
 #[cfg(test)]
 mod tests {
+    use std::fs;
+    use std::path::PathBuf as PB;
+
     use super::*;
+    use crate::modpack::Host;
+    use crate::romfs::Romfs;
+    use crate::slice::edit::Built;
 
     #[test]
     fn a_new_game_starts_with_its_best_wallet_full() {
@@ -127,15 +63,17 @@ mod tests {
         let load: PB = std::env::temp_dir().join(format!("ootrr_full_wallet_navi_{}", std::process::id()));
         let _ = fs::remove_dir_all(&load);
         let b: Built = crate::slice::edit::build_for(&g.seed_file, &p, &load, "fullwallet", Host::Eden).unwrap();
-        assert!(b.report.contains("Full Wallets: wallet fills added at"), "{}", b.report);
-        assert!(!local(&b.root.join("romfs"), navi).exists());
+        assert!(b.report.contains("Full Wallets: added at the get points of"), "{}", b.report);
+        assert!(!navi.split('/').fold(b.root.join("romfs"), |a, s| a.join(s)).exists());
         let _ = fs::remove_dir_all(&load);
     }
 
     #[test]
     fn the_fill_tops_up_every_wallet_and_the_caps_match_the_game_wallet_table() {
         assert!(CAPS.iter().all(|(_, n)| *n <= fill::FILL));
-        assert_eq!(sites::WALLETS.to_vec(), CAPS.iter().map(|c| c.0).collect::<Vec<&str>>());
+        assert_eq!(WALLETS.to_vec(), CAPS.iter().map(|c| c.0).collect::<Vec<&str>>());
+        assert_eq!(fill::HOLD, 60);
+        assert_eq!(crate::progressive::tiers("Wallet").unwrap().to_vec(), WALLETS.to_vec());
         let p: PB = ootrr_game::test_romfs::path();
         if !p.join("Pack").join("ZsDic.pack.zs").is_file() {
             eprintln!("skipped, no RomFS dump at {} (set OOTRR_ROMFS)", p.display());
