@@ -84,7 +84,13 @@ Logic is unchanged: placement and shop price rules count `Progressive_Wallet` it
 - A wallet lying on the ground, commit 02d4f5c2: PASS. "ground perfect."
 - A new game with the Adult's Wallet as a starting item, commit 02d4f5c2: PASS. "new-game success".
 
-The scrub, the Great Fairy, a pot and a new game without a starting wallet are not yet played by hand (for the pot and the Great Fairy see the scripted test below).
+27 Nov, by the user, on mods built from commit fa14bb97, setting on:
+
+- A new game with no starting wallet starts full: PASS. "i started a fresh game and my wallet is full."
+- Two wallets in one game, a chest in Mido's house (200 -> 500), then a pot in the Know-It-All Brothers' house (500 -> 1000): PASS. "wallet from pot is good." The game read 1000 rupees of 1000.
+- A wallet bought from a Deku Scrub: PASS. "scrub gave wallet, wallet behaved correct."
+
+The Great Fairy is not played by hand (see the scripted test below).
 
 ## Scripted game test (commit 02d4f5c2)
 
@@ -106,21 +112,23 @@ No text other than the normal get boxes and the Navi remark was seen. A video of
 
 The Hyrule Castle Great Fairy, child: the Adult's Wallet filled it from 60 to 500 and the counter read 500 in the reward scene. This was the 50 rupee offering path (the test save counted as already rewarded); the first-visit reward was not run. No setting-off run.
 
-The scrub sale was not tested: the Hyrule Field grotto scrub asked for a password, and the Lost Woods bridge scrub attacked and was not defeated by the script, so nothing was bought.
+The scrub sale was not scripted: the Hyrule Field grotto scrub asked for a password, and the Lost Woods bridge scrub attacked and was not defeated by the script, so nothing was bought. It was played by hand later (see Hands-on).
 
 ## Unproven (game test needed)
 
 - The counter popup in a chest scene with the setting off, and in a person's gift scene with the setting off (no counter is expected).
-- The scrub sale: that the shop fill shows on its open counter. Not played.
 - The Great Fairy's first-visit reward: not run (only the offering path).
-- The starting count with no starting wallet, and with "Giant's Wallet": not played (see "The starting wallet").
+- The starting count with "Giant's Wallet" as a starting item: not played (see "The starting wallet").
+- "Full Wallets" together with "Ice Traps": built with both on (`ootrr flow-loads` finds no missing loads), events not inspected, never played.
 - Archipelago: covered offline only (the mailbox gives through `GetInEvent_NotTurn_NotNpc`); no Archipelago build was made.
 
 ## Tested
 
-Merged with nightly 52db1a16 (merge commit fa14bb97, conflicts in `slice/edit.rs` and `slice/support.rs` resolved by keeping both sides), all runs with `OOTRR_ROMFS` set: `cargo test --workspace` 2445 passed, 0 failed, 13 ignored; audits clean; the default preset builds byte-identical to nightly 52db1a16 (286 files). No game run after this merge.
+Merged with nightly 4fa6e5a6 (merge commit 239b1775), with `OOTRR_ROMFS` set: `cargo test --workspace` 2447 passed, 0 failed, 13 ignored; audits 0 FAIL (15 hex-string warnings, none in this feature's files). The feature's code, the settings code and `slice/` are unchanged since fa14bb97, the commit of the 27 Nov hands-on. The default-output comparison with nightly 4fa6e5a6 has not been run.
 
-Earlier, merged with nightly 240af8b2 (merge commit ea264d4a): `cargo test --workspace` 2437 passed, 0 failed, 13 ignored; audits clean; the default preset and the three setting-off plandos build byte-identical to nightly 240af8b2. The game results below are from commit 02d4f5c2, before that merge. The merge brought a nightly change that makes upgrade pickups replay their get event; wallet pickups have not been played since.
+Before that, merged with nightly 52db1a16 (merge commit fa14bb97, conflicts in `slice/edit.rs` and `slice/support.rs` resolved by keeping both sides), all runs with `OOTRR_ROMFS` set: `cargo test --workspace` 2445 passed, 0 failed, 13 ignored; audits clean; the default preset builds byte-identical to nightly 52db1a16 (286 files). The 27 Nov hand-played results are from this commit.
+
+Earlier, merged with nightly 240af8b2 (merge commit ea264d4a): `cargo test --workspace` 2437 passed, 0 failed, 13 ignored; audits clean; the default preset and the three setting-off plandos build byte-identical to nightly 240af8b2. The game results below are from commit 02d4f5c2, before that merge. The merge brought a nightly change that makes upgrade pickups replay their get event; wallet pickups were played again on 27 Nov (see Hands-on).
 
 Before the merge, code commit 02d4f5c2:
 
@@ -165,10 +173,10 @@ The setting was a stub. The pouch table column that fills bags on get (`IsItemSt
 
 ## Checked
 
-- `cargo test --workspace`: 2445 passed, 0 failed, with 9 `full_wallet` tests among them.
+- `cargo test --workspace`: 2447 passed, 0 failed, with 9 `full_wallet` tests among them.
 - Default settings: every file built is byte-identical to nightly 52db1a16. Setting off: byte-identical to nightly 240af8b2 with three more (chest and person plando, shop deals and freestanding plando, pot and Gold Skulltula reward plando).
 - On: `ootrr flow-loads` finds no missing loads on 9 mods with the setting on.
-- Game: a person's gift, a shop purchase, a ground pickup, the Gold Skulltula reward, a new game with the Adult's Wallet and, on an earlier version, a chest were played by hand and passed. Scripted after the nightly merge: a pot and the Great Fairy's offering reward filled the wallet. The scrub sale is not yet seen.
+- Game, played by hand and passed: a chest, a pot, a Deku Scrub sale, a person's gift, a shop purchase, a ground pickup, the Gold Skulltula reward, and a new game with and without the Adult's Wallet. Scripted only: the Great Fairy's offering reward.
 
 Setting number 610.
 
