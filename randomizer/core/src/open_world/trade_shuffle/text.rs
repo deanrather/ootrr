@@ -67,10 +67,19 @@ pub fn hinted(m: &Msbt, actor: &str, short: &str) -> Res<Vec<Tok>> {
 
 /// A language archive with the hint on every trade item's caption.
 pub fn archive(raw: &[u8]) -> Res<Vec<u8>> {
+    archive_of(raw, all())
+}
+
+/// The same for the child's three trade items only (the child switch without adult trade shuffle).
+pub fn archive_kid(raw: &[u8]) -> Res<Vec<u8>> {
+    archive_of(raw, KID.iter().zip(KID_SHORT))
+}
+
+fn archive_of(raw: &[u8], items: impl Iterator<Item = (&'static Trade, &'static str)>) -> Res<Vec<u8>> {
     let mut es: Vec<Entry> = sarc::parse(raw)?;
     let b: Vec<u8> = sarc::get(&es, FILE).ok_or(Error::Format("trade shuffle: a message archive has no PouchContent.msbt"))?.data.clone();
     let mut m: Msbt = msbt::parse(&b)?;
-    for (x, short) in all() {
+    for (x, short) in items {
         let t: Vec<Tok> = hinted(&m, x.actor, short)?;
         m.set_tokens(&label(x.actor), &t)?;
     }

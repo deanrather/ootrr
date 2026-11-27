@@ -66,7 +66,7 @@ export const FIELDS = [
   { id: "seed", page: CONFIG, section: "Seed", label: "Seed",
     tip: "Type a seed to make the same game again. Left empty, Generate picks a random seed. This box is never filled in for you. The seed that was used is in the spoiler log and on the Seed page." },
   { id: "spoiler_log", page: CONFIG, section: "Seed", label: "Include Spoiler Log",
-    tip: "Writes Spoiler.txt into the mod folder next to the mod. It lists the seed, the settings string, every setting used, the expected playthrough step by step, and the item at every location. Off, no spoiler is made and an old Spoiler.txt is removed." },
+    tip: "Writes Spoiler.txt into the mod folder next to the mod. It lists the seed, the settings string, every setting used, the expected playthrough step by step, and the item at every location. Seed.ootrr goes beside it, the seed file the Import menu reads. Off, neither is made and an old Spoiler.txt and Seed.ootrr are removed." },
   { id: "music", page: COSMETICS, section: "Music and sound", label: "Music shuffle", choices: SHUFFLE("music"),
     tip: "Music changes only the mod you build, never the seed, so the same seed can be built with different music. Cutscene music keeps its own tracks. Themes built from stacked layers trade whole layer sets. Area themes that change with the time of day play one track all day. Jingles only trade with other jingles." },
   { id: "sfx", page: COSMETICS, section: "Music and sound", label: "Sound effect shuffle", choices: SHUFFLE("sounds"), tip: "Shuffles sound effects in the mod you build. The seed is not changed." },
@@ -334,7 +334,7 @@ export function gen_line() {
     line.classList.toggle("ready", !miss);
     line.textContent = miss
       ? `Fill in ${miss}, then use Generate at the top right.`
-      : `Generate, at the top right, writes the mod to ${mod_target()}${state.spoiler_log ? ", with Spoiler.txt beside it" : ""}.`;
+      : `Generate, at the top right, writes the mod to ${mod_target()}${state.spoiler_log ? ", with Spoiler.txt and Seed.ootrr beside it" : ""}.`;
   };
   draw();
   return { el: line, draw };

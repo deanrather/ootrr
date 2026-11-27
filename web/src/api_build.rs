@@ -85,6 +85,17 @@ pub fn put_spoiler(root: &PB, text: Option<&str>) -> std::io::Result<()> {
     }
 }
 
+pub const SEED_FILE: &str = "Seed.ootrr";
+
+pub fn put_seed(root: &PB, seed: Option<&SeedFile>) -> std::io::Result<()> {
+    let p: PB = root.join(SEED_FILE);
+    match seed {
+        Some(s) => fs::write(&p, s.to_text()),
+        None if p.is_file() => fs::remove_file(&p),
+        None => Ok(()),
+    }
+}
+
 fn mods_slot(md: &PB, game: &PB, romfs: &PB) -> bool {
     let own: PB = game.join("mods");
     if md == &own || inside(md, &own) {
@@ -266,14 +277,20 @@ pub fn run(jobs: &Arc<Jobs>, b: &Json) -> Hr<Json> {
                     }
                 }
                 c.ok(90);
-                c.begin(if p.spoiler.is_some() { "Write the spoiler log" } else { "Remove any old spoiler log" });
+                c.begin(if p.spoiler.is_some() { "Write the spoiler log and seed file" } else { "Remove any old spoiler log and seed file" });
                 if let Err(e) = put_spoiler(&built.root, p.spoiler.as_deref()) {
                     c.mark("failed");
                     c.finish("failed", &format!("The mod was written, but {SPOILER_FILE} could not be: {e}"));
                     return;
                 }
+                if let Err(e) = put_seed(&built.root, p.spoiler.as_ref().map(|_| &p.seed)) {
+                    c.mark("failed");
+                    c.finish("failed", &format!("The mod was written, but {SEED_FILE} could not be: {e}"));
+                    return;
+                }
                 if p.spoiler.is_some() {
                     built.report.push_str(&format!("Spoiler log: {}\n", pathsafe::text(&built.root.join(SPOILER_FILE))));
+                    built.report.push_str(&format!("Seed file: {}\n", pathsafe::text(&built.root.join(SEED_FILE))));
                 }
                 if p.with_update {
                     c.begin("Add the v1.1.1 update files to the mod");

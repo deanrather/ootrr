@@ -77,8 +77,10 @@ function settings_page(p) {
   return [head(p.label), warn, h("div", { class: "mgrid" }, secs)];
 }
 
-// An option's needs: "id" (a toggle that must be on), "id=value" or "id!=value".
+// An option's needs: "id" (a toggle that must be on), "!id" (a toggle that must be off),
+// "id=value" or "id!=value".
 function needs_met(n, eff) {
+  if (n.startsWith("!")) return eff[n.slice(1)] !== true;
   const ne = n.indexOf("!=");
   if (ne >= 0) return eff[n.slice(0, ne)] !== n.slice(ne + 2);
   const eq = n.indexOf("=");

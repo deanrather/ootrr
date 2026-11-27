@@ -73,9 +73,11 @@ pub fn edit_file_with(file: &str, raw: &[u8], ts: &[Target], keys: bool, small: 
                     let size: Size = route(&mut y, t.hash, f).ok_or(E::Format("edited actor vanished"))?;
                     used.push((f.to_string(), size));
                 }
-            } else if t.key.is_none() && guarded(&t.new_actor) && t.ev != Some(Ev::Keep) {
+            } else if t.key.is_none() && guarded(&t.new_actor) && t.hash == crate::slice::treasure::FIRST {
+                crate::slice::treasure::route_guard(&mut y, &t.new_actor)?;
+            } else if t.key.is_none() && guarded(&t.new_actor) && (t.ev != Some(Ev::Keep) || special::sized(t.hash).is_some()) {
                 let fam: String = guard_family(&t.new_actor);
-                if special::of(t.hash).is_some() {
+                if special::sized(t.hash).is_some() {
                     // A summoned chest starts its open event from its story flow, which the special
                     // stage points at the guard, as it does for an upgrade chain.
                     let g: String = find(&y, file, t.hash).into_iter().next().map(|x| x.gyaml).unwrap_or_default();
@@ -95,4 +97,74 @@ pub fn edit_file_with(file: &str, raw: &[u8], ts: &[Target], keys: bool, small: 
         return Ok(None);
     }
     Ok(Some(Edited { file: file.to_string(), old_len: raw.len(), bytes: y.write()?, hits, used, hearts, wraps, touched }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::byml::Node;
+
+    fn chest(hash: u64, drop: &str, gyaml: &str) -> Node {
+        Node::Map(vec![
+            ("Dynamic".to_string(), Node::Map(vec![("Drop__DropActor".to_string(), Node::Str(drop.to_string())), ("GetEventName".to_string(), Node::Str("Story".to_string()))])),
+            ("Gyaml".to_string(), Node::Str(gyaml.to_string())),
+            ("Hash".to_string(), Node::U64(hash)),
+            ("Translate".to_string(), Node::Arr(vec![Node::F32(1.0), Node::F32(2.0), Node::F32(3.0)])),
+        ])
+    }
+
+    fn target(hash: u64, old: &str, new: &str) -> Target {
+        Target {
+            name: "Chest".to_string(),
+            hash,
+            files: vec!["Banc/Area/a.bcett.byml.zs".to_string()],
+            old_item: "Old".to_string(),
+            new_item: "Bombs (20)".to_string(),
+            old_actor: old.to_string(),
+            new_actor: new.to_string(),
+            ev: Some(Ev::Keep),
+            family: None,
+            key: None,
+            heart_chest: false,
+        }
+    }
+
+    #[test]
+    fn ammo_in_a_summoned_story_chest_takes_the_bomb_bag_guard() {
+        const OTHER: u64 = 77;
+        let list: Vec<Node> = vec![
+            chest(special::DAMPE_HOOK, "Item_Hookshot", "Obj_TBox_A_02_NoBake"),
+            chest(special::SPIRIT, "Armor_Adult_Gauntlet_Silver", "Obj_TBox_A_02"),
+            chest(special::ICE_ARROWS, "Item_IceArrow", "Obj_TBox_A_01"),
+            chest(OTHER, "Obj_Heart_Piece", "Obj_TBox_A_02"),
+        ];
+        let raw: Vec<u8> = Byml { root: Node::Map(vec![("Actors".to_string(), Node::Arr(list))]), version: 7, big: false }.write().unwrap();
+        let bombs: &str = "Item_BombBundle_Small";
+        let ts: Vec<Target> = vec![
+            target(special::DAMPE_HOOK, "Item_Hookshot", bombs),
+            target(special::SPIRIT, "Armor_Adult_Gauntlet_Silver", "TBox_ArrowBundle_Medium"),
+            target(special::ICE_ARROWS, "Item_IceArrow", "TBox_DekuSeedBundle"),
+            target(OTHER, "Obj_Heart_Piece", bombs),
+        ];
+        let e: Edited = edit_file("Banc/Area/a.bcett.byml.zs", &raw, &ts).unwrap().unwrap();
+        assert_eq!(
+            e.wraps,
+            vec![
+                (special::DAMPE_HOOK, guard_family(bombs)),
+                (special::SPIRIT, guard_family("TBox_ArrowBundle_Medium")),
+                (special::ICE_ARROWS, guard_family("TBox_DekuSeedBundle")),
+            ]
+        );
+        assert!(e.used.contains(&(guard_family(bombs), Size::Big)));
+        assert!(e.used.contains(&(guard_family("TBox_DekuSeedBundle"), Size::Small)));
+        assert_eq!(e.touched, vec![special::DAMPE_HOOK, special::SPIRIT]);
+        let back: Byml = Byml::parse(&e.bytes).unwrap();
+        for h in [special::DAMPE_HOOK, OTHER] {
+            let f: Found = find(&back, "f", h).into_iter().next().unwrap();
+            assert_eq!(f.drop.as_deref(), Some(bombs));
+        }
+        let list: &[Node] = back.root.get("Actors").and_then(|a| a.as_arr()).unwrap();
+        let other: &Node = list.iter().find(|a| crate::placement::hash_of(a) == Some(OTHER)).unwrap();
+        assert_eq!(other.get("Dynamic").and_then(|d| d.get("GetEventName")).and_then(|v| v.as_str()), Some("Story"));
+    }
 }

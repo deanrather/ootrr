@@ -200,7 +200,9 @@ impl Plan {
         }
         if self.gates.kakariko {
             out.push(KAKARIKO);
-            out.push(("skip_child_zelda", "true"));
+        }
+        if self.gates.zelda {
+            out.push((crate::open_world::zelda::SKIP, "true"));
         }
         out.extend(self.qol.logic());
         out.extend(self.open.logic());
@@ -285,31 +287,31 @@ pub fn plan(s: &Settings) -> Res<Plan> {
     let fast: bool = toggle(s, "faster_chests", &mut bad);
     let intro: bool = toggle(s, "skip_intro", &mut bad);
     let start: crate::start_items::Start = crate::start_items::Start::read(s, &mut bad);
-    let gates: crate::open_world::Gates = crate::open_world::Gates::read(s, &mut bad);
+    let mut gates: crate::open_world::Gates = crate::open_world::Gates::read(s, &mut bad);
     let songs: Songs = crate::songs::mode(s, &mut bad);
     let harp_colors: bool = toggle(s, crate::song_models::SETTING, &mut bad);
     let chosen: Vec<String> = s.items("starting_items").map(|v| v.to_vec()).unwrap_or_default();
     let mut kit: crate::start_items::Kit = crate::start_items::read(s, &mut bad);
     // Settings that would hand out the same check twice.
-    // The open gate needs the forest open: its story state skips the Deku Tree quest past Mido.
-    // A closed forest closes the gate too: the schema locks the gate to closed (the page greys it
-    // out and a settings string decodes it as closed); a value set directly is refused here, so no
-    // such seed is made.
-    if gates.kakariko && gates.forest != Forest::Open {
-        bad.push(format!("open_kakariko is open while open_forest is {}, which cannot go together; set Kokiri Forest to Open or the Kakariko Gate to Closed", s.text("open_forest").unwrap_or("closed")));
+    // Skip Zelda Meeting needs the forest open: its story state skips the Deku Tree quest past
+    // Mido. The schema locks the skip off with a closed forest (the page greys it out and a
+    // settings string decodes it as off); a value set directly is refused here, so no such seed
+    // is made. The gate-only Kakariko gate goes with any forest.
+    if gates.zelda && gates.forest != Forest::Open {
+        bad.push(format!("skip_child_zelda is on while open_forest is {}, which cannot go together; set Kokiri Forest to Open or turn Skip Zelda Meeting off", s.text("open_forest").unwrap_or("closed")));
     }
-    if gates.kakariko && chosen.iter().any(|i| i == "zeldas_letter") {
-        bad.push("starting_items includes zeldas_letter while open_kakariko is open, which already hands out that check at new game; drop one of them".to_string());
+    if gates.zelda && chosen.iter().any(|i| i == "zeldas_letter") {
+        bad.push("starting_items includes zeldas_letter while skip_child_zelda is on, which takes the letter out of the game; drop one of them".to_string());
     }
-    if gates.kakariko && s.items("starting_songs").is_ok_and(|v| v.iter().any(|x| x == "zeldas_lullaby")) {
-        bad.push("starting_songs includes zeldas_lullaby while open_kakariko is open, which already hands out that check at new game; drop one of them".to_string());
+    if gates.zelda && s.items("starting_songs").is_ok_and(|v| v.iter().any(|x| x == "zeldas_lullaby")) {
+        bad.push("starting_songs includes zeldas_lullaby while skip_child_zelda is on, which already hands out that check at new game; drop one of them".to_string());
     }
     let skulls: crate::slice::skulls::Mode = crate::slice::skulls::mode(s, &mut bad);
     let remake: bool = chests != Mode::Off;
     let chus: bool = crate::slice::bombchus::mode(s, &mut bad);
     let chest_sizes: bool = crate::chest_size::mode(s, &mut bad);
     let qol: crate::qol::Opts = crate::qol::read(s, &mut bad);
-    let npc: crate::npc_hints::Opts = crate::npc_hints::read(s, gates.kakariko, &mut bad);
+    let npc: crate::npc_hints::Opts = crate::npc_hints::read(s, gates.zelda, &mut bad);
     let treasure: bool = crate::slice::treasure::mode(s, &mut bad);
     let day_skulls: bool = toggle(s, crate::slice::skull_day::SETTING, &mut bad);
     let open: crate::open_world::Opts = crate::open_world::read(s, &mut bad);
@@ -319,6 +321,8 @@ pub fn plan(s: &Settings) -> Res<Plan> {
         crate::start_items::give::add(&mut kit, "gerudo_card");
     }
     rewards.read_merchants(s, open.beans, &mut bad);
+    // Malon's gift is only shuffled with the NPC rewards.
+    gates.egg &= rewards.on;
     // Always on in this randomizer, like the other cutscene skips (no setting).
     let story: bool = true;
     let endings: bool = true;
@@ -377,9 +381,12 @@ pub fn plan(s: &Settings) -> Res<Plan> {
         (!start.pouch.is_empty(), "The ticked Kokiri Sword, Deku Shield or Slingshot is added to the pouch when a new game starts. A ticked Big or Biggest Bullet Bag brings the Slingshot with it."),
         (keys.small.roams(), "Small keys can be found in other dungeons or outside them. A chest key is counted for the dungeon it belongs to and the chest says which."),
         (gates.forest != Forest::Closed, "Kokiri Forest starts open. The blocker walls are switched off when a new game starts."),
-        (gates.kakariko, "The Kakariko gate starts open and the castle visit is skipped. A new game sets the castle quest complete, the Door of Time quest past Impa's send off, the Fire Stone quest past the gate and the gate guard's flag, and gives the items of Zelda's Letter and the Song from Impa."),
+        (gates.zelda, crate::open_world::zelda::SKIP_NOTE),
+        (gates.kakariko && !gates.zelda, crate::open_world::zelda::GATE_NOTE),
+        (gates.egg, crate::open_world::zelda::EGG_NOTE),
         (gates.door, "The Door of Time starts open. The Temple of Time logic is edited so the door is always open and the Master Sword can be drawn without the Door of Time quest, and the door's opened flag is set when a new game starts, so the Ocarina and the Song of Time are not needed to reach the Master Sword. The quest itself is left alone, so Zelda's escape and the Song of Time stay checks, and the adult pedestal works before the Forest Sage so you can return to childhood at any time."),
-        (gates.forest == Forest::Open, "The Deku Tree quest starts at the step Mido normally sets when he steps aside (Meet_DekuTree Step03), so Mido stands aside and the Kokiri Shop shows its later stock."),
+        (gates.forest == Forest::Open, "The Deku Tree quest starts at the step Mido normally sets when he steps aside (Meet_DekuTree Step03), so the Kokiri Shop shows its later stock."),
+        (gates.forest == Forest::Open, crate::open_world::kokiri::NOTE),
         (gates.forest == Forest::Open, crate::story_skip::NOTE_DEKU),
         (story, crate::story_skip::NOTE),
         (endings, crate::story_skip::NOTE_ENDINGS),
@@ -485,7 +492,7 @@ mod tests {
         assert_eq!(p.keys.map, Keep::Dungeon);
         assert!(p.intro);
         assert!(p.story && p.endings);
-        assert_eq!(p.notes.len(), 25);
+        assert_eq!(p.notes.len(), 27);
         assert!(p.notes.iter().any(|n| n == crate::lake_tree_wall::NOTE));
         assert!(p.notes.iter().any(|n| n == crate::qol::gear_cycle::NOTE), "the gear cycle is always on");
         assert!(p.short && p.notes.iter().any(|n| n == crate::short_get::NOTE));
@@ -545,8 +552,15 @@ mod tests {
         s.set("open_forest", Value::s("open")).unwrap();
         s.set("open_kakariko", Value::s("open")).unwrap();
         let p: Plan = plan(&s).unwrap();
-        assert!(p.gates.kakariko);
+        assert!(p.gates.kakariko && !p.gates.zelda);
+        assert_eq!(p.logic(), [&[("open_forest", "open")][..], &OWN_KEYS, &[("open_kakariko", "open"), (crate::open_world::EPONA, "1"), crate::open_world::trade::LOGIC[0]]].concat());
+        assert!(p.notes.iter().any(|n| n == crate::open_world::zelda::GATE_NOTE));
+        s.set(crate::open_world::zelda::SKIP, Value::Bool(true)).unwrap();
+        let p: Plan = plan(&s).unwrap();
+        assert!(p.gates.kakariko && p.gates.zelda);
         assert_eq!(p.logic(), [&[("open_forest", "open")][..], &OWN_KEYS, &[("open_kakariko", "open"), ("skip_child_zelda", "true"), (crate::open_world::EPONA, "1"), crate::open_world::trade::LOGIC[0]]].concat());
+        assert!(p.notes.iter().any(|n| n == crate::open_world::zelda::SKIP_NOTE) && !p.notes.iter().any(|n| n == crate::open_world::zelda::GATE_NOTE));
+        s.set(crate::open_world::zelda::SKIP, Value::Bool(false)).unwrap();
         assert_eq!(p.start_flags(), vec![(MIDO_WALL.to_string(), false), (EXIT_WALL.to_string(), false), (FIRE_LOOP_FLAG.to_string(), true)]);
         s.set("open_kakariko", Value::s("closed")).unwrap();
         let p: Plan = plan(&s).unwrap();
@@ -647,20 +661,51 @@ mod tests {
     }
 
     #[test]
-    fn an_open_kakariko_gate_needs_an_open_forest() {
+    fn skipping_the_zelda_meeting_needs_an_open_forest() {
+        let skip: &str = crate::open_world::zelda::SKIP;
         let mut s: Settings = Settings::default();
         s.set("open_forest", Value::s("open")).unwrap();
-        s.set("open_kakariko", Value::s("open")).unwrap();
-        assert!(plan(&s).unwrap().gates.kakariko);
+        s.set(skip, Value::Bool(true)).unwrap();
+        assert!(plan(&s).unwrap().gates.zelda);
         s.set("open_forest", Value::s("closed")).unwrap();
         // A seed is never made from both.
         let e: String = plan(&s).err().unwrap().to_string();
-        assert!(e.contains("open_kakariko is open while open_forest is closed"), "{e}");
-        // A closed forest locks the gate closed: the page greys it out and a string reads closed.
-        assert!(!s.is_enabled("open_kakariko"));
+        assert!(e.contains("skip_child_zelda is on while open_forest is closed"), "{e}");
+        // A closed forest locks the skip off: the page greys it out and a string reads off.
+        assert!(!s.is_enabled(skip));
         let back: Settings = Settings::decode(&s.encode().unwrap()).unwrap().settings;
-        assert_eq!(back.get("open_kakariko"), Some(&Value::s("closed")));
-        assert!(!plan(&back).unwrap().gates.kakariko);
+        assert_eq!(back.get(skip), Some(&Value::Bool(false)));
+        assert!(!plan(&back).unwrap().gates.zelda);
+    }
+
+    #[test]
+    fn the_gate_only_kakariko_goes_with_a_closed_forest() {
+        let mut s: Settings = Settings::default();
+        s.set("open_forest", Value::s("closed")).unwrap();
+        s.set("open_kakariko", Value::s("open")).unwrap();
+        assert!(s.is_enabled("open_kakariko"));
+        let p: Plan = plan(&s).unwrap();
+        assert!(p.gates.kakariko && !p.gates.zelda);
+        // Only the guard's flag: no story state, no given checks.
+        assert!(crate::slice::edit::skipped_locations(&p).is_empty());
+        assert_eq!(p.defaults()[0], KAKARIKO);
+    }
+
+    #[test]
+    fn skipping_the_zelda_meeting_locks_the_gate_open_and_the_egg_unshuffled() {
+        let skip: &str = crate::open_world::zelda::SKIP;
+        let egg: &str = crate::open_world::zelda::EGG;
+        let mut s: Settings = Settings::default();
+        s.set("open_forest", Value::s("open")).unwrap();
+        s.set(egg, Value::Bool(true)).unwrap();
+        assert!(plan(&s).unwrap().gates.egg);
+        s.set(skip, Value::Bool(true)).unwrap();
+        assert!(!s.is_enabled(egg));
+        let back: Settings = Settings::decode(&s.encode().unwrap()).unwrap().settings;
+        assert_eq!(back.get(egg), Some(&Value::Bool(false)));
+        let p: Plan = plan(&s).unwrap();
+        assert!(p.gates.kakariko && p.gates.zelda && !p.gates.egg);
+        assert_eq!(crate::slice::edit::skipped_locations(&p), crate::start_state::KAKARIKO_LOCATIONS.to_vec());
     }
 
     #[test]
@@ -676,10 +721,10 @@ mod tests {
     fn starting_with_zeldas_letter_next_to_an_open_kakariko_is_refused() {
         let mut s: Settings = Settings::default();
         s.set("open_forest", Value::s("open")).unwrap();
-        s.set("open_kakariko", Value::s("open")).unwrap();
+        s.set(crate::open_world::zelda::SKIP, Value::Bool(true)).unwrap();
         s.set("starting_items", Value::set(&["zeldas_letter"])).unwrap();
         let e: String = plan(&s).unwrap_err().to_string();
-        assert!(e.contains("zeldas_letter while open_kakariko"), "{e}");
+        assert!(e.contains("zeldas_letter while skip_child_zelda"), "{e}");
     }
 
     #[test]
@@ -708,7 +753,7 @@ mod tests {
         let p: Plan = plan(&s).unwrap();
         assert!(p.gates.kakariko);
         assert_eq!(p.defaults(), vec![KAKARIKO, (crate::open_world::TIME, "true"), ("open_forest", "open")]);
-        assert_eq!(p.logic(), [&[("open_forest", "open")][..], &OWN_KEYS, &[KAKARIKO, ("skip_child_zelda", "true"), (crate::open_world::EPONA, "1"), crate::open_world::trade::LOGIC[0]]].concat());
+        assert_eq!(p.logic(), [&[("open_forest", "open")][..], &OWN_KEYS, &[KAKARIKO, (crate::open_world::EPONA, "1"), crate::open_world::trade::LOGIC[0]]].concat());
         assert!(p.notes.iter().any(|n| n.contains("Death Mountain starts open") && n.contains("Mask Shop")));
         assert_eq!(p.start_flags(), vec![(MIDO_WALL.to_string(), false), (EXIT_WALL.to_string(), false), (FIRE_LOOP_FLAG.to_string(), true)]);
         s.set("open_kakariko", Value::s("closed")).unwrap();

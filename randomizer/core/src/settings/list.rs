@@ -294,17 +294,31 @@ pub fn build() -> Schema {
     );
     s.push(
         Setting::choice(3, "open_forest", "world", "Kokiri Forest", "closed")
-            .tip("Whether the way out of the forest and into the Deku Tree is blocked. Closed also closes the Kakariko gate. An open Kakariko gate needs the forest open, since its story state skips the Deku Tree quest past Mido; with an open Kakariko gate, Closed is locked out.")
+            .tip("Whether the way out of the forest and into the Deku Tree is blocked. Skip Zelda Meeting needs the forest open, since its story state skips the Deku Tree quest past Mido; with Skip Zelda Meeting on, Closed is locked out.")
             .opt("open", "Open", "Nothing blocks the forest or the Deku Tree.")
-            .opt("closed", "Closed", "The forest and the Deku Tree stay closed until the story opens them, and the Kakariko gate stays closed."),
+            .opt("closed", "Closed", "The forest and the Deku Tree stay closed until the story opens them."),
     );
     s.push(
-        Setting::choice(4, "open_kakariko", "world", "Kakariko Gate", "closed")
+        Setting::toggle(crate::open_world::zelda::SKIP_NUM, crate::open_world::zelda::SKIP, "world", "Skip Zelda Meeting", false)
             .dep("open_forest", super::model::Cond::Is(super::model::Value::s("open")))
-            .disabled_as(super::model::Value::s("closed"))
-            .tip("Whether the Kakariko Village gate to Death Mountain starts open. Open also skips the castle visit: a new game starts after Zelda and Impa, with their two items already given. Needs Kokiri Forest set to Open; with Closed the gate is locked to Closed, and a seed that asks for both is refused.")
-            .opt("open", "Open", "The gate is open from the start and the castle visit is skipped. Zelda's Letter and the Song from Impa, or whatever is placed there, are given when a new game starts.")
+            .disabled_as(super::model::Value::Bool(false))
+            .tip("A new game starts after the castle visit: Malon and Talon are back at Lon Lon Ranch, Zelda and Impa have been met, the Kakariko gate is open and the Happy Mask Shop quest has started. The checks of Zelda's Letter and the Song from Impa, or whatever is placed there, are given when a new game starts. Zelda's Letter and the Weird Egg serve no purpose and are taken out of the item pool. Needs Kokiri Forest set to Open."),
+    );
+    s.push(
+        // Skip Zelda Meeting opens the gate whatever this says (Gates::read); a dep cannot name it,
+        // since a setting may only depend on one listed before it.
+        Setting::choice(4, "open_kakariko", "world", "Kakariko Gate", "closed")
+            .tip("Whether the Kakariko Village gate to Death Mountain starts open. Open only opens the gate: no quest moves on, so Malon, Talon, Zelda and Impa stay where they are and their checks stay. Skip Zelda Meeting opens the gate as well, whatever this says.")
+            .opt("open", "Open", "The gate is open from the start. Nothing else changes: the castle visit and every check on it stay, and showing Zelda's Letter to the guard only gets his talk.")
             .opt("closed", "Closed", "The gate opens when you show Zelda's Letter to the guard."),
+    );
+    s.push(
+        // On by default: the egg was always shuffled with the NPC rewards before this setting.
+        Setting::toggle(crate::open_world::zelda::EGG_NUM, crate::open_world::zelda::EGG, "shuffle", "Shuffle Weird Egg", true)
+            .dep(crate::open_world::zelda::SKIP, super::model::Cond::Is(super::model::Value::Bool(false)))
+            .disabled_as(super::model::Value::Bool(false))
+            .when("shuffle_rewards", "supported")
+            .tip("The Weird Egg can be anywhere and Malon's castle gift holds a random item. The egg hatches wherever it is carried, and its cucco is needed to wake Talon, so the Zelda meeting waits for the egg. Off keeps the egg as Malon's gift. Skip Zelda Meeting takes the egg out of the game, so with it on this is locked to Off."),
     );
     s.push(
         Setting::toggle(5, "open_door_of_time", "world", "Open Door of Time", false)
@@ -323,8 +337,10 @@ pub fn build() -> Schema {
             .tip("Jabu Jabu opens his mouth without a fish, so no fish and no bottle are needed to enter Jabu Jabu's Belly. King Zora still has to be moved first unless Zora's Fountain is open."),
     );
     s.push(
+        // Always on (user rule 2026-11-26): legacy, so every string reads it as on.
         Setting::toggle(76, "time_always_passes", "world", "Time always passes", true)
             .wire_as(Value::Bool(false))
+            .legacy()
             .tip("The day and night clock runs from the start instead of waiting for Kaepora in Hyrule Field and Impa's send off, so night can be reached before meeting Zelda."),
     );
     s.push(

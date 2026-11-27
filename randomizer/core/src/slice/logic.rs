@@ -492,12 +492,12 @@ mod tests {
     }
 
     #[test]
-    fn the_zora_river_wall_needs_a_blast_or_a_smash() {
+    fn the_zora_river_wall_needs_a_blast_or_a_smash_as_a_child() {
         let d: Data = Data::load().unwrap();
         let w: World = world(&d).unwrap();
         let s: Search = explore(&w, &vanilla_without(&w, &d, &["Bomb Bag"]), &[]);
-        let h: ItemId = w.item("Megaton Hammer").unwrap();
-        assert_eq!(exit_open(&s, &w, "ZR Front -> Zora River", Age::Adult), s.cnt[h] > 0);
+        // Adult climbs past the boulders.
+        assert!(exit_open(&s, &w, "ZR Front -> Zora River", Age::Adult));
         assert!(!exit_open(&s, &w, "ZR Front -> Zora River", Age::Child));
     }
 

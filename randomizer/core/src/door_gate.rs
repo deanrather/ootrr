@@ -49,7 +49,8 @@ pub const PREFIX: &str = "OOTRRDoorGate";
 pub const ALTAR_NOTE: &str = "Door of Time: the altar in the Temple of Time answers the Song of Time until the door is open (Market_Child_TimeTempleDoor_OcarinaReacts is rewritten to the door's opened flag), and the opening scene checks the chosen requirement in place of Zelda's escape. Opening the door early moves the Door of Time quest to Step06 only once it is past Step04, so Zelda's escape, the Ocarina of Time and the Song of Time stay checks, the door's logic module keeps it open from its opened flag, and the Master Sword can be drawn without the quest.";
 pub const VANILLA_NOTE: &str = "Door of Time, Closed - Vanilla: the song opens the door once Dodongo's Cavern and Jabu-Jabu's Belly are cleared (Get_StoneOfFire_IsCompleted_Exp and Get_StoneOfWater_IsCompleted_Exp).";
 pub const NOTE: &str = "Door of Time, Closed - Classic: the song opens the door once the three Spiritual Stones are held (DoorOfTime_IsAfter_Srep2_1_1_Exp).";
-pub const ESCAPE_NOTE: &str = "Zelda's escape waits for the three Spiritual Stones in place of Dodongo's Cavern and Jabu-Jabu's Belly: clearing those two dungeons no longer moves the Door of Time quest, and the escape area in Hyrule Field appears while DoorOfTime_IsAfter_Step2_1_Exp holds (Impa's send off played, the escape not played yet, the Stones held).";
+pub const ESCAPE_NOTE: &str = "Zelda's escape waits for the three Spiritual Stones in place of Dodongo's Cavern and Jabu-Jabu's Belly: the escape area in Hyrule Field appears while DoorOfTime_IsAfter_Step2_1_Exp holds (the Stones held, the escape not played yet), whether or not Zelda and Impa were met.";
+pub const ESCAPE_DUNGEONS_NOTE: &str = "Zelda's escape no longer waits for the Zelda meeting: the escape area in Hyrule Field appears while DoorOfTime_IsAfter_Step2_1_Exp holds (Dodongo's Cavern and Jabu-Jabu's Belly cleared, the escape not played yet), whether or not Zelda and Impa were met, and the Ocarina of Time lands in the moat once the escape has played.";
 pub const SONG_ONLY_NOTE: &str = "Door of Time, Closed - Song Only: the Song of Time opens the door with no other requirement.";
 pub const MOAT_NOTE: &str = "Zelda's Escape, Not Required: the Ocarina of Time lies in the castle moat from the start (its logic module no longer waits for the Door of Time quest's Step04, and its map entry is present until HyruleField_DoorOfTime_GetOcarinaOfTime has played), so HF Ocarina of Time Item and Song from Ocarina of Time need neither the two dungeons nor Zelda's escape. Zelda's escape never plays: its area in Hyrule Field is absent (its presence reads Get_StoneOfFire_IsAfter_Ready_Exp, always true, negated) and clearing Dodongo's Cavern and Jabu-Jabu's Belly no longer moves the Door of Time quest.";
 pub const SONGLESS_NOTE: &str = "Door of Time, Song of Time not required: the door opens by itself as soon as the requirement is met (the door's logic module reads the requirement next to its quest step: Get_StoneOfFire_IsCompleted_Exp and Get_StoneOfWater_IsCompleted_Exp for Closed - Vanilla, DoorOfTime_IsAfter_Srep2_1_1_Exp, rewritten to the three Stones, for Closed - Classic).";
@@ -77,6 +78,7 @@ const IS_EQUAL: u16 = 2;
 const AND_OP: i32 = 3;
 const OR_OP: i32 = 4;
 const NOT_OP: i32 = 5;
+const READ_EXP_OP: i32 = 10;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Need {
@@ -105,13 +107,21 @@ impl Opts {
         self.need != Need::Vanilla
     }
 
+    /// Zelda's escape plays from its own area (not the Door of Time quest step), whatever the
+    /// requirement: everything but the moat choice, which has no escape.
+    pub fn area(&self) -> bool {
+        !self.moat
+    }
+
     pub fn exps(&self) -> Vec<Edit> {
         let mut out: Vec<Edit> = Vec::new();
         if !self.open {
             out.push(Edit::Exp(REACTS.to_string(), vec![(0, OPENED.to_string())]));
         }
-        if self.escape() {
+        if self.area() {
             out.push(Edit::Exp(ESCAPE_EXP.to_string(), terms(self.need)));
+        }
+        if self.escape() {
             out.push(Edit::Exp(REQ_EXP.to_string(), req_terms(self.need)));
         }
         out
@@ -149,6 +159,8 @@ impl Opts {
         }
         if self.escape() {
             out.push(ESCAPE_NOTE.to_string());
+        } else if self.area() {
+            out.push(ESCAPE_DUNGEONS_NOTE.to_string());
         }
         if !self.song {
             out.push(SONGLESS_NOTE.to_string());
@@ -222,12 +234,12 @@ pub fn req_terms(n: Need) -> Vec<(i32, String)> {
     held(n).unwrap_or_else(|| vec![(0, SENT.to_string()), (0, SENT.to_string()), (NOT_OP, String::new()), (OR_OP, String::new())])
 }
 
+/// When Zelda's escape area exists: the requirement met and the escape not played yet. It does not
+/// wait for Impa's send off (the Door of Time depends only on its own settings, not the Zelda
+/// meeting).
 pub fn terms(n: Need) -> Vec<(i32, String)> {
-    let mut t: Vec<(i32, String)> = vec![(0, SENT.to_string()), (0, ESCAPED.to_string()), (NOT_OP, String::new()), (AND_OP, String::new())];
-    if let Some(h) = held(n) {
-        t.extend(h);
-        t.push((AND_OP, String::new()));
-    }
+    let mut t: Vec<(i32, String)> = held(n).unwrap_or_else(|| vec![(READ_EXP_OP, FIRE_EXP.to_string()), (READ_EXP_OP, WATER_EXP.to_string()), (AND_OP, String::new())]);
+    t.extend([(0, ESCAPED.to_string()), (NOT_OP, String::new()), (AND_OP, String::new())]);
     t
 }
 
@@ -570,13 +582,7 @@ fn stage_presence(rf: &mut Romfs, more: &mut Vec<Out>, from: Option<&PB>, p: &Pr
 }
 
 pub fn stage_escape(rf: &mut Romfs, more: &mut Vec<Out>, from: Option<&PB>, o: &Opts) -> Res<()> {
-    let p: &Presence = if o.escape() {
-        &ESCAPE_AREA
-    } else if o.moat {
-        &NO_ESCAPE
-    } else {
-        return Ok(());
-    };
+    let p: &Presence = if o.area() { &ESCAPE_AREA } else { &NO_ESCAPE };
     more.push(crate::medal_gate::module(rf, MODULE, patch_module)?);
     stage_presence(rf, more, from, p)
 }
@@ -626,7 +632,7 @@ mod tests {
         let mut s: Vec<bool> = Vec::new();
         for (op, f) in t {
             match *op {
-                0 => s.push(on.contains(&f.as_str())),
+                0 | READ_EXP_OP => s.push(on.contains(&f.as_str())),
                 AND_OP => {
                     let b: bool = s.pop().unwrap();
                     let a: bool = s.pop().unwrap();
@@ -654,13 +660,24 @@ mod tests {
     const LIGHT: &str = "IsGet.Item_Medal_Light";
 
     #[test]
-    fn classic_needs_the_three_stones_after_the_send_off_and_before_the_escape() {
+    fn classic_needs_the_three_stones_before_the_escape_and_not_the_send_off() {
         let t: Vec<(i32, String)> = terms(Need::Stones);
         assert!(holds(&t, &[SENT, FOREST, FIRE, WATER]));
+        assert!(holds(&t, &[FOREST, FIRE, WATER]));
         assert!(!holds(&t, &[SENT, FOREST, FIRE]));
         assert!(!holds(&t, &[SENT, FOREST, FIRE, LIGHT]));
-        assert!(!holds(&t, &[FOREST, FIRE, WATER]));
         assert!(!holds(&t, &[SENT, ESCAPED, FOREST, FIRE, WATER]));
+    }
+
+    #[test]
+    fn the_dungeon_escape_needs_both_dungeons_before_the_escape_and_not_the_send_off() {
+        let t: Vec<(i32, String)> = terms(Need::Vanilla);
+        assert_eq!(t[0], (READ_EXP_OP, FIRE_EXP.to_string()));
+        assert_eq!(t[1], (READ_EXP_OP, WATER_EXP.to_string()));
+        // The two dungeon expressions read as held flags here.
+        assert!(holds(&t, &[FIRE_EXP, WATER_EXP]));
+        assert!(!holds(&t, &[FIRE_EXP]) && !holds(&t, &[SENT, WATER_EXP]));
+        assert!(!holds(&t, &[FIRE_EXP, WATER_EXP, ESCAPED]));
     }
 
     #[test]
@@ -679,7 +696,7 @@ mod tests {
         let mut s: Settings = Settings::default();
         let d: Opts = read(&s, false, &mut bad);
         assert_eq!(d, Opts::default());
-        assert!(d.exps() == vec![Edit::Exp(REACTS.to_string(), vec![(0, OPENED.to_string())])] && d.logic().is_empty() && d.notes() == vec![ALTAR_NOTE.to_string(), VANILLA_NOTE.to_string()]);
+        assert!(d.exps() == vec![Edit::Exp(REACTS.to_string(), vec![(0, OPENED.to_string())]), Edit::Exp(ESCAPE_EXP.to_string(), terms(Need::Vanilla))] && d.logic().is_empty() && d.notes() == vec![ALTAR_NOTE.to_string(), VANILLA_NOTE.to_string(), ESCAPE_DUNGEONS_NOTE.to_string()]);
         s.set(SETTING, Value::s(STONES)).unwrap();
         assert_eq!(read(&s, false, &mut bad).need, Need::Stones);
         let o: Opts = read(&s, false, &mut bad);

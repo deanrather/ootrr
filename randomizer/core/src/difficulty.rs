@@ -73,7 +73,8 @@ pub const CUCCO: &str = "cucco_revenge";
 pub const FOREST: &str = "open_forest";
 pub const ENTRANCES: &str = "shuffle_entrances";
 pub const SPAWN_COMBO: &str = "enemy_spawn_combo";
-pub const KAKARIKO: &str = "open_kakariko";
+/// Skip Zelda Meeting: its story state removes Mido (start_state::kakariko).
+pub const KAKARIKO: &str = crate::open_world::zelda::SKIP;
 pub const BOWLING: &str = "unbreakable_bowling_grass";
 pub const TALON: &str = "harder_talon_cuccos";
 pub const FIREBALLS: &str = "fireball_storms";
@@ -364,7 +365,7 @@ pub fn read(s: &Settings, bad: &mut Vec<String>) -> Opts {
     let entrances: gates::Shuffle = chosen(s.text(ENTRANCES), bad).map(|t| gates::Shuffle::from_setting(t)).unwrap_or(gates::Shuffle::Wide);
     let shops: bool = chosen(s.text(crate::shops::plan::SETTING), bad).map(|t| t != "off").unwrap_or(false);
     let closed: bool = s.text(FOREST).map(|t| t == "closed").unwrap_or(true);
-    let mido_gone: bool = !closed && s.text(KAKARIKO).map(|t| t == "open").unwrap_or(false);
+    let mido_gone: bool = !closed && s.flag(KAKARIKO).unwrap_or(false);
     let sizes: sizes::Range = chosen(s.text(SIZES), bad).map(sizes::Range::from_setting).unwrap_or_default();
     let timers: i64 = chosen(s.text(timers::SETTING), bad).and_then(timers::percent).unwrap_or(NORMAL);
     Opts { extra, sizes, timers, encounters: extra > 0, forest_open, mido_gone, entrances, shops, ..o }
@@ -669,10 +670,10 @@ mod tests {
         s.set(FOREST, Value::s("open")).unwrap();
         let o: Opts = read(&s, &mut bad);
         assert!(o.gates() && o.gate_list().len() == gates::GATES.len() - gates::HELD.len() - 1);
-        s.set(KAKARIKO, Value::s("open")).unwrap();
+        s.set(KAKARIKO, Value::Bool(true)).unwrap();
         let o: Opts = read(&s, &mut bad);
         assert!(o.mido_gone && o.gate_list().len() == gates::GATES.len() - gates::HELD.len() - 1);
-        s.set(KAKARIKO, Value::s("closed")).unwrap();
+        s.set(KAKARIKO, Value::Bool(false)).unwrap();
         s.set(ENTRANCES, Value::s("dungeons")).unwrap();
         let o: Opts = read(&s, &mut bad);
         assert!(o.entrances == gates::Shuffle::Dungeons && o.gates());

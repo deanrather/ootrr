@@ -74,9 +74,9 @@ impl Cosmetics {
 
     /// Whether anything in these cosmetics is drawn at random, so the cosmetic seed matters.
     pub fn rolls(&self) -> bool {
-        let drawn = |i: &colors::Item| match self.parts.get(i.id) {
+        let drawn = |i: &colors::Item| match colors::pick_of(i, &self.parts).0 {
             None => matches!(self.colors, Colors::Random | Colors::Shared),
-            Some(p) => *p == colors::Pick::Random && self.colors != Colors::Off,
+            Some(p) => p == colors::Pick::Random && self.colors != Colors::Off,
         };
         self.music != Music::Off || self.sfx != Sfx::Off || colors::ITEMS.iter().any(drawn)
     }

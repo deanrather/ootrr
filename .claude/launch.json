@@ -4,8 +4,29 @@
     {
       "name": "web-builder",
       "runtimeExecutable": "py",
-      "runtimeArgs": ["-I", "-m", "http.server", "8765", "--bind", "127.0.0.1", "--directory", "site/dist"],
+      "runtimeArgs": [
+        "-I",
+        "-m",
+        "http.server",
+        "8765",
+        "--bind",
+        "127.0.0.1",
+        "--directory",
+        "site/dist"
+      ],
       "port": 8765
+    },
+    {
+      "name": "app",
+      "runtimeExecutable": "target/preview/release/ootrr.exe",
+      "runtimeArgs": [
+        "serve",
+        "--port",
+        "7879",
+        "--no-open",
+        "--no-update-check"
+      ],
+      "port": 7879
     }
   ]
 }

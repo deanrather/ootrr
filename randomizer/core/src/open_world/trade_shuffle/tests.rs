@@ -642,3 +642,58 @@ fn the_weird_egg_hatch_takes_the_egg_from_a_count_of_one_or_not_at_all() {
         }
     }
 }
+
+/// The child switch without adult trade shuffle (stage_kid): only the child's own flows edits.
+fn kid_patched(rf: &mut Romfs) -> HM<String, Flow> {
+    let mut out: HM<String, Flow> = HM::new();
+    one(rf, &mut out, SHOW_FLOW, &show_kid);
+    one(rf, &mut out, GET_FLOW, &get_kid);
+    one(rf, &mut out, KID_QUEST, &kid_hatch);
+    for n in KID_NPCS {
+        one(rf, &mut out, n, &|b: &mut Bf| kid_npc_bf(b, n).map(|_| ()));
+    }
+    out
+}
+
+#[test]
+fn without_adult_trade_shuffle_a_child_still_switches_by_showing_one_to_nobody() {
+    let Some(r) = root() else { return };
+    let mut rf: Romfs = Romfs::open(&r).unwrap();
+    let fl: HM<String, Flow> = kid_patched(&mut rf);
+    let show_flow: Flow = fl[SHOW_FLOW].clone();
+    let mut s: Sim = sim(&r, fl).unwrap();
+    s.opts.verbose = true;
+    let own: [(&str, i64); 2] = [("Item_ZeldaLetter", 1), ("Item_AlarmCucco", P)];
+    let sc: Scene = counted(SHOW_FLOW, SHOW_ENTRY, &[KIDDO, (KID_BUTTON, "ZeldaLetter")], &own);
+    let fins: Vec<Fin> = run(&mut s, &sc).unwrap();
+    assert!(!fins.is_empty());
+    for (f, p) in fins.iter().zip(picks(&fins, &show_flow)) {
+        assert_eq!(p, Some(32), "the cucco goes on the button");
+        assert_eq!((count(&mut s, f, "Item_ZeldaLetter"), count(&mut s, f, "Item_AlarmCucco")), (P, 1));
+    }
+    // An adult's show is the game's own: nothing switches.
+    let sc: Scene = counted(SHOW_FLOW, SHOW_ENTRY, &[(BUTTON, "CojiroCucco")], &[("Item_CojiroCucco", 1), ("Item_OddMushroom", 1)]);
+    let fins: Vec<Fin> = run(&mut s, &sc).unwrap();
+    assert!(picks(&fins, &show_flow).iter().all(Option::is_none));
+    assert!(fins.iter().all(|f| count(&mut s, f, "Item_OddMushroom") == 1));
+}
+
+#[test]
+fn without_adult_trade_shuffle_a_new_child_trade_item_is_parked_and_adult_ones_are_not() {
+    let Some(r) = root() else { return };
+    let mut rf: Romfs = Romfs::open(&r).unwrap();
+    let fl: HM<String, Flow> = kid_patched(&mut rf);
+    let mut s: Sim = sim(&r, fl).unwrap();
+    let sc: Scene = counted(GET_FLOW, GET_FLOW, &[KIDDO, (KID_BUTTON, "WeirdEgg")], &[("Item_WeirdEgg", 1)]);
+    let fins: Vec<Fin> = run_args(&mut s, &sc, &[("ActorName", "Item_ZeldaLetter")]).unwrap();
+    let got: Vec<&Fin> = fins.iter().filter(|f| granted(f, "Item_ZeldaLetter") == 1).collect();
+    assert!(!got.is_empty());
+    for f in got {
+        assert_eq!((count(&mut s, f, "Item_ZeldaLetter"), count(&mut s, f, "Item_WeirdEgg")), (P, 1), "the egg on the button stays out");
+    }
+    let sc: Scene = counted(GET_FLOW, GET_FLOW, &[(BUTTON, "ClaimCheck")], &[("Item_ClaimCheck", 1)]);
+    let fins: Vec<Fin> = run_args(&mut s, &sc, &[("ActorName", "Item_CojiroCucco")]).unwrap();
+    for f in fins.iter().filter(|f| granted(f, "Item_CojiroCucco") == 1) {
+        assert_eq!(count(&mut s, f, "Item_CojiroCucco"), 1, "adult trade items stay the game's");
+    }
+}

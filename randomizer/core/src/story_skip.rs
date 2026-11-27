@@ -902,6 +902,15 @@ pub const ITEM_GET: (&str, &str) = ("Dm_SY_GetInEvent", "GetInEvent_NotTurn_NotN
 /// Adds the item get for `g` to `f`, ending on `then`, and returns its first event. A dungeon item
 /// runs the item get's window-only copy (crate::item_window), then its credit; an upgrade gets its
 /// tier checks. The call joins the preload list (subs) of `entries`.
+pub fn give_item(f: &mut Flow, name: &str, g: &SceneGive, then: u16, entries: &[&str]) -> Res<u16> {
+    item_get(f, name, g, then, entries)
+}
+
+/// The scene `scene` played by the transition `name` becomes its played flag (crate::open_world::zelda).
+pub fn cut_scene(f: &mut Flow, prefix: &str, name: &str, scene: &str) -> Res<usize> {
+    transition_to_flag(f, prefix, name, scene, None)
+}
+
 fn item_get(f: &mut Flow, name: &str, g: &SceneGive, then: u16, entries: &[&str]) -> Res<u16> {
     if f.events.iter().any(|e| e.name == name) {
         return Err(Error::Msg(format!("story skip: the item get {name} is already in {}", f.name)));
@@ -1930,7 +1939,12 @@ pub fn patch_saria_give(b: &mut Bf, g: &SceneGive) -> Res<()> {
     let k1: Kind = set_bool(f, LONG_FLAG, true)?;
     let k2: Kind = set_bool(f, "HavePlayedEvent.Dm_Kokiri_0155", true)?;
     let k3: Kind = set_bool(f, SARIA_AFTER, false)?;
-    let first: u16 = chain(f, SARIA_GIVE, vec![k1, k2, k3], at)?;
+    let mut kinds: Vec<Kind> = vec![k1, k2, k3];
+    // The field intro the bridge would have led into (crate::open_world::zelda::FIELD_INTRO).
+    for (n, v) in crate::open_world::zelda::FIELD_INTRO.iter().filter(|(n, _)| *n != SARIA_AFTER) {
+        kinds.push(set_bool(f, n, *v)?);
+    }
+    let first: u16 = chain(f, SARIA_GIVE, kinds, at)?;
     set_next(&mut f.events[wait].kind, first)?;
     set_next(&mut f.events[roll].kind, idx(join)?)?;
     set_next(&mut f.events[join].kind, idx(unequip)?)?;

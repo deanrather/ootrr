@@ -187,7 +187,7 @@ pub const OPTS: &[Opt] = &[
 
 pub const REFUSED: &[(&str, &str)] = &[(
     "zeldas_letter",
-    "Zelda's Letter shares the child trade slot in the remake, so the Weird Egg or the next child trade item would take its place and the logic would lose it. Use open_kakariko instead",
+    "Zelda's Letter shares the child trade slot in the remake, so the Weird Egg or the next child trade item would take its place and the logic would lose it. Use Skip Zelda Meeting (skip_child_zelda) instead",
 )];
 
 pub const SONGS: &[(&str, &str, &str)] = &[

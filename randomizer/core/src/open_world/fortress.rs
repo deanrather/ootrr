@@ -10,8 +10,8 @@
 //!
 //! Two states replace the quest step (user rule, 2026-11-21: the fortress follows the Membership
 //! Card in the inventory):
-//! - the fortress itself (guards, Gerudo NPCs, the valley bridge, horseback archery) is cleared
-//!   while Link holds the card: [`CLEARED`] reads [`CARD`], and every Step01 node in
+//! - the fortress itself (guards, Gerudo NPCs, horseback archery) is cleared while Link holds the
+//!   card: [`CLEARED`] reads [`CARD`], and every Step01 node in
 //!   [`CARD_MODULES`] is cut off for an OR over [`CLEARED`] (IsAfter becomes cleared, IsBefore and
 //!   IsEqual, only ever read together, become not cleared);
 //! - the rescue (the carpenters' jail behaviour, which also calls the thieves, and the jail-side
@@ -21,10 +21,13 @@
 //!   the card scene's shuffled item would be lost. [`RESCUE_MODULES`] read [`MARK`]; each
 //!   carpenter's jail behaviour lived in the Step01 participant schedule
 //!   (SageOfSpirit_Step01_Npc_Hylia_01x_Adult_GerudoFortress), which no later step carries, so their
-//!   own schedule now holds it: its first condition is [`MARK`] (their own old behaviour), then the
-//!   Step01 conditions, then the Step01 default. A schedule parses into about ten times its file
+//!   own schedule now holds it: the Step01 conditions, then [`MARK`] (their own old behaviour) last,
+//!   since the game applies the last matching condition, with the Step01 default. A schedule parses into about ten times its file
 //!   size, so [`budget`] gives each merged schedule the sizes of both schedules it holds (the plain
 //!   growth margin crashed the game's loader).
+//!
+//! The valley bridge follows the rescue too (and the bridge setting), not the card: see
+//! super::valley.
 //!
 //! The Requiem scene's map logic also asks for SageOfSpirit Step05 when the scene ends; it now only
 //! does while the quest is not past Step05, so a late Requiem cannot roll the temple back.
@@ -276,8 +279,9 @@ pub fn module_bytes(raw: &[u8], path: &str) -> Res<Vec<u8>> {
     checked(&a, path)
 }
 
-/// A carpenter's own schedule with the jail behaviour of its Step01 schedule: rescue done first (the
-/// old own behaviour), then the Step01 conditions, then the Step01 default.
+/// A carpenter's own schedule with the jail behaviour of its Step01 schedule: the Step01 conditions,
+/// then rescue done (the old own behaviour), then the Step01 default. The game applies the LAST
+/// matching condition, so rescue done comes last and wins over jail flags that stay true.
 pub fn jailed(own: &[u8], step: &[u8]) -> Res<Vec<u8>> {
     let mut y: Byml = Byml::parse(own)?;
     let s: Byml = Byml::parse(step)?;
@@ -285,12 +289,12 @@ pub fn jailed(own: &[u8], step: &[u8]) -> Res<Vec<u8>> {
     if y.root.get("ConditionalSchedule").and_then(|c| c.as_arr()).is_some_and(|c| !c.is_empty()) {
         return Err(Error::Format("gerudo fortress: a carpenter's own schedule already has conditions, the game files differ"));
     }
-    let mut first: Node = y.root.get("DefaultSchedule").cloned().ok_or(Error::Format("gerudo fortress: a carpenter's own schedule has no default"))?;
-    first.set("ConditionFlag", Node::Str(MARK.to_string()));
+    let mut done: Node = y.root.get("DefaultSchedule").cloned().ok_or(Error::Format("gerudo fortress: a carpenter's own schedule has no default"))?;
+    done.set("ConditionFlag", Node::Str(MARK.to_string()));
     let jail: &[Node] = s.root.get("ConditionalSchedule").and_then(|c| c.as_arr()).ok_or(Error::Format("gerudo fortress: a Step01 carpenter schedule has no conditions"))?;
     let default: Node = s.root.get("DefaultSchedule").cloned().ok_or(Error::Format("gerudo fortress: a Step01 carpenter schedule has no default"))?;
-    let mut list: Vec<Node> = vec![first];
-    list.extend(jail.iter().cloned());
+    let mut list: Vec<Node> = jail.to_vec();
+    list.push(done);
     y.root.set("ConditionalSchedule", Node::Arr(list));
     y.root.set("DefaultSchedule", default);
     y.write()
@@ -464,9 +468,12 @@ mod tests {
             let o: Byml = Byml::parse(&own).unwrap();
             let s: Byml = Byml::parse(&step).unwrap();
             let list: &[Node] = y.root.get("ConditionalSchedule").unwrap().as_arr().unwrap();
-            assert_eq!(list[0].get("ConditionFlag").and_then(|f| f.as_str()), Some(MARK));
-            assert_eq!(list[0].get("EventEntry"), o.root.get("DefaultSchedule").unwrap().get("EventEntry"));
-            assert_eq!(&list[1..], s.root.get("ConditionalSchedule").unwrap().as_arr().unwrap());
+            // Last match wins: rescue done is the last condition.
+            let k: usize = list.len() - 1;
+            assert_eq!(list[k].get("ConditionFlag").and_then(|f| f.as_str()), Some(MARK));
+            assert_eq!(list[k].get("EventEntry"), o.root.get("DefaultSchedule").unwrap().get("EventEntry"));
+            assert!(list[..k].iter().all(|n| n.get("ConditionFlag").and_then(|f| f.as_str()) != Some(MARK)));
+            assert_eq!(&list[..k], s.root.get("ConditionalSchedule").unwrap().as_arr().unwrap());
             assert_eq!(y.root.get("DefaultSchedule"), s.root.get("DefaultSchedule"));
             assert!(jailed(&jailed(&own, &step).unwrap(), &step).is_err());
         }

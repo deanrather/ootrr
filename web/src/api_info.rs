@@ -36,7 +36,13 @@ pub fn color_parts() -> Json {
     Json::Arr(
         colors::ITEMS
             .iter()
-            .map(|i| Json::obj().with("id", i.id.into()).with("label", i.label.into()).with("group", i.group.into()))
+            .map(|i| {
+                let j: Json = Json::obj().with("id", i.id.into()).with("label", i.label.into()).with("group", i.group.into());
+                match i.parent {
+                    Some(p) => j.with("parent", p.into()),
+                    None => j,
+                }
+            })
             .collect(),
     )
 }

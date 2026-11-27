@@ -101,12 +101,19 @@ pub fn parse_picks(pairs: &[(String, String)]) -> Res<Picks> {
 }
 
 /// How a part's pixels are chosen: by hue band and the default chroma ramp, by hue band
-/// with a soft ramp (cloth keeps its weave), or every pixel (undershirts that are almost grey).
+/// with a soft ramp (cloth keeps its weave), every pixel (undershirts that are almost grey),
+/// or the near-grey pixels only (steel blades, silver trim).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Look {
     Plain,
     Cloth,
     Whole,
+    Metal,
+    /// The soft cloth ramp in one flat colour, the part's own hues dropped (the mirror face,
+    /// whose pastel rainbow would otherwise turn into another rainbow).
+    Sheen,
+    /// Only strongly coloured pixels: the gold of a hilt, not the pale grip wrap beside it.
+    Vivid,
 }
 
 pub struct Item {
@@ -117,6 +124,13 @@ pub struct Item {
     pub band: Option<(f32, f32)>,
     pub look: Look,
     pub vals: &'static [(&'static str, &'static str, &'static str)],
+    /// The OKLab lightness window the part's pixels sit in, (0, 1) for all of them.
+    pub light: (f32, f32),
+    /// Textures painted outright with the part's colour (a reflection map), beside `tex`.
+    pub whole: &'static [&'static str],
+    /// A part split off another: with no pick of its own it takes the other part's pick, so
+    /// one colour still paints the whole tunic.
+    pub parent: Option<&'static str>,
 }
 
 const C0: &str = "ns_param_color0";
@@ -125,6 +139,9 @@ const C2: &str = "ns_param_color2";
 const C3: &str = "ns_param_color3";
 const SOFT: (f32, f32) = (3.0, 12.0);
 const ALL: (f32, f32) = (-1.0, 0.0);
+const METAL: (f32, f32) = (14.0, 30.0);
+const VIVID: (f32, f32) = (55.0, 80.0);
+const ANY_LIGHT: (f32, f32) = (0.0, 1.0);
 
 pub const KOKIRI: &str = "Kokiri tunic";
 pub const GORON: &str = "Goron tunic";
@@ -134,6 +151,7 @@ pub const OTHER: &str = "Other";
 const GREEN: Option<(f32, f32)> = Some((100.0, 45.0));
 const LEATHER: Option<(f32, f32)> = Some((25.0, 12.0));
 const RED: Option<(f32, f32)> = Some((0.0, 8.0));
+const ZORA_BLUE: Option<(f32, f32)> = Some((222.0, 25.0));
 
 /// The tiled cloth of the Kokiri tunic. Mido and the Fairy Ocarina holder use it too, so
 /// Link's models are pointed at a recoloured copy with a name of the same length, as the
@@ -148,26 +166,58 @@ pub const LINK_MODELS: [&str; 6] = [
     "Obj_Armor_Adult_Normal.Obj_Armor_Adult_Normal",
     "Obj_Armor_Child_Normal.Obj_Armor_Child_Normal",
 ];
+/// The iris most people in the game share (61 models); Link's eyes read a renamed copy.
+/// Dark Link has his own eye texture.
+pub const IRIS: &str = "Eye_Inner_Iris_CmnTex_Chara_Eye_Alb";
+pub const LINK_IRIS: &str = "Eye_Inner_Iris_CmnTex_Plyer_Eye_Alb";
+pub const EYE_MODELS: [&str; 3] = ["Player_Adult.Player_Adult", "Player_Child.Player_Child", "Player_Child_Op.Player_Child_Op"];
+
+/// Shared game textures Link's models are pointed away from: the game's name, the copy's
+/// name (the same length), and the models that read the copy.
+pub const COPIES: [(&str, &str, &[&str]); 2] = [(TILE, LINK_TILE, &LINK_MODELS), (IRIS, LINK_IRIS, &EYE_MODELS)];
 
 const ADULT_BELT: &str = "Mt_Leater_Upper_Player_Adult_Alb";
 const CHILD_LEATHER: &str = "Mt_Leather_Player_Child_Alb";
 const BOOTS: &str = "Mt_Boots_Player_Adult_Alb";
 const GLOVE: &str = "Mt_Glove_Player_Adult_Alb";
 const GAUNTLET_GLOVE: &str = "Mt_Glove_Armor_Adult_Gauntlet_Silver_Alb";
+const MASTER: &str = "Mt_Weapon_Sword_Master_Alb";
+const BIGGORON: &str = "Mt_Weapon_Sword_Biggoron_Alb.00";
+const HYLIAN: &str = "Mt_Weapon_Shield_Hylian_Alb";
+const MIRROR: &str = "Mt_Weapon_Shield_Mirror_Alb";
+const BRACELET: &str = "Mt_Item_Gauntlet_Goron_Alb";
+const ADULT: &str = "Player_Adult.Player_Adult";
+const CHILD: &str = "Player_Child.Player_Child";
+const CHILD_OP: &str = "Player_Child_Op.Player_Child_Op";
+const SWORD: &str = "Weapon_Sword_Master.Weapon_Sword_Master";
+const SWORD_PEDESTAL: &str = "Weapon_Sword_Master.Land_HrlCity_MasterSword";
+const SILVER_HANDS: &str = "Armor_Adult_Gauntlet_Silver.Armor_Adult_Gauntlet_Silver";
+const GOLD_HANDS: &str = "Armor_Adult_Gauntlet_Gold.Armor_Adult_Gauntlet_Gold";
+const BRACELET_MODEL: &str = "Item_Gauntlet_Goron.Item_Gauntlet_Goron";
 
 const fn part(id: &'static str, label: &'static str, group: &'static str, tex: &'static [&'static str], band: Option<(f32, f32)>, look: Look) -> Item {
-    Item { id, label, group, tex, band, look, vals: &[] }
+    Item { id, label, group, tex, band, look, vals: &[], light: ANY_LIGHT, whole: &[], parent: None }
 }
 
-pub const ITEMS: [Item; 27] = [
-    part(
-        "kokiri",
-        "Tunic",
-        KOKIRI,
-        &[LINK_TILE, "Mt_Vest_Player_Adult_Alb", "Mt_Vest_Player_Child_Alb", "Mt_Angin_Acs_Player_Adult_Alb", "Mt_Cloth_Parts_Player_Child_Alb"],
-        GREEN,
-        Look::Cloth,
-    ),
+/// A part painted only through material colour values.
+const fn vals(id: &'static str, label: &'static str, group: &'static str, vals: &'static [(&'static str, &'static str, &'static str)]) -> Item {
+    Item { id, label, group, tex: &[], band: None, look: Look::Plain, vals, light: ANY_LIGHT, whole: &[], parent: None }
+}
+
+/// The near-grey steel or silver of a texture, within a lightness window.
+const fn metal(id: &'static str, label: &'static str, group: &'static str, tex: &'static [&'static str], light: (f32, f32)) -> Item {
+    Item { id, label, group, tex, band: None, look: Look::Metal, vals: &[], light, whole: &[], parent: None }
+}
+
+/// A part split off `parent`, which it follows when it has no pick of its own.
+const fn split(parent: &'static str, it: Item) -> Item {
+    Item { parent: Some(parent), ..it }
+}
+
+pub const ITEMS: [Item; 43] = [
+    part("kokiri", "Tunic", KOKIRI, &["Mt_Vest_Player_Adult_Alb", "Mt_Vest_Player_Child_Alb"], GREEN, Look::Cloth),
+    split("kokiri", part("kokiri_cloth", "Cloth weave", KOKIRI, &[LINK_TILE], GREEN, Look::Cloth)),
+    split("kokiri", part("kokiri_ropes", "Ropes and collar", KOKIRI, &["Mt_Angin_Acs_Player_Adult_Alb", "Mt_Cloth_Parts_Player_Child_Alb"], GREEN, Look::Cloth)),
     part("kokiri_pants", "Child pants", KOKIRI, &["Angin_Tile_A_Dark_Alb", "Mt_PantsParts_Player_Child_Alb"], GREEN, Look::Cloth),
     part("kokiri_shirt", "Undershirt", KOKIRI, &["Mt_Inner_Player_Adult_Alb"], None, Look::Whole),
     part("kokiri_belt", "Belts (and child boots)", KOKIRI, &[ADULT_BELT, CHILD_LEATHER], LEATHER, Look::Cloth),
@@ -176,91 +226,83 @@ pub const ITEMS: [Item; 27] = [
     part("goron_trim", "Gold trim", GORON, &["Mt_Angin_Armor_Adult_Goron_Alb", "Mt_HoodAcs_Armor_Adult_Goron_Alb"], Some((38.0, 10.0)), Look::Cloth),
     part("goron_belt", "Belt", GORON, &["Mt_Leater_Upper_Armor_Adult_Goron_Alb"], LEATHER, Look::Cloth),
     part("goron_beads", "Beads", GORON, &["Mt_Beads_Armor_Adult_Goron_Alb", "Mt_Beads_B_Armor_Adult_Goron_Alb"], None, Look::Plain),
-    Item {
-        id: "zora",
-        label: "Tunic",
-        group: ZORA,
-        tex: &["Mt_Angin_Armor_Adult_Zora_Alb", "Mt_Angin_Acs_Armor_Adult_Zora_Alb", "Mt_Vest_Armor_Adult_Zora_Alb"],
-        band: Some((222.0, 25.0)),
-        look: Look::Cloth,
-        vals: &[("Armor_Adult_Zora.Armor_Adult_Zora", "Mt_Angin", C0)],
-    },
+    Item { vals: &[("Armor_Adult_Zora.Armor_Adult_Zora", "Mt_Angin", C0)], ..part("zora", "Tunic", ZORA, &["Mt_Angin_Armor_Adult_Zora_Alb"], ZORA_BLUE, Look::Cloth) },
+    split("zora", part("zora_pattern", "Pattern", ZORA, &["Mt_Vest_Armor_Adult_Zora_Alb"], ZORA_BLUE, Look::Cloth)),
+    split("zora", part("zora_ropes", "Ropes", ZORA, &["Mt_Angin_Acs_Armor_Adult_Zora_Alb"], ZORA_BLUE, Look::Cloth)),
     part("zora_belt", "Belt sash", ZORA, &["Mt_Leater_Upper_Armor_Adult_Zora_Alb"], Some((305.0, 18.0)), Look::Cloth),
     part("zora_shirt", "Undershirt", ZORA, &["Mt_Inner_Armor_Adult_Zora_Alb"], None, Look::Whole),
     part("zora_scales", "Scale trim", ZORA, &["Mt_Parts_Armor_Adult_Zora_Alb"], Some((200.0, 15.0)), Look::Cloth),
+    split("feathers", part("zora_feather", "Feather", ZORA, &["Mt_Feather_Armor_Adult_Zora_Alb"], None, Look::Plain)),
     part("boots", "Boots", GEAR, &[BOOTS], LEATHER, Look::Cloth),
     part("gloves", "Gloves", GEAR, &[GLOVE, GAUNTLET_GLOVE], LEATHER, Look::Cloth),
     part("leather_trim", "Red leather trim", GEAR, &[ADULT_BELT, CHILD_LEATHER, BOOTS, GLOVE, GAUNTLET_GLOVE], RED, Look::Cloth),
+    part("kokiri_sword", "Kokiri Sword", GEAR, &["Mt_Weapon_Sword_Kokiri_Alb"], Some((350.0, 18.0)), Look::Plain),
+    // The Master Sword's one texture holds the pale steel blade, the violet guard and its
+    // gold. color1 is the grip, color0 the wrap stripes (seen in game). The first value of a
+    // model is the one that takes the picked colour exactly, the others keep their brightness
+    // relative to it, so the grip leads and the stripes stay a darker shade.
     Item {
-        id: "hair",
-        label: "Hair",
-        group: OTHER,
+        vals: &[(SWORD, "Mt_Weapon_Sword_Master", C1), (SWORD, "Mt_Weapon_Sword_Master", C0), (SWORD_PEDESTAL, "Mt_Weapon_Sword_Master", C1), (SWORD_PEDESTAL, "Mt_Weapon_Sword_Master", C0)],
+        ..part("master_sword", "Master Sword hilt", GEAR, &[MASTER], Some((250.0, 20.0)), Look::Plain)
+    },
+    part("master_blade", "Master Sword blade", GEAR, &[MASTER], Some((195.0, 20.0)), Look::Cloth),
+    part("biggoron_sword", "Biggoron Sword hilt", GEAR, &[BIGGORON, "Mt_Weapon_Sword_Biggoron_Alb.01"], ZORA_BLUE, Look::Plain),
+    part("biggoron_gold", "Biggoron Sword gold", GEAR, &[BIGGORON], Some((40.0, 18.0)), Look::Vivid),
+    metal("biggoron_blade", "Biggoron Sword blade", GEAR, &[BIGGORON], (0.62, 1.0)),
+    part("deku_shield", "Deku Shield", GEAR, &["Mt_Body_Weapon_Shield_Deku_Alb"], Some((2.0, 14.0)), Look::Plain),
+    part("hylian_shield", "Hylian Shield", GEAR, &[HYLIAN], Some((231.0, 35.0)), Look::Plain),
+    metal("hylian_trim", "Hylian Shield trim", GEAR, &[HYLIAN], (0.42, 1.0)),
+    part("mirror_shield", "Mirror Shield", GEAR, &[MIRROR], Some((2.0, 14.0)), Look::Plain),
+    // The mirror face is pale violet and white on the albedo; its shine is a sphere map.
+    Item { whole: &["Mt_Weapon_Shield_Mirror_Sphere_Emc"], ..part("mirror_face", "Mirror Shield mirror", GEAR, &[MIRROR], Some((240.0, 45.0)), Look::Sheen) },
+    vals("boomerang", "Boomerang gem", GEAR, &[("Item_Boomerang.Item_Boomerang", "Mt_Item_Boomerang_Gem", C0), ("Item_Boomerang.Item_Boomerang", "Mt_Item_Boomerang_Gem", C1), ("Item_Boomerang.Item_Boomerang", "Mt_Item_Boomerang_Gem", C2)]),
+    vals(
+        "gauntlets",
+        "Gauntlet jewels",
+        GEAR,
+        &[(SILVER_HANDS, "Mt_Jewelry", C0), (SILVER_HANDS, "Mt_Jewelry", C1), (SILVER_HANDS, "Mt_Jewelry", C2), (GOLD_HANDS, "Mt_Jewelry", C0), (GOLD_HANDS, "Mt_Jewelry", C1), (GOLD_HANDS, "Mt_Jewelry", C2)],
+    ),
+    // The silver plates are one texture both pairs wear; the Golden Gauntlets lay their gold over them.
+    metal("silver_gauntlets", "Silver Gauntlets", GEAR, &["Mt_Silver_Armor_Adult_Gauntlet_Silver_Alb"], (0.35, 1.0)),
+    part("golden_gauntlets", "Golden Gauntlets", GEAR, &["Mt_Gold_Armor_Adult_Gauntlet_Gold_Alb"], Some((45.0, 25.0)), Look::Cloth),
+    part("goron_bracelet", "Goron's Bracelet", GEAR, &[BRACELET], Some((42.0, 20.0)), Look::Cloth),
+    Item {
+        vals: &[(BRACELET_MODEL, "Mt_Item_Gauntlet_Goron_Glass", C0), (BRACELET_MODEL, "Mt_Item_Gauntlet_Goron_Glass", C2), (BRACELET_MODEL, "Mt_Item_Gauntlet_Goron_Glass", C1)],
+        ..part("bracelet_gem", "Goron's Bracelet gem", GEAR, &[BRACELET], Some((345.0, 18.0)), Look::Plain)
+    },
+    Item {
         // Adult hair takes its colour from its BC7 albedo: its Mt_Hairs colour values change
         // nothing that shows (tried in game). Child hair has no albedo file, so its values stay.
-        tex: &["Mt_Hairs_Player_Adult_Alb"],
-        band: None,
-        look: Look::Plain,
-        vals: &[
-            ("Player_Child.Player_Child", "Mt_Hairs", C0),
-            ("Player_Child.Player_Child", "Mt_Hairs", C1),
-            ("Player_Child.Player_Child", "Mt_Hairs", C3),
-        ],
+        vals: &[(CHILD, "Mt_Hairs", C0), (CHILD, "Mt_Hairs", C1), (CHILD, "Mt_Hairs", C3)],
+        ..part("hair", "Hair", OTHER, &["Mt_Hairs_Player_Adult_Alb"], None, Look::Plain)
     },
-    part("kokiri_sword", "Kokiri Sword", GEAR, &["Mt_Weapon_Sword_Kokiri_Alb"], Some((350.0, 18.0)), Look::Plain),
+    // The eyebrow texture is grey: its colour is the material's, the brown of the hair.
+    split(
+        "hair",
+        vals(
+            "eyebrows",
+            "Eyebrows",
+            OTHER,
+            &[
+                (ADULT, "Mt_Eyebrow", C0),
+                (ADULT, "Mt_Eyebrow", C1),
+                (ADULT, "Mt_Eyebrow", C2),
+                (ADULT, "Mt_Eyebrow", C3),
+                (CHILD, "Mt_Eyebrow", C0),
+                (CHILD, "Mt_Eyebrow", C1),
+                (CHILD, "Mt_Eyebrow", C2),
+                (CHILD, "Mt_Eyebrow", C3),
+                (CHILD_OP, "Mt_Eyebrow", C0),
+                (CHILD_OP, "Mt_Eyebrow", C1),
+                (CHILD_OP, "Mt_Eyebrow", C2),
+                (CHILD_OP, "Mt_Eyebrow", C3),
+            ],
+        ),
+    ),
+    part("eyes", "Eyes", OTHER, &[LINK_IRIS], None, Look::Plain),
     Item {
-        id: "master_sword",
-        label: "Master Sword",
-        group: GEAR,
-        tex: &["Mt_Weapon_Sword_Master_Alb"],
-        band: None,
-        look: Look::Plain,
-        // color1 is the grip, color0 the wrap stripes (seen in game). The first value of a
-        // model is the one that takes the picked colour exactly, the others keep their
-        // brightness relative to it, so the grip leads and the stripes stay a darker shade.
-        vals: &[
-            ("Weapon_Sword_Master.Weapon_Sword_Master", "Mt_Weapon_Sword_Master", C1),
-            ("Weapon_Sword_Master.Weapon_Sword_Master", "Mt_Weapon_Sword_Master", C0),
-            ("Weapon_Sword_Master.Land_HrlCity_MasterSword", "Mt_Weapon_Sword_Master", C1),
-            ("Weapon_Sword_Master.Land_HrlCity_MasterSword", "Mt_Weapon_Sword_Master", C0),
-        ],
-    },
-    part("biggoron_sword", "Biggoron Sword", GEAR, &["Mt_Weapon_Sword_Biggoron_Alb.00", "Mt_Weapon_Sword_Biggoron_Alb.01"], None, Look::Plain),
-    part("deku_shield", "Deku Shield", GEAR, &["Mt_Body_Weapon_Shield_Deku_Alb"], Some((2.0, 14.0)), Look::Plain),
-    part("hylian_shield", "Hylian Shield", GEAR, &["Mt_Weapon_Shield_Hylian_Alb"], Some((231.0, 35.0)), Look::Plain),
-    part("mirror_shield", "Mirror Shield", GEAR, &["Mt_Weapon_Shield_Mirror_Alb"], Some((2.0, 14.0)), Look::Plain),
-    Item {
-        id: "boomerang",
-        label: "Boomerang gem",
-        group: GEAR,
-        tex: &[],
-        band: None,
-        look: Look::Plain,
-        vals: &[("Item_Boomerang.Item_Boomerang", "Mt_Item_Boomerang_Gem", C0), ("Item_Boomerang.Item_Boomerang", "Mt_Item_Boomerang_Gem", C1), ("Item_Boomerang.Item_Boomerang", "Mt_Item_Boomerang_Gem", C2)],
-    },
-    Item {
-        id: "gauntlets",
-        label: "Gauntlet jewels",
-        group: GEAR,
-        tex: &[],
-        band: None,
-        look: Look::Plain,
-        vals: &[
-            ("Armor_Adult_Gauntlet_Silver.Armor_Adult_Gauntlet_Silver", "Mt_Jewelry", C0),
-            ("Armor_Adult_Gauntlet_Silver.Armor_Adult_Gauntlet_Silver", "Mt_Jewelry", C1),
-            ("Armor_Adult_Gauntlet_Silver.Armor_Adult_Gauntlet_Silver", "Mt_Jewelry", C2),
-            ("Armor_Adult_Gauntlet_Gold.Armor_Adult_Gauntlet_Gold", "Mt_Jewelry", C0),
-            ("Armor_Adult_Gauntlet_Gold.Armor_Adult_Gauntlet_Gold", "Mt_Jewelry", C1),
-            ("Armor_Adult_Gauntlet_Gold.Armor_Adult_Gauntlet_Gold", "Mt_Jewelry", C2),
-        ],
-    },
-    Item {
-        id: "navi",
-        label: "Navi",
-        group: OTHER,
-        tex: &["Npc_Navi_Body_Alb.00", "Npc_Navi_Body_Alb.01", "Npc_Navi_Wings_Alb.00", "Npc_Navi_Wings_Emc.00", "Npc_Navi_Wings_Emc.01"],
-        band: None,
-        look: Look::Plain,
         vals: &[("Npc_Navi.Npc_Navi", "Mt_Body", C1), ("Npc_Navi.Npc_Navi", "Mt_Body_AlphaMask", C1)],
+        ..part("navi", "Navi", OTHER, &["Npc_Navi_Body_Alb.00", "Npc_Navi_Body_Alb.01", "Npc_Navi_Wings_Alb.00", "Npc_Navi_Wings_Emc.00", "Npc_Navi_Wings_Emc.01"], None, Look::Plain)
     },
     part("hearts", "Recovery hearts", OTHER, &["Mt_Obj_Heart_Alb", "Mt_Heart_Container_Alb"], None, Look::Plain),
 ];
@@ -268,11 +310,25 @@ pub const ITEMS: [Item; 27] = [
 impl Item {
     pub fn tint(&self, to: [u8; 3]) -> Tint {
         let t: Tint = self.band.map(|b| Tint::new(to).band(b.0, b.1)).unwrap_or(Tint::new(to));
-        match self.look {
+        let t: Tint = match self.look {
             Look::Plain => t,
             Look::Cloth => t.chroma(SOFT.0, SOFT.1),
             Look::Whole => t.chroma(ALL.0, ALL.1),
-        }
+            Look::Metal => t.grey(METAL.0, METAL.1),
+            Look::Sheen => t.chroma(SOFT.0, SOFT.1).flat(),
+            Look::Vivid => t.chroma(VIVID.0, VIVID.1),
+        };
+        t.light(self.light.0, self.light.1)
+    }
+
+    /// The tint of one of the part's textures: those in `whole` take the colour outright.
+    pub fn tint_on(&self, whole: bool, to: [u8; 3]) -> Tint {
+        if whole { Tint::new(to).chroma(ALL.0, ALL.1) } else { self.tint(to) }
+    }
+
+    /// Every texture the part paints, with whether it is painted outright.
+    pub fn textures(&self) -> impl Iterator<Item = (&'static str, bool)> {
+        self.tex.iter().map(|t| (*t, false)).chain(self.whole.iter().map(|t| (*t, true)))
     }
 }
 
@@ -289,7 +345,7 @@ pub fn name_of(it: &Item) -> String {
 
 /// The game texture a part's texture is painted from.
 pub fn source_of(name: &str) -> &str {
-    if name == LINK_TILE { TILE } else { name }
+    COPIES.iter().find(|c| c.1 == name).map(|c| c.0).unwrap_or(name)
 }
 
 fn unit(rng: &mut Rng) -> f32 {
@@ -372,15 +428,31 @@ fn part_roll(seed: &str, id: &str) -> [u8; 3] {
     roll(&mut Rng::from_text(&format!("{seed} colors part {id}")))
 }
 
+/// A part's pick: its own, else the pick of the part it was split off (and that part's id,
+/// so a followed random pick draws the same colour).
+pub fn pick_of(it: &Item, picks: &Picks) -> (Option<Pick>, &'static str) {
+    if let Some(p) = picks.get(it.id) {
+        return (Some(*p), it.id);
+    }
+    match it.parent.and_then(|q| ITEMS.iter().find(|i| i.id == q)) {
+        Some(up) => match pick_of(up, picks) {
+            (Some(p), id) => (Some(p), id),
+            (None, _) => (None, it.id),
+        },
+        None => (None, it.id),
+    }
+}
+
 pub fn plan(c: Colors, seed: &str, picks: &Picks) -> Vec<(&'static Item, [u8; 3])> {
     let base: [u8; 3] = roll(&mut Rng::from_text(&format!("{seed} colors shared")));
     let mut out: Vec<(&'static Item, [u8; 3])> = Vec::new();
     for it in &ITEMS {
-        let to: Option<[u8; 3]> = match (c, picks.get(it.id).copied()) {
+        let (pick, key): (Option<Pick>, &str) = pick_of(it, picks);
+        let to: Option<[u8; 3]> = match (c, pick) {
             (Colors::Off, _) | (_, Some(Pick::Original)) | (Colors::Custom, None) => None,
             (_, Some(Pick::Rgb(x))) => Some(x),
             (Colors::Shared, None) => Some(shade_of(base, &mut Rng::from_text(&format!("{seed} colors shade {}", it.id)))),
-            (Colors::Random, _) | (_, Some(Pick::Random)) => Some(part_roll(seed, it.id)),
+            (Colors::Random, _) | (_, Some(Pick::Random)) => Some(part_roll(seed, key)),
         };
         if let Some(to) = to {
             out.push((it, to));
@@ -403,10 +475,10 @@ fn fitted(raw: &[u8], t: Tint) -> Res<Option<Tint>> {
 pub fn files() -> Vec<String> {
     let mut out: Vec<String> = vec![NAMES.to_string(), rsizetable::TABLE_PATH.to_string()];
     for it in &ITEMS {
-        out.extend(it.tex.iter().map(|t| tex_path(source_of(t))));
+        out.extend(it.textures().map(|t| tex_path(source_of(t.0))));
         out.extend(it.vals.iter().map(|v| model_path(v.0)));
     }
-    out.extend(LINK_MODELS.iter().map(|m| model_path(m)));
+    out.extend(COPIES.iter().flat_map(|c| c.2.iter()).map(|m| model_path(m)));
     out.sort();
     out.dedup();
     out
@@ -488,12 +560,12 @@ pub fn combined(fits: &[Tint], c: [u8; 3]) -> [u8; 3] {
 
 type Planned = (&'static Item, [u8; 3]);
 
-/// The parts painted on each texture, in part order.
-fn by_texture(todo: &[Planned]) -> BM<&'static str, Vec<Planned>> {
-    let mut out: BM<&'static str, Vec<Planned>> = BM::new();
+/// The parts painted on each texture, in part order, each with its tint on that texture.
+fn by_texture(todo: &[Planned]) -> BM<&'static str, Vec<(Planned, Tint)>> {
+    let mut out: BM<&'static str, Vec<(Planned, Tint)>> = BM::new();
     for (it, to) in todo {
-        for t in it.tex {
-            out.entry(*t).or_default().push((*it, *to));
+        for (t, whole) in it.textures() {
+            out.entry(t).or_default().push(((*it, *to), it.tint_on(whole, *to)));
         }
     }
     out
@@ -538,8 +610,8 @@ pub fn apply(mod_root: &P, romfs: &P, c: Colors, picks: &Picks, seed: &str) -> R
         };
         let mut raw: Vec<u8> = rf.zs.decompress(&z)?;
         let mut fits: Vec<Tint> = Vec::new();
-        for (it, to) in &parts {
-            if let Some(s) = fitted(&raw, it.tint(*to))? {
+        for ((it, _), t) in &parts {
+            if let Some(s) = fitted(&raw, *t)? {
                 fits.push(s);
                 hit.push(it.id);
             }
@@ -572,13 +644,11 @@ pub fn apply(mod_root: &P, romfs: &P, c: Colors, picks: &Picks, seed: &str) -> R
             by_model.entry(m).or_default().push((it.tint(*to), g));
         }
     }
-    let renamed: bool = made.iter().any(|m| m.0 == tex_path(LINK_TILE));
+    let copied: Vec<&(&str, &str, &[&str])> = COPIES.iter().filter(|c| made.iter().any(|m| m.0 == tex_path(c.1))).collect();
     let mut models: Vec<&str> = by_model.keys().copied().collect();
-    if renamed {
-        models.extend(LINK_MODELS);
-        models.sort_unstable();
-        models.dedup();
-    }
+    models.extend(copied.iter().flat_map(|c| c.2.iter().copied()));
+    models.sort_unstable();
+    models.dedup();
     for m in models {
         let r: String = model_path(m);
         let Ok(z) = rf.read(&r) else {
@@ -589,8 +659,8 @@ pub fn apply(mod_root: &P, romfs: &P, c: Colors, picks: &Picks, seed: &str) -> R
         for (t, g) in by_model.get(m).map(|v| v.as_slice()).unwrap_or(&[]) {
             n += tint_model(&mut raw, &keys, g, t)?;
         }
-        if renamed && LINK_MODELS.contains(&m) {
-            n += rename(&mut raw, TILE, LINK_TILE)?;
+        for (from, to, _) in copied.iter().filter(|c| c.2.contains(&m)) {
+            n += rename(&mut raw, from, to)?;
         }
         if n == 0 {
             continue;
@@ -635,8 +705,8 @@ pub fn preview(romfs: &P, out: &P, c: Colors, picks: &Picks, seed: &str) -> Res<
             continue;
         };
         let mut fits: Vec<Tint> = Vec::new();
-        for (it, to) in &parts {
-            match fitted(&old, it.tint(*to))? {
+        for ((it, _), tn) in &parts {
+            match fitted(&old, *tn)? {
                 Some(s) => fits.push(s),
                 None => lines.push(format!("{t} {}: no pixel in the colour band", it.id)),
             }
@@ -658,7 +728,7 @@ pub fn preview(romfs: &P, out: &P, c: Colors, picks: &Picks, seed: &str) -> Res<
         }
         fs::write(out.join(format!("{t}_before.png")), png::encode(&a))?;
         fs::write(out.join(format!("{t}_after.png")), png::encode(&b))?;
-        let to: Vec<String> = parts.iter().map(|p| format!("{} {}", p.0.id, hex(p.1))).collect();
+        let to: Vec<String> = parts.iter().map(|p| format!("{} {}", p.0.0.id, hex(p.0.1))).collect();
         lines.push(format!("{t}: {}, {} of {} blocks changed, {} skipped, mean error {:.2}, worst {}", to.join(", "), n.changed, n.blocks, n.skipped, sum as f64 / (a.px.len() as f64 * 0.75), worst));
     }
     Ok(lines)
@@ -731,7 +801,9 @@ mod tests {
         let free: Vec<(&Item, [u8; 3])> = plan(Colors::Random, "s", &none());
         for c in [Colors::Random, Colors::Shared] {
             let all: Vec<(&Item, [u8; 3])> = plan(c, "s", &picks);
-            assert_eq!(all.len(), ITEMS.len() - 1);
+            // The weave and ropes split off the tunic follow its "original".
+            assert_eq!(all.len(), ITEMS.len() - 3);
+            assert_eq!(of(&all, "kokiri_cloth"), None);
             assert_eq!(of(&all, "kokiri_belt"), Some([1, 2, 3]));
             assert_eq!(of(&all, "kokiri"), None);
             assert_eq!(of(&all, "boots"), of(&mine, "boots"));
@@ -832,9 +904,11 @@ mod tests {
     #[test]
     fn every_tunic_covers_its_body_texture_and_link_gets_his_own_cloth() {
         assert!(item("kokiri").tex.contains(&"Mt_Vest_Player_Adult_Alb") && item("kokiri").tex.contains(&"Mt_Vest_Player_Child_Alb"));
-        assert!(item("kokiri").tex.contains(&LINK_TILE) && !ITEMS.iter().any(|i| i.tex.contains(&TILE)));
+        assert!(item("kokiri_cloth").tex.contains(&LINK_TILE) && !ITEMS.iter().any(|i| i.tex.contains(&TILE)));
+        assert!(item("eyes").tex.contains(&LINK_IRIS) && !ITEMS.iter().any(|i| i.tex.contains(&IRIS)));
+        assert!(COPIES.iter().all(|c| c.0.len() == c.1.len() && source_of(c.1) == c.0));
         assert!(item("goron").tex.contains(&"Mt_Vest_Armor_Adult_Goron_Alb"));
-        assert!(item("zora").tex.contains(&"Mt_Vest_Armor_Adult_Zora_Alb"));
+        assert!(item("zora").tex.contains(&"Mt_Angin_Armor_Adult_Zora_Alb") && item("zora_pattern").tex.contains(&"Mt_Vest_Armor_Adult_Zora_Alb"));
         assert!(ITEMS.iter().filter(|i| i.look == Look::Cloth).all(|i| i.band.is_some()));
         assert_eq!(LINK_TILE.len(), TILE.len());
         assert_eq!(source_of(LINK_TILE), TILE);
@@ -851,6 +925,33 @@ mod tests {
         assert_eq!(ids.len(), ITEMS.len());
         assert!(ITEMS.iter().all(|i| !i.tex.is_empty() || !i.vals.is_empty()));
         assert!(ITEMS.iter().all(|i| !i.label.is_empty() && !i.group.is_empty()));
+        for it in ITEMS.iter().filter(|i| i.parent.is_some()) {
+            let at: usize = ITEMS.iter().position(|i| i.id == it.id).unwrap();
+            let up: Option<usize> = ITEMS.iter().position(|i| Some(i.id) == it.parent);
+            assert!(up.is_some_and(|u| u < at), "{} follows a part listed before it", it.id);
+        }
+    }
+
+    #[test]
+    fn a_split_part_follows_its_parent_until_it_has_its_own_pick() {
+        let of = |p: &[(&Item, [u8; 3])], id: &str| p.iter().find(|x| x.0.id == id).map(|x| x.1);
+        let red: Picks = [("kokiri".to_string(), Pick::Rgb([200, 0, 0])), ("hair".to_string(), Pick::Random)].into_iter().collect();
+        let p: Vec<(&Item, [u8; 3])> = plan(Colors::Custom, "s", &red);
+        for id in ["kokiri", "kokiri_cloth", "kokiri_ropes"] {
+            assert_eq!(of(&p, id), Some([200, 0, 0]), "{id}");
+        }
+        assert_eq!(of(&p, "kokiri_pants"), None);
+        assert!(of(&p, "hair").is_some() && of(&p, "eyebrows") == of(&p, "hair"));
+        let mut own: Picks = red.clone();
+        own.insert("kokiri_ropes".to_string(), Pick::Rgb([0, 0, 200]));
+        own.insert("kokiri_cloth".to_string(), Pick::Original);
+        let q: Vec<(&Item, [u8; 3])> = plan(Colors::Custom, "s", &own);
+        assert_eq!((of(&q, "kokiri"), of(&q, "kokiri_cloth"), of(&q, "kokiri_ropes")), (Some([200, 0, 0]), None, Some([0, 0, 200])));
+        // With no picks the random modes give a split part its own colour.
+        let r: Vec<(&Item, [u8; 3])> = plan(Colors::Random, "s", &none());
+        assert_ne!(of(&r, "kokiri"), of(&r, "kokiri_cloth"));
+        let feather: Picks = [("feathers".to_string(), Pick::Rgb([1, 2, 3]))].into_iter().collect();
+        assert_eq!(of(&plan(Colors::Random, "s", &feather), "zora_feather"), Some([1, 2, 3]));
     }
 
     #[test]
@@ -940,15 +1041,15 @@ mod tests {
         let out: PB = std::env::temp_dir().join(format!("ootrr_colors_{}", std::process::id()));
         let _ = fs::remove_dir_all(&out);
         let notes: Vec<String> = apply(&out, &root, Colors::Random, &none(), "colour seed").unwrap();
-        assert!(notes[0].contains("Kokiri tunic #") && notes[0].contains("Master Sword") && notes[0].contains("Zora tunic scale trim"), "{notes:?}");
+        assert!(notes[0].contains("Kokiri tunic #") && notes[0].contains("Master Sword") && notes[0].contains("Zora tunic scale trim") && notes[0].contains("Eyebrows #"), "{notes:?}");
         let mut rf: Romfs = Romfs::open(&root).unwrap();
         let mut seen: usize = 0;
         let mut paths: Vec<String> = Vec::new();
         for it in &ITEMS {
-            paths.extend(it.tex.iter().map(|t| tex_path(t)));
+            paths.extend(it.textures().map(|t| tex_path(t.0)));
             paths.extend(it.vals.iter().map(|v| model_path(v.0)));
         }
-        paths.extend(LINK_MODELS.iter().map(|m| model_path(m)));
+        paths.extend(COPIES.iter().flat_map(|c| c.2.iter()).map(|m| model_path(m)));
         paths.sort();
         paths.dedup();
         for r in paths {
@@ -956,7 +1057,7 @@ mod tests {
             if !p.is_file() {
                 continue;
             }
-            let from: String = if r == tex_path(LINK_TILE) { tex_path(TILE) } else { r.clone() };
+            let from: String = COPIES.iter().find(|c| r == tex_path(c.1)).map(|c| tex_path(c.0)).unwrap_or(r.clone());
             let old: Vec<u8> = rf.read_zs(&from).unwrap();
             let new: Vec<u8> = rf.zs.decompress(&fs::read(&p).unwrap()).unwrap();
             assert_eq!(old.len(), new.len(), "{r}");
@@ -993,6 +1094,55 @@ mod tests {
         assert_eq!(table.get(&tex_path(LINK_TILE)), game.get(&tex_path(TILE)));
         assert!(game.get(&tex_path(LINK_TILE)).is_none());
         let _ = fs::remove_dir_all(&out);
+    }
+
+    #[test]
+    fn the_real_eye_colour_is_links_own() {
+        let Some(root) = real() else {
+            return;
+        };
+        let out: PB = std::env::temp_dir().join(format!("ootrr_colors_eyes_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&out);
+        let picks: Picks = [("eyes".to_string(), Pick::Rgb([200, 30, 30]))].into_iter().collect();
+        apply(&out, &root, Colors::Custom, &picks, "s").unwrap();
+        let rom: PB = out.join("romfs");
+        assert!(!rom.join(tex_path(IRIS)).exists() && rom.join(tex_path(LINK_IRIS)).is_file());
+        // The tunic cloth was not picked, so its copy is not made and no model points at it.
+        assert!(!rom.join(tex_path(LINK_TILE)).exists());
+        assert!(!rom.join(model_path("Player_Adult_Dark.Player_Adult_Dark")).exists());
+        let mut rf: Romfs = Romfs::open(&root).unwrap();
+        for m in EYE_MODELS {
+            let b: Vec<u8> = rf.zs.decompress(&fs::read(rom.join(model_path(m))).unwrap()).unwrap();
+            let s: String = String::from_utf8_lossy(&b).into_owned();
+            assert!(s.contains(LINK_IRIS) && !s.contains(IRIS) && s.contains(TILE), "{m}");
+        }
+        let table: Rst = Rst::parse(&rf.zs.decompress(&fs::read(rom.join(rsizetable::TABLE_PATH)).unwrap()).unwrap()).unwrap();
+        assert_eq!(table.get(&tex_path(LINK_IRIS)), rsizetable::load(&mut rf).unwrap().get(&tex_path(IRIS)));
+        let _ = fs::remove_dir_all(&out);
+    }
+
+    #[test]
+    fn every_real_part_finds_pixels_on_each_of_its_textures() {
+        let Some(root) = real() else {
+            return;
+        };
+        let mut rf: Romfs = Romfs::open(&root).unwrap();
+        // Older parts may list a sheet with nothing in their band (the heart container is
+        // grey); the parts split since must hit every sheet they name.
+        const SPLIT: [&str; 17] = [
+            "kokiri", "kokiri_cloth", "kokiri_ropes", "zora", "zora_pattern", "zora_ropes", "zora_feather", "master_blade", "biggoron_gold", "biggoron_blade", "hylian_trim", "mirror_face", "silver_gauntlets",
+            "golden_gauntlets", "goron_bracelet", "bracelet_gem", "eyes",
+        ];
+        for it in ITEMS.iter().filter(|i| !i.tex.is_empty()) {
+            let mut hits: usize = 0;
+            for (t, whole) in it.textures() {
+                let raw: Vec<u8> = rf.read_zs(&tex_path(source_of(t))).unwrap();
+                let hit: bool = fitted(&raw, it.tint_on(whole, [10, 200, 220])).unwrap().is_some();
+                assert!(hit || !SPLIT.contains(&it.id), "{} {t}", it.id);
+                hits += hit as usize;
+            }
+            assert!(hits > 0, "{}", it.id);
+        }
     }
 
     #[test]

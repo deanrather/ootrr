@@ -11,7 +11,7 @@
 
         },
         "exits": {
-            "Zora River": "can_blast_or_smash",
+            "Zora River": "can_blast_or_smash or is_adult",
             "Hyrule Field": "True"
         }
     },
@@ -38,9 +38,8 @@
                 can_play(Zeldas_Lullaby) and can_play(Eponas_Song) and can_play(Sarias_Song) and
                 can_play(Suns_Song) and can_play(Song_of_Time) and can_play(Song_of_Storms) and
                 has_all_notes_for_song('ZR Frogs Ocarina Game')",
-            "ZR Near Open Grotto Freestanding PoH": "
-                is_child or here(can_plant_bean) or Hover_Boots or logic_zora_river_lower",
-            "ZR Near Domain Freestanding PoH": "is_child or Hover_Boots or logic_zora_river_upper",
+            "ZR Near Open Grotto Freestanding PoH": "is_child or Hover_Boots",
+            "ZR Near Domain Freestanding PoH": "is_child or Hover_Boots",
             "ZR Child River Wonderitem 1": "is_child",
             "ZR Child River Wonderitem 2": "is_child",
             "ZR Child River Wonderitem 3": "is_child",
@@ -77,7 +76,7 @@
             "Bean Plant Fairy": "is_child and can_plant_bean and can_play(Song_of_Storms) and has_bottle",
             "Butterfly Fairy": "can_use(Sticks) and has_bottle",
             "Bug Shrub": "
-                (is_child or here(can_plant_bean) or Hover_Boots or logic_zora_river_lower) and
+                (is_child or here(can_plant_bean) or Hover_Boots) and
                 can_cut_shrubs and has_bottle",
             "ZR Frogs Ocarina Minigame Hint": "is_child"
         },
@@ -99,7 +98,7 @@
         "hint": "ZORA_RIVER",
         "exits": {
             "Zora River": "True",
-            "Zoras Domain": "True"
+            "Zoras Domain": "can_play(Zeldas_Lullaby)"
         }
     },
     {

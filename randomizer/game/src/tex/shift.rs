@@ -74,11 +74,21 @@ pub struct Tint {
     /// The OKLab chroma of the most colourful pixels the tint takes, and their mean hue (radians).
     pub chroma: f32,
     pub angle: f32,
+    /// Takes the near-grey pixels (metal, blades) instead of the colourful ones.
+    pub grey: bool,
+    /// Paints every pixel the flat target scaled by its brightness: the part's own hues and
+    /// chroma are not kept (metal, a mirror).
+    pub flat: bool,
+    /// The OKLab lightness window a pixel must sit in, with soft edges.
+    pub light: (f32, f32),
 }
+
+/// How far past a lightness bound a pixel fades out of the part.
+const LIGHT_EDGE: f32 = 0.06;
 
 impl Tint {
     pub fn new(to: [u8; 3]) -> Tint {
-        Tint { to, mid: 0.0, span: 360.0, floor: 10.0, full: 40.0, from: 0.0, chroma: 0.0, angle: 0.0 }
+        Tint { to, mid: 0.0, span: 360.0, floor: 10.0, full: 40.0, from: 0.0, chroma: 0.0, angle: 0.0, grey: false, flat: false, light: (0.0, 1.0) }
     }
 
     pub fn band(mut self, mid: f32, span: f32) -> Tint {
@@ -93,15 +103,53 @@ impl Tint {
         self
     }
 
+    /// Takes the pixels below `floor` chroma fully and fades them out by `full`: the
+    /// near-grey metal of a blade or a trim, which a hue band cannot pick.
+    pub fn grey(mut self, floor: f32, full: f32) -> Tint {
+        self.grey = true;
+        self.flat = true;
+        self.floor = floor;
+        self.full = full;
+        self
+    }
+
+    /// Drops the part's own hues and chroma: every pixel takes the target, shaded.
+    pub fn flat(mut self) -> Tint {
+        self.flat = true;
+        self
+    }
+
+    /// Keeps the part to pixels of OKLab lightness `lo..hi` (0 black, 1 white).
+    pub fn light(mut self, lo: f32, hi: f32) -> Tint {
+        self.light = (lo, hi);
+        self
+    }
+
+    fn by_light(&self, c: [u8; 3]) -> f32 {
+        let (lo, hi): (f32, f32) = self.light;
+        if lo <= 0.0 && hi >= 1.0 {
+            return 1.0;
+        }
+        let l: f32 = oklab(lin(c))[0];
+        let up: f32 = if lo <= 0.0 { 1.0 } else { ((l - lo) / LIGHT_EDGE + 0.5).clamp(0.0, 1.0) };
+        let down: f32 = if hi >= 1.0 { 1.0 } else { ((hi - l) / LIGHT_EDGE + 0.5).clamp(0.0, 1.0) };
+        up * down
+    }
+
     pub fn weight(&self, c: [u8; 3]) -> f32 {
         let (h, chroma): (f32, f32) = hue([c[0] as f32, c[1] as f32, c[2] as f32]);
-        let by_chroma: f32 = ((chroma - self.floor) / (self.full - self.floor)).clamp(0.0, 1.0);
+        let ramp: f32 = ((chroma - self.floor) / (self.full - self.floor)).clamp(0.0, 1.0);
+        let by_chroma: f32 = if self.grey { 1.0 - ramp } else { ramp };
+        if by_chroma <= 0.0 {
+            return 0.0;
+        }
+        let by_light: f32 = self.by_light(c);
         if self.span >= 180.0 {
-            return by_chroma;
+            return by_chroma * by_light;
         }
         let far: f32 = ((h - self.mid + 540.0).rem_euclid(360.0) - 180.0).abs();
         let by_hue: f32 = ((self.span * 1.5 - far) / (self.span * 0.5)).clamp(0.0, 1.0);
-        by_hue * by_chroma
+        by_hue * by_chroma * by_light
     }
 
     pub fn fit(mut self, img: &Img) -> Option<Tint> {
@@ -169,6 +217,9 @@ impl Tint {
     /// How much of the part's own hues and chroma a tint keeps: none for a grey part, all
     /// for a colourful one.
     pub fn keep(&self) -> f32 {
+        if self.flat {
+            return 0.0;
+        }
         ((self.chroma - REL_FLOOR) / (REL_FULL - REL_FLOOR)).clamp(0.0, 1.0)
     }
 
@@ -264,6 +315,25 @@ mod tests {
         assert_eq!(soft.weight(dull), 1.0);
         let got: [u8; 3] = soft.rgb(dull);
         assert!(got[0] > 200 && got[1] < 10 && got[2] < 10, "{got:?}");
+    }
+
+    #[test]
+    fn a_grey_tint_takes_the_light_metal_and_leaves_colour_and_dark_grip() {
+        let (steel, grip, wood): ([u8; 3], [u8; 3], [u8; 3]) = ([200, 202, 205], [40, 40, 42], [120, 80, 40]);
+        let mut img: Img = flat(steel, 3);
+        img.put(1, 0, [grip[0], grip[1], grip[2], 255]);
+        img.put(2, 0, [wood[0], wood[1], wood[2], 255]);
+        let t: Tint = Tint::new([220, 40, 40]).grey(6.0, 18.0).light(0.5, 1.0).fit(&img).unwrap();
+        assert_eq!((t.weight(steel), t.weight(grip), t.weight(wood)), (1.0, 0.0, 0.0));
+        assert_eq!(t.rgb(grip), grip);
+        assert_eq!(t.rgb(wood), wood);
+        let got: [u8; 3] = t.rgb(steel);
+        assert!(got[0] > 180 && got[1] < 70 && got[2] < 70, "{got:?}");
+        let mid: Tint = Tint::new([0, 0, 0]).grey(6.0, 18.0).light(0.4, 0.7);
+        let at = |v: u8| mid.weight([v, v, v]);
+        assert_eq!((at(0), at(255)), (0.0, 0.0));
+        assert_eq!(at(128), 1.0);
+        assert_eq!(Tint::new([0, 0, 0]).light(0.4, 0.7).weight([128, 128, 128]), 0.0);
     }
 
     #[test]

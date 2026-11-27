@@ -1,5 +1,6 @@
 use crate::byml::{Byml, Node};
-use crate::error::Res;
+use crate::bfevfl::{Bf, Flow};
+use crate::error::{Error, Res};
 use crate::placement::hash_of;
 use crate::settings::Settings;
 use crate::slice::banc::set_drop_ev;
@@ -17,9 +18,14 @@ pub const VIEW: &str = "DropViewActor";
 
 pub const VANILLA: &str = "Obj_Heart_Piece";
 
-pub const NOTE: &str = "The Treasure Chest Game reward is shuffled. The first win gives the shuffled item once (its chest stays open) and every later win gives the vanilla red rupee. An upgrade there gives the tier fixed for it in the spoiler.";
+pub const NOTE: &str = "The Treasure Chest Game reward is shuffled. The first win gives the shuffled item once (its chest stays open) and every later win gives the vanilla red rupee. An upgrade there gives the tier fixed for it in the spoiler. Bombs, arrows or seeds there give rupees to a player without their bag, as in any chest.";
 
 pub const REPEAT_OPEN: &str = "IsEnableRepeatOpen";
+
+/// The prize event both reward chests start (GetEventName), its flow and its entry.
+pub const EVENT: &str = "MiniGame_ChoiceTreasure_OpenClearTreasureBox";
+pub const FLOW: &str = "MiniGame_SequentialChoiceTreasure";
+pub const ENTRY: &str = "MiniGame_SequentialChoiceTreasure_OpenClearTreasureBox";
 
 const VIEWS: [(&str, &str); 4] = [
     ("Obj_Heart_Piece", "Obj_Heart_Piece_MiniGame"),
@@ -85,6 +91,62 @@ pub fn test_edit(y: &mut Byml, actor: &str, view: bool) -> Res<usize> {
         set_view(y, FIRST, actor);
     }
     Ok(n)
+}
+
+/// The event the first reward chest starts when it holds ammo that needs a bag: a copy of the
+/// prize event whose entry asks for the bag first (crate::progressive::guard_entry). The repeat
+/// chest keeps the prize event, so its red rupee is never asked about.
+pub fn guard_event(actor: &str) -> String {
+    format!("OOTRR_TCG_AmmoGuard_{actor}")
+}
+
+fn guard_entry_name(actor: &str) -> String {
+    format!("{ENTRY}_AmmoGuard_{actor}")
+}
+
+pub fn route_guard(y: &mut Byml, actor: &str) -> Res<usize> {
+    let want: String = guard_event(actor);
+    let Some(list) = y.root.get_mut("Actors").and_then(|a| a.as_arr_mut()) else {
+        return Ok(0);
+    };
+    let mut n: usize = 0;
+    for a in list.iter_mut() {
+        if hash_of(a) != Some(FIRST) {
+            continue;
+        }
+        let Some(d) = a.get_mut("Dynamic") else {
+            continue;
+        };
+        let have: String = d.get("GetEventName").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        if have != EVENT && have != want {
+            return Err(Error::Msg(format!("the Treasure Chest Game reward chest starts {have:?} and not {EVENT}, the game files differ")));
+        }
+        d.set("GetEventName", Node::Str(want.clone()));
+        n += 1;
+    }
+    Ok(n)
+}
+
+pub fn guard_flow(b: &mut Bf, actor: &str) -> Res<()> {
+    let f: &mut Flow = b.flows.iter_mut().find(|f| f.name == FLOW).ok_or(Error::Format("treasure: the prize flow is missing"))?;
+    crate::progressive::guard_entry(f, &guard_entry_name(actor), ENTRY, actor)
+}
+
+pub fn guard_rows(y: &mut Byml, actor: &str, analyzed: bool) -> Res<usize> {
+    let entry: Option<String> = if analyzed { None } else { Some(guard_entry_name(actor)) };
+    crate::progressive::add_rows(y, EVENT, &[(guard_event(actor), entry)])
+}
+
+pub fn stage_guard(rf: &mut crate::romfs::Romfs, late: &mut Vec<crate::staging::Out>, work: &std::path::Path, actor: &str) -> Res<()> {
+    crate::story_skip::stage_late(rf, late, work, FLOW, |b| guard_flow(b, actor))?;
+    for (table, analyzed) in [(crate::progressive::SETTING_TABLE, false), (crate::progressive::ANALYZED_TABLE, true)] {
+        crate::story_skip::stage_late_file(rf, late, work, table, |raw: &[u8]| {
+            let mut y: Byml = Byml::parse(raw)?;
+            guard_rows(&mut y, actor, analyzed)?;
+            y.write()
+        })?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -332,6 +394,65 @@ mod tests {
         assert_eq!(text(&a, VIEW), "Item_Hammer");
         assert_eq!(text(&dynamic(&y, REPEAT), "Drop__DropActor"), "TBox_Rupee_Red");
         assert_eq!(text(&dynamic(&y, REPEAT), VIEW), "Obj_OrnamentalRupee_Red_MiniGame");
+        let _ = std::fs::remove_dir_all(&out);
+    }
+
+    #[test]
+    fn bombs_in_the_first_win_chest_ask_for_the_bag_and_the_repeat_chest_keeps_its_event() {
+        use crate::bfevfl::{Kind, Val};
+        let Some(root) = real() else { return };
+        let d: Data = Data::load().unwrap();
+        let o: GenOpts = GenOpts { plando: vec![crate::slice::plando::parse(&format!("{LOC}=Bombs (20)")).unwrap()], ..GenOpts::default() };
+        let g: Generated = generate_data(&d, &on(), "treasure bombs", &o).unwrap();
+        let out: PB = std::env::temp_dir().join(format!("ootrr_treasure_bombs_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&out);
+        let b: crate::slice::edit::Built = crate::slice::edit::build_for(&g.seed_file, &root, &out, "treasure", crate::modpack::Host::Eden).unwrap();
+        let bombs: &str = "Item_BombBundle_Small";
+        let mut rf: Romfs = Romfs::open(&root).unwrap();
+        let read = |rf: &mut Romfs, rel: &str| -> Vec<u8> {
+            let z: Vec<u8> = std::fs::read(b.root.join("romfs").join(rel.replace('/', std::path::MAIN_SEPARATOR_STR))).unwrap();
+            rf.zs.decompress(&z).unwrap()
+        };
+        let y: Byml = Byml::parse(&read(&mut rf, FILE)).unwrap();
+        assert_eq!(text(&dynamic(&y, FIRST), "Drop__DropActor"), bombs);
+        assert_eq!(text(&dynamic(&y, FIRST), "GetEventName"), guard_event(bombs));
+        assert_eq!(text(&dynamic(&y, REPEAT), "GetEventName"), EVENT);
+        let bf: Bf = Bf::parse(&read(&mut rf, &format!("Event/EventFlow/{FLOW}.bfevfl.zs"))).unwrap();
+        let f: &Flow = bf.flows.iter().find(|f| f.name == FLOW).unwrap();
+        let e = f.entries.iter().find(|e| e.name == guard_entry_name(bombs)).unwrap();
+        let mut at: usize = usize::from(e.main);
+        let mut asked: Vec<String> = Vec::new();
+        let none: usize = loop {
+            let Kind::Switch { cases, params, .. } = &f.events[at].kind else { break at };
+            if let Some(Val::Str(s)) = params.as_ref().and_then(|c| c.get("ActorName")) {
+                asked.push(s.clone());
+            }
+            let yes: usize = cases.iter().find(|c| c.val == 0).unwrap().ev as usize;
+            at = cases.iter().find(|c| c.val == 1).unwrap().ev as usize;
+            assert!(matches!(f.events[yes].kind, Kind::Sub { .. }));
+            if !matches!(f.events[at].kind, Kind::Switch { .. }) {
+                let Kind::Sub { entry, params, .. } = &f.events[yes].kind else { unreachable!() };
+                assert_eq!(entry, ENTRY);
+                assert_eq!(params.as_ref().and_then(|c| c.get("ContentName")), Some(&Val::Arg("ContentName".to_string())));
+            }
+        };
+        asked.sort();
+        assert_eq!(asked, vec!["Item_BombBag_Large", "Item_BombBag_Medium", "Item_BombBag_Small"]);
+        let Kind::Sub { entry, params, next, .. } = &f.events[none].kind else { panic!("the no-bag branch is not a call") };
+        assert_eq!(entry, ENTRY);
+        assert_eq!(params.as_ref().and_then(|c| c.get("ContentName")), Some(&Val::Str(crate::progressive::NO_BAG.to_string())));
+        assert_eq!(f.events[usize::from(*next)].kind.params().and_then(|c| c.get("Value")), Some(&Val::Int(crate::progressive::NO_BAG_EXTRA)));
+        let row = |rf: &mut Romfs, t: &str, id: &str| -> Node {
+            let y: Byml = Byml::parse(&read(rf, t)).unwrap();
+            y.root.as_arr().unwrap().iter().find(|r| text(r, "__RowId") == id).cloned().unwrap()
+        };
+        let ours: Node = row(&mut rf, crate::progressive::SETTING_TABLE, &guard_event(bombs));
+        let theirs: Node = row(&mut rf, crate::progressive::SETTING_TABLE, EVENT);
+        assert_eq!(text(&ours, "EntryPointName"), guard_entry_name(bombs));
+        assert_eq!(ours.get("FlowchartFileName"), theirs.get("FlowchartFileName"));
+        let ours: Node = row(&mut rf, crate::progressive::ANALYZED_TABLE, &guard_event(bombs));
+        let theirs: Node = row(&mut rf, crate::progressive::ANALYZED_TABLE, EVENT);
+        assert_eq!(ours.get("SubFlowList"), theirs.get("SubFlowList"));
         let _ = std::fs::remove_dir_all(&out);
     }
 }

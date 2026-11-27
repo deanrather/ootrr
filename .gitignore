@@ -23,3 +23,6 @@
 /docs/
 *.7z
 /site/dist/
+
+# Local probe tests (they read the local game dump)
+**/tests/tmp_*.rs

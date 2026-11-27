@@ -22,6 +22,9 @@ pub const POUCH_ACTOR: &str = "PouchSystemActor";
 pub const POUCH: &str = "EventTriggerAddOrRemovePouchContent";
 pub const WORLD_ACTOR: &str = "EventWorldManagerController";
 pub const SET_TIME: &str = "EventTrigger_SetTime";
+pub const SOUND_ACTOR: &str = "SoundSystemActor";
+/// The opening's own action that starts the in-game music (OpeningEvent Event4).
+pub const START_BGM: &str = "EventTriggerStartInGameBgm";
 const TRUE: u32 = 0x8000_0001;
 const FALSE: u32 = 0;
 const NONE: u16 = 0xFFFF;
@@ -244,15 +247,18 @@ pub struct Ops {
     pub items: Vec<String>,
     /// The clock to set, hour and minute, as the first Hyrule Field scenes do.
     pub time: Option<(i32, i32)>,
+    /// Starts the in-game music at the end: the opening stops it and only Link's house door scene
+    /// (Dm_Kokiri_0045, skipped at every new game) starts it again.
+    pub bgm: bool,
 }
 
 impl Ops {
     pub fn is_empty(&self) -> bool {
-        self.steps.is_empty() && self.enums.is_empty() && self.ints.is_empty() && self.flags.is_empty() && self.items.is_empty() && self.time.is_none()
+        self.steps.is_empty() && self.enums.is_empty() && self.ints.is_empty() && self.flags.is_empty() && self.items.is_empty() && self.time.is_none() && !self.bgm
     }
 
     pub fn len(&self) -> usize {
-        self.steps.len() + self.enums.len() + self.ints.len() + self.flags.len() + self.items.len() + usize::from(self.time.is_some())
+        self.steps.len() + self.enums.len() + self.ints.len() + self.flags.len() + self.items.len() + usize::from(self.time.is_some()) + usize::from(self.bgm)
     }
 
     pub fn extend(&mut self, o: Ops) {
@@ -264,6 +270,7 @@ impl Ops {
         if o.time.is_some() {
             self.time = o.time;
         }
+        self.bgm |= o.bgm;
     }
 }
 
@@ -344,7 +351,7 @@ pub fn visits(o: &Ops) -> Ops {
 }
 
 pub fn fountain() -> Ops {
-    Ops { steps: owned(&FOUNTAIN_STEPS), enums: owned(&FOUNTAIN_ENUMS), ints: Vec::new(), flags: flags_of(&FOUNTAIN_FLAGS), items: Vec::new(), time: None }
+    Ops { steps: owned(&FOUNTAIN_STEPS), enums: owned(&FOUNTAIN_ENUMS), flags: flags_of(&FOUNTAIN_FLAGS), ..Ops::default() }
 }
 
 pub fn kakariko(items: &[String]) -> Ops {
@@ -357,6 +364,7 @@ pub fn kakariko(items: &[String]) -> Ops {
         flags: flags_of(&KAKARIKO_FLAGS),
         items: all,
         time: Some(KAKARIKO_TIME),
+        bgm: false,
     }
 }
 
@@ -514,6 +522,11 @@ pub fn patch(f: &mut Flow, ops: &Ops) -> Res<usize> {
     if let Some((h, m)) = ops.time {
         let items: Vec<(String, Val)> = vec![item("TimeHour", Val::Int(h)), item("TimeMin", Val::Int(m))];
         chain.push(Kind::Action { next: NONE, actor: wa, act: wx, params: Some(Cont { items }) });
+    }
+    if ops.bgm {
+        let (ba, bx): (u16, u16) = slot(f, SOUND_ACTOR, START_BGM)?;
+        let items: Vec<(String, Val)> = vec![item("IsFadeIn", flag(false)), item("WithPlayableEvent", flag(false)), item("ResumeDelay", Val::Int(0))];
+        chain.push(Kind::Action { next: NONE, actor: ba, act: bx, params: Some(Cont { items }) });
     }
     let base: usize = f.events.len();
     idx(base + chain.len())?;

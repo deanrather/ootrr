@@ -27,8 +27,12 @@ pub fn merged(own: &[u8], roll: &[u8], cry: &[u8]) -> Res<Vec<u8>> {
     if list.iter().any(|n| n.get("ConditionFlag").and_then(|f| f.as_str()) == Some(STOPPED)) {
         return Err(Error::Msg("rolling goron: his own schedule already reads the stop".to_string()));
     }
-    let mut v: Vec<Node> = vec![while_not(&Byml::parse(roll)?, STOPPED)?, while_not(&Byml::parse(cry)?, GIVEN)?];
-    v.extend(list.iter().cloned());
+    // The game applies the LAST matching condition, so the overrides go after his own conditions
+    // (none of which may shadow them, SageOfFire_IsCompleted_Exp included), roll after cry: he rolls
+    // while !FirstTalked, cries while !DoorOpen, then acts as before.
+    let mut v: Vec<Node> = list.to_vec();
+    v.push(while_not(&Byml::parse(cry)?, GIVEN)?);
+    v.push(while_not(&Byml::parse(roll)?, STOPPED)?);
     y.root.set(CONDS, Node::Arr(v));
     y.write()
 }
@@ -92,7 +96,9 @@ mod tests {
         let y: Byml = Byml::parse(&out).unwrap();
         let o: Byml = Byml::parse(&own).unwrap();
         let list: &[Node] = y.root.get(CONDS).unwrap().as_arr().unwrap();
-        for (i, flag, from) in [(0, STOPPED, &roll), (1, GIVEN, &cry)] {
+        let k: usize = list.len();
+        // Last match wins: roll is the last condition, cry the one before it.
+        for (i, flag, from) in [(k - 1, STOPPED, &roll), (k - 2, GIVEN, &cry)] {
             let n: &Node = &list[i];
             assert_eq!(n.get("ConditionFlag").and_then(|f| f.as_str()), Some(flag));
             assert_eq!(n.get("IsReverseCondition"), Some(&Node::Bool(true)));
@@ -100,10 +106,10 @@ mod tests {
             assert_eq!(n.get("ActionSchedule"), d.root.get(DEFAULT).unwrap().get("ActionSchedule"));
             assert_eq!(events(n), events(d.root.get(DEFAULT).unwrap()));
         }
-        let a: &Node = &list[0].get("ActionSchedule").unwrap().as_arr().unwrap()[0];
+        let a: &Node = &list[k - 1].get("ActionSchedule").unwrap().as_arr().unwrap()[0];
         assert_eq!(a.get("Setting").and_then(|s| s.get("IsTurnToTerror")), Some(&Node::Bool(true)));
         assert_eq!(a.get("Setting").and_then(|s| s.get("MovingAS")).and_then(|s| s.as_str()), Some("Run_GoronRoll_02"));
-        assert_eq!(&list[2..], o.root.get(CONDS).unwrap().as_arr().unwrap());
+        assert_eq!(&list[..k - 2], o.root.get(CONDS).unwrap().as_arr().unwrap());
         assert_eq!(y.root.get(DEFAULT), o.root.get(DEFAULT));
         assert!(merged(&out, &roll, &cry).is_err());
     }

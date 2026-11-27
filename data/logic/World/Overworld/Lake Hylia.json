@@ -30,7 +30,7 @@
         },
         "exits": {
             "Hyrule Field": "True",
-            "Zoras Domain": "is_child and can_dive",
+            "Zoras Domain": "is_child and can_dive or (is_adult and 'Water Temple Clear' and (can_dive or can_use(Iron_Boots)))",
             "LH Owl Flight": "is_child",
             "LH Lab": "True",
             # The seemingly redundant `plant_beans` check is to allow supplementary searches, which can't collect events, to use this path.

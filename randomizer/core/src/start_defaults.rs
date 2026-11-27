@@ -566,7 +566,7 @@ mod tests {
         assert!(rows.contains(&("Bool".to_string(), key("Npc_Hylia_Soldier_003_GateOpen"))));
         assert!(rows.iter().any(|(t, _)| t == crate::pots::TABLE), "the pot rows were lost");
         assert!(report.contains("Death Mountain starts open"));
-        // An open Kakariko gate needs the open forest, which moves the opening quest on.
+        // The open forest moves the opening quest on; the gate-only Kakariko gate adds nothing.
         assert_eq!(opening_steps(&flow.unwrap()), vec![opening::OPEN_STEP.to_string(), "Complete".to_string()]);
     }
 

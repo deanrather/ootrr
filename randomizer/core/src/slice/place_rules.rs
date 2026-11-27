@@ -165,19 +165,23 @@ mod tests {
     fn with(v: &[(&str, &str)]) -> Settings {
         let mut s: Settings = Settings::default();
         for (k, x) in v {
-            s.set(k, Value::s(x)).unwrap();
+            // The new game checks come from skipping the Zelda meeting, a toggle.
+            match *x {
+                "true" | "false" => s.set(k, Value::Bool(*x == "true")).unwrap(),
+                _ => s.set(k, Value::s(x)).unwrap(),
+            }
         }
         s.finish().unwrap()
     }
 
     fn open_keys() -> Settings {
-        with(&[("open_forest", "open"), ("open_kakariko", "open"), ("shuffle_smallkeys", "keysanity")])
+        with(&[("open_forest", "open"), ("skip_child_zelda", "true"), ("shuffle_smallkeys", "keysanity")])
     }
 
     fn every_kind() -> Settings {
         with(&[
             ("open_forest", "open"),
-            ("open_kakariko", "open"),
+            ("skip_child_zelda", "true"),
             ("shuffle_smallkeys", "keysanity"),
             ("shuffle_bosskeys", "keysanity"),
             ("shuffle_mapcompass", "keysanity"),
@@ -242,7 +246,7 @@ mod tests {
     #[test]
     fn keys_in_their_own_dungeon_never_reach_the_new_game_checks() {
         let d: Data = Data::load().unwrap();
-        let s: Settings = with(&[("open_forest", "open"), ("open_kakariko", "open")]);
+        let s: Settings = with(&[("open_forest", "open"), ("skip_child_zelda", "true")]);
         assert_eq!(dungeon_items_at_new_game(&d, &s, 0..20), 0);
     }
 

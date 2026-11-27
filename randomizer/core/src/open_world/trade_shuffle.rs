@@ -525,6 +525,10 @@ pub fn npc_bf(b: &mut Bf, flow: &str) -> Res<usize> {
 
 /// ShowItem:EntryPoint0 ends with the button switch.
 pub fn show(b: &mut Bf) -> Res<()> {
+    show_with(b, false)
+}
+
+fn show_with(b: &mut Bf, kids_only: bool) -> Res<()> {
     let f: &mut Flow = crate::open_world::guard::flow_mut(b, SHOW_FLOW)?;
     if f.events.iter().any(|e| e.name.starts_with(PREFIX)) {
         return Err(Error::Format("trade shuffle: ShowItem is already patched"));
@@ -557,9 +561,58 @@ pub fn show(b: &mut Bf) -> Res<()> {
     };
     let end: usize = *end;
     let stop: u16 = wait(f, NONE)?;
-    let first: u16 = cycle(f, stop)?;
+    let first: u16 = if kids_only {
+        let kid: u16 = turn(f, &CHILD, stop)?;
+        ask(f, PLAYER, "EventQueryPlayerIsChild", None, kid, stop)?
+    } else {
+        cycle(f, stop)?
+    };
     if let Kind::Sub { next, .. } = &mut f.events[end].kind {
         *next = first;
+    }
+    Ok(())
+}
+
+/// The child switch alone (no adult trade shuffle): showing a child trade item where nobody takes
+/// it puts the next held one on the child's button; an adult's show stays the game's.
+pub fn show_kid(b: &mut Bf) -> Res<()> {
+    show_with(b, true)
+}
+
+/// The child's gets alone: a new child trade item is parked while the button's own is out, at
+/// either age. Adult trade items stay the game's (one at a time, in the chain).
+pub fn get_kid(b: &mut Bf) -> Res<()> {
+    let f: &mut Flow = crate::open_world::guard::flow_mut(b, GET_FLOW)?;
+    if f.events.iter().any(|e| e.name.starts_with(PREFIX)) {
+        return Err(Error::Format("trade shuffle: GetPouchContent is already patched"));
+    }
+    let (i, name) = GET_ADD;
+    let then: u16 = match f.events.get(i) {
+        Some(Event { name: n, kind: Kind::Action { next, .. } }) if n == name => *next,
+        _ => return Err(Error::Msg(format!("trade shuffle: event {i} of GetPouchContent is not the pouch add {name}, the game files differ"))),
+    };
+    let then: u16 = if then == NONE { wait(f, NONE)? } else { then };
+    let first: u16 = park_others(f, &CHILD, then)?;
+    if let Kind::Action { next, .. } = &mut f.events[i].kind {
+        *next = first;
+    }
+    Ok(())
+}
+
+/// The child's switch between the Weird Egg, the cucco and Zelda's Letter without adult trade
+/// shuffle: the same one-out rule, the A press on the menu's trade slot and the show-to-nobody
+/// switch, the guard and Talon putting the other one on the button after their take, a parked egg
+/// coming out for its hatch, and the menu hint on the three captions.
+pub fn stage_kid(rf: &mut Romfs, late: &mut Vec<Out>, work: &std::path::Path) -> Res<()> {
+    crate::story_skip::stage_late(rf, late, work, SHOW_FLOW, show_kid)?;
+    crate::story_skip::stage_late(rf, late, work, GET_FLOW, get_kid)?;
+    crate::story_skip::stage_late(rf, late, work, KID_QUEST, kid_hatch)?;
+    for flow in KID_NPCS {
+        crate::story_skip::stage_late(rf, late, work, flow, |b| kid_npc_bf(b, flow).map(|_| ()))?;
+    }
+    late_plain(rf, late, work, menu::FILE, menu::patch_kid)?;
+    for l in crate::hints::languages(rf)? {
+        crate::story_skip::stage_late_file(rf, late, work, &l, text::archive_kid)?;
     }
     Ok(())
 }

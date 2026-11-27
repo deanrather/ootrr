@@ -5,6 +5,7 @@
   "order": 40,
   "settings": {
     "open_forest": "open",
+    "skip_child_zelda": true,
     "open_kakariko": "open",
     "door_of_time_condition": "open",
     "zora_fountain": "open",

@@ -403,7 +403,10 @@ mod tests {
             assert_ne!(t, "OOTRR1-EYAQD32I");
             let l: Loaded = Settings::decode(&t).unwrap();
             assert!(l.warnings.is_empty());
-            assert_eq!(l.settings, s);
+            // The clock is legacy (always on), so it reads back on whatever was set.
+            let mut want: Settings = s.clone();
+            want.normalize();
+            assert_eq!(l.settings, want);
             assert_eq!(l.settings.text("shuffle_dungeon_rewards").unwrap(), v);
         }
     }
@@ -412,7 +415,8 @@ mod tests {
     fn old_strings_keep_the_clock_off_and_the_door_closed_while_new_defaults_turn_the_clock_on() {
         for t in ["OOTRR1-XZLA", "OOTRR1-EYAQD32I", "OOTRR1-BAAQFSMI", "OOTRR1-BEAQGGABAUOACZBEAMBAABWEOQ"] {
             let s: Settings = Settings::decode(t).unwrap().settings;
-            assert!(!s.flag("time_always_passes").unwrap(), "{t}");
+            // The clock is always on now: the setting is legacy and reads as on from every string.
+            assert!(s.flag("time_always_passes").unwrap(), "{t}");
             assert!(!s.flag("deku_bridge_safe").unwrap(), "{t}");
             assert!(!s.flag("open_door_of_time").unwrap(), "{t}");
             assert!(!s.flag("jabu_open").unwrap(), "{t}");
@@ -436,7 +440,7 @@ mod tests {
         let mut late: Settings = all.clone();
         late.set("time_always_passes", Value::Bool(false)).unwrap();
         late.normalize();
-        assert!(!late.flag("early_beds").unwrap());
+        assert!(late.flag("time_always_passes").unwrap() && late.flag("early_beds").unwrap());
         for (n, id) in [(75, "jabu_open"), (76, "time_always_passes"), (77, "early_beds")] {
             assert_eq!(schema().get(id).unwrap().num, n);
         }

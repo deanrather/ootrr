@@ -3,11 +3,14 @@ pub mod darunia;
 pub mod fortress;
 pub mod gerudo;
 pub mod guard;
+pub mod kokiri;
 pub mod quest_order;
 pub mod rolling_goron;
 pub mod skips;
 pub mod trade;
 pub mod trade_shuffle;
+pub mod valley;
+pub mod zelda;
 pub mod zora_tunic;
 
 use std::fs;
@@ -114,7 +117,6 @@ impl Opts {
             || self.beds
             || self.epona
             || self.beans
-            || self.bridge
     }
 
     pub fn logic(&self) -> Vec<(&'static str, &'static str)> {
@@ -216,8 +218,11 @@ pub fn read(s: &Settings, bad: &mut Vec<String>) -> Opts {
         })
     };
     let jabu: bool = flag(JABU);
-    let time: bool = flag(TIME);
-    let beds: bool = time && flag(BEDS);
+    // The world clock always runs (user rule 2026-11-26): the setting is kept only so old strings
+    // still read, and is ignored.
+    let _ = flag(TIME);
+    let time: bool = true;
+    let beds: bool = flag(BEDS);
     let epona: bool = flag(EPONA);
     let masks: bool = flag(MASKS);
     let beans: bool = flag(BEANS);
@@ -283,6 +288,7 @@ pub fn stage_last(rf: &mut Romfs, late: &mut Vec<Out>, work: &std::path::Path) -
     darunia::stage_late(rf, late, work)?;
     trade::stage_late(rf, late, work)?;
     zora_tunic::stage_late(rf, late, work)?;
+    zelda::stage_late(rf, late, work)?;
     quest_order::stage_late(rf, late, work)
 }
 
@@ -300,9 +306,6 @@ pub fn stage(rf: &mut Romfs, o: &Opts, have: Have) -> Res<Vec<Out>> {
     if o.beans {
         outs.push(edit_zs(rf, have, skips::BEAN_FILE, skips::bean_bytes)?);
     }
-    if o.bridge {
-        outs.push(edit_plain(rf, have, skips::BRIDGE_MODULE, skips::bridge_bytes)?);
-    }
     if o.fortress == Fortress::Open {
         outs.push(edit_zs(rf, have, gerudo::GUARD_FILE, |raw| {
             flow_edit(raw, |b| gerudo::patch_open_guard(b).map(|_| ()))
@@ -317,6 +320,7 @@ pub fn worked(rf: &mut Romfs, pk: &crate::modpack::Pack, o: &Opts) -> Res<Vec<Ou
     let mut outs: Vec<Out> = if o.edits_files() { stage(rf, o, &have)? } else { Vec::new() };
     outs.extend(crate::gerudo_card::stage(rf, &have)?);
     fortress::stage(rf, &mut outs, &have)?;
+    valley::stage(rf, &mut outs, &have, o.bridge)?;
     rolling_goron::stage(rf, &mut outs, &have)?;
     outs.push(crate::malon_song::stage(rf, &have)?);
     Ok(outs)
@@ -356,7 +360,12 @@ pub fn write_epona_event(rf: &mut Romfs, pk: &crate::modpack::Pack, rst: &mut Op
 pub struct Gates {
     pub forest: crate::slice::support::Forest,
     pub door: bool,
+    /// The Kakariko gate starts open (the guard's flag only, see zelda::GATE_ONLY).
     pub kakariko: bool,
+    /// Skip Zelda Meeting: the castle story state of crate::start_state::kakariko. Opens the gate too.
+    pub zelda: bool,
+    /// The Weird Egg joins the shuffle (never with `zelda`, which takes it out of the game).
+    pub egg: bool,
 }
 
 impl Gates {
@@ -375,7 +384,8 @@ impl Gates {
             }
         };
         let door: bool = crate::slice::support::toggle(s, "open_door_of_time", bad) || s.text(crate::door_gate::SETTING).is_ok_and(|v| v == crate::door_gate::OPEN);
-        let kakariko: bool = match s.text("open_kakariko") {
+        let zelda: bool = crate::slice::support::toggle(s, zelda::SKIP, bad);
+        let gate: bool = match s.text("open_kakariko") {
             Ok("open") => true,
             Ok("closed") => false,
             Ok(v) => {
@@ -387,7 +397,10 @@ impl Gates {
                 false
             }
         };
-        Gates { forest, door, kakariko }
+        // Skipping the meeting opens the gate as the letter would have.
+        let kakariko: bool = gate || zelda;
+        let egg: bool = !zelda && crate::slice::support::toggle(s, zelda::EGG, bad);
+        Gates { forest, door, kakariko, zelda, egg }
     }
 }
 
@@ -414,10 +427,10 @@ mod tests {
         assert!(o.edits_files());
         assert_eq!(o.logic(), vec![(EPONA, "1")]);
         assert_eq!(o.defaults(), vec![(TIME, "true")]);
+        // The clock is always on: a string that says off still reads it as on.
         let (off, _) = opts(&[(TIME, Value::Bool(false)), (EPONA, Value::Bool(false))]);
-        assert_eq!(off, Opts::default());
-        assert!(!off.any() && off.defaults().is_empty() && off.notes().unwrap().is_empty());
-        assert_eq!(off.logic(), vec![(TIME, "0")]);
+        assert_eq!(off, Opts { time: true, ..Opts::default() });
+        assert!(off.defaults() == vec![(TIME, "true")] && off.logic().is_empty());
     }
 
     #[test]
@@ -445,7 +458,7 @@ mod tests {
             assert!(n.iter().any(|x| x.contains(t)), "{t}");
         }
         let (b, _) = opts(&[(BEDS, Value::Bool(true)), (TIME, Value::Bool(false))]);
-        assert!(!b.beds);
+        assert!(b.beds && b.time, "the clock is always on, so the beds follow their own setting");
         let (_, bad) = opts(&[(ZORA, Value::s("adult"))]);
         assert!(bad.iter().any(|x| x.contains("zora_fountain is adult")));
     }
@@ -669,9 +682,10 @@ mod tests {
 
     #[test]
     fn a_running_clock_gives_night_before_zelda_and_the_old_rule_stays_without_it() {
+        // The clock always runs now, so night comes before Zelda whatever the setting says.
         let no_egg = |n: &str| n == "Weird Egg";
         let tour: &str = "Graveyard Dampe Gravedigging Tour";
-        assert!(!reach(&[], &no_egg, At::Loc(tour)));
+        assert!(reach(&[], &no_egg, At::Loc(tour)));
         assert!(reach(&[(TIME, Value::Bool(true))], &no_egg, At::Loc(tour)));
         assert!(reach(&[], &|_| false, At::Loc(tour)));
     }
@@ -680,10 +694,10 @@ mod tests {
     fn the_quest_skips_read_their_settings_and_become_logic_defaults_and_notes() {
         let (o, bad) = opts(&[(EPONA, Value::Bool(true)), (MASKS, Value::Bool(true)), (BEANS, Value::Bool(true)), (BRIDGE, Value::Bool(true)), (TIME, Value::Bool(false))]);
         assert!(bad.is_empty());
-        assert_eq!(o, Opts { epona: true, masks: true, beans: true, bridge: true, ..Opts::default() });
+        assert_eq!(o, Opts { epona: true, masks: true, beans: true, bridge: true, time: true, ..Opts::default() });
         assert!(o.edits_files());
-        assert_eq!(o.logic(), vec![(TIME, "0"), ("complete_mask_quest", "1"), (BEANS, "1"), (BRIDGE, "1"), (EPONA, "1")]);
-        assert_eq!(o.defaults(), vec![(MASKS, "true"), (BEANS, "true")]);
+        assert_eq!(o.logic(), vec![("complete_mask_quest", "1"), (BEANS, "1"), (BRIDGE, "1"), (EPONA, "1")]);
+        assert_eq!(o.defaults(), vec![(TIME, "true"), (MASKS, "true"), (BEANS, "true")]);
         let n: Vec<String> = o.notes().unwrap();
         for t in ["Epona's Song is enough to own Epona", "Happy Mask Shop quest starts complete", "bean patch starts planted", "Gerudo Valley bridge is repaired"] {
             assert!(n.iter().any(|x| x.contains(t)), "{t}");

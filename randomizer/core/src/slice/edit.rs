@@ -119,12 +119,14 @@ pub fn skipped_items(d: &Data, seed: &SeedFile, locs: &[&str]) -> Res<Vec<String
 /// plus flow guards), so start_state::fountain is not used here.
 pub fn start_state(d: &Data, seed: &SeedFile, p: &crate::slice::support::Plan) -> Res<crate::start_state::Ops> {
     let mut ops: crate::start_state::Ops = crate::start_state::Ops::default();
-    if p.gates.kakariko {
+    if p.gates.zelda {
         ops.extend(crate::start_state::kakariko(&skipped_items(d, seed, &crate::start_state::KAKARIKO_LOCATIONS)?));
     }
     if p.intro {
         ops.extend(crate::start_state::first_visit());
     }
+    // Always: the Kokiri intro, the first field owl and the clock gates.
+    ops.extend(crate::open_world::zelda::new_game(!p.gates.zelda));
     if p.gates.forest == crate::slice::support::Forest::Open {
         ops.extend(crate::story_skip::deku());
     }
@@ -139,7 +141,7 @@ pub fn start_state(d: &Data, seed: &SeedFile, p: &crate::slice::support::Plan) -
 
 /// The locations whose items a plan gives at new game instead of in the world.
 pub fn skipped_locations(p: &crate::slice::support::Plan) -> Vec<&'static str> {
-    if p.gates.kakariko { crate::start_state::KAKARIKO_LOCATIONS.to_vec() } else { Vec::new() }
+    if p.gates.zelda { crate::start_state::KAKARIKO_LOCATIONS.to_vec() } else { Vec::new() }
 }
 
 pub fn build_for(seed: &SeedFile, romfs: &P, load: &P, mod_name: &str, host: Host) -> Res<Built> {
@@ -357,6 +359,20 @@ pub fn build_data(d: Data, seed: &SeedFile, romfs: &P, load: &P, mod_name: &str,
     });
     let windows: Vec<(&str, &str)> = if arrows_key { vec![crate::story_skip::ITEM_GET] } else { Vec::new() };
     crate::gift_keys::apply(&mut rf, &mut staged.files, &gift_keys, &windows)?;
+    // A special chest in a flow the location edits also changed (the Iron Boots chest next to King
+    // Zora's thaw gift in SageOfWater) takes its edit on top of them: its own copy was rebuilt
+    // from the game's file and, written later, put King Zora's Zora Tunic back.
+    let both: Vec<String> = special_outs.iter().filter(|o| staged.files.iter().any(|f| f.path == o.path)).map(|o| o.path.clone()).collect();
+    for path in &both {
+        if let Some(f) = staged.files.iter_mut().find(|f| f.path == *path) {
+            let id: Option<u32> = crate::flow_locations::dict_id(&f.z);
+            let raw: Vec<u8> = rf.zs.decompress(&f.z)?;
+            let out: Vec<u8> = special::edit_raw(path, &raw, &wraps, &retarget, &touched)?;
+            f.new = out.len();
+            f.z = crate::zs::compress_raw(&out, id)?;
+        }
+        special_outs.retain(|o| o.path != *path);
+    }
     for f in &staged.files {
         pk.write_romfs(&f.path, &f.z)?;
         if f.new > f.old {
@@ -460,20 +476,17 @@ pub fn build_data(d: Data, seed: &SeedFile, romfs: &P, load: &P, mod_name: &str,
         let l: crate::flags::FlagList = crate::flags_build::load(&mut rf)?;
         crate::start_state::add_is_get(&mut state, |n| l.by_hash(crate::flags::hash_name(n) as u64).is_some());
     }
-    let clock: bool = p.gates.kakariko || p.open.time;
+    let clock: bool = p.gates.zelda || p.open.time;
     if p.intro || !state.is_empty() || p.opening_step().is_some() || clock {
         let o: crate::intro_skip::Opts = if p.intro { crate::intro_skip::Opts::FULL } else { crate::intro_skip::Opts::default() };
         let (mut outs, _): (Vec<crate::staging::Out>, crate::intro_skip::Report) = crate::intro_skip::stage_with(&mut rf, o, &state)?;
         if let Some(st) = p.opening_step() {
             crate::start_defaults::opening::stage(&mut rf, &mut outs, st)?;
         }
-        if p.gates.kakariko {
+        if p.gates.zelda {
             outs.push(crate::start_state::stage_free_quest(&mut rf)?);
         }
         crate::key_log::stage_table(&mut rf, &mut outs)?;
-        if clock {
-            outs.push(crate::start_state::stage_field_clock(&mut rf)?);
-        }
         for o in outs {
             pk.write_romfs(&o.path, &o.z)?;
             extra += 1;
@@ -584,6 +597,9 @@ pub fn build_data(d: Data, seed: &SeedFile, romfs: &P, load: &P, mod_name: &str,
     crate::dungeon_packs::stage(&mut rf, &mut late, &work, &crate::dungeon_packs::credits(&d, seed))?;
     crate::pickup_tiers::stage(&mut rf, &mut late, &work, &crate::pickup_tiers::families(&d, seed))?;
     crate::ocarina_hold::stage(&mut rf, &mut late, &work, crate::ocarina_hold::picked_up(&d, seed))?;
+    if let Some(t) = ts.iter().find(|t| t.hash == crate::slice::treasure::FIRST && t.key.is_none() && crate::progressive::guarded(&t.new_actor)) {
+        crate::slice::treasure::stage_guard(&mut rf, &mut late, &work, &t.new_actor)?;
+    }
     // Rooms that could lock Link in once their item is shuffled away (crate::dungeon_fixes).
     crate::dungeon_fixes::stage(&mut rf, &mut late, &work)?;
     if p.short {
@@ -592,8 +608,35 @@ pub fn build_data(d: Data, seed: &SeedFile, romfs: &P, load: &P, mod_name: &str,
     crate::entr::story::stage(&mut rf, seed, &mut late, &work)?;
     crate::key_log::stage_flows(&mut rf, &mut late, &work)?;
     crate::open_world::stage_last(&mut rf, &mut late, &work)?;
+    // The forest exit's first-visit write is cleared on top of the castle flow as the build left it
+    // (it holds Malon's gift, Saria's gift and the owl cuts): rewriting it from the game's file here
+    // dropped the location edits, and Malon handed out the Weird Egg whatever her check held.
+    if clock {
+        crate::story_skip::stage_late(&mut rf, &mut late, &work, crate::start_state::FIELD_FLOW, crate::start_state::keep_field_clock)?;
+    }
+    if p.gates.egg {
+        crate::open_world::zelda::stage_egg(&mut rf, &mut late, &work)?;
+    }
+    // Saria waits in the meadow from the Zelda meeting on (always).
+    crate::open_world::zelda::stage_meadow(&mut rf, &mut late, &work)?;
+    // The Zelda meeting gives its two checks and goes straight to Hyrule Field (always, unless the
+    // meeting is skipped altogether).
+    if !p.gates.zelda {
+        use crate::open_world::zelda::{LETTER_LOC, SONG_LOC};
+        crate::open_world::zelda::stage_meeting(&mut rf, &mut late, &work, &give_for(LETTER_LOC), &give_for(SONG_LOC))?;
+    }
+    // Open Forest: the Kokiri keep their post-Deku state whatever later quests do (Mido keeps his
+    // pre-Deku talk until Gohma).
+    if p.gates.forest == crate::slice::support::Forest::Open {
+        crate::open_world::kokiri::stage_late(&mut rf, &mut late, &work)?;
+    }
     if p.rewards.trade_items {
         crate::open_world::trade_shuffle::stage(&mut rf, &mut late, &work)?;
+    } else if !p.gates.zelda {
+        // The child's three trade items share one slot: the child switches between the Weird
+        // Egg, the cucco and Zelda's Letter as the adult trade shuffle does (always on; with the
+        // Zelda meeting skipped none of them is in the game).
+        crate::open_world::trade_shuffle::stage_kid(&mut rf, &mut late, &work)?;
     }
     let mut debug_missed: Vec<String> = Vec::new();
     let mut paths: BS<&str> = BS::new();

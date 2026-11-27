@@ -178,7 +178,7 @@
     "door_of_time_requirement": "(
         (door_of_time_condition == 'vanilla' and 'Defeat King Dodongo' and 'Defeat Barinade') or
         (door_of_time_condition == 'stones' and has_all_stones))",
-    "story_stones": "door_of_time_requirement and at('HC Garden Skippable Locations', is_child)",
+    "story_stones": "door_of_time_requirement",
     "has_all_medallions": "Forest_Medallion and Fire_Medallion and Water_Medallion and Shadow_Medallion and Spirit_Medallion and Light_Medallion",
     "can_open_door_of_time": "(
         (open_door_of_time == 'open') or

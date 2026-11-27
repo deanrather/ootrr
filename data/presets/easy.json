@@ -8,6 +8,7 @@
     "shuffle_ganon_bosskey": "remove",
     "shuffle_mapcompass": "startwith",
     "open_forest": "open",
+    "skip_child_zelda": true,
     "open_kakariko": "open",
     "zora_fountain": "open",
     "gerudo_fortress": "fast",

@@ -73,7 +73,8 @@ impl Schema {
         let mut body: Vec<u8> = Vec::new();
         for s in order {
             let x: &Value = n.get(&s.id).ok_or(Error::Format("setting vanished during encoding"))?;
-            if x == s.wire_value() || !self.enabled(s, &n) {
+            // A legacy setting always reads as its default (normalize), so it is never written.
+            if s.legacy || x == s.wire_value() || !self.enabled(s, &n) {
                 continue;
             }
             let p: Vec<u8> = self.enc(s, x)?;

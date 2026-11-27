@@ -48,6 +48,10 @@ fn vanilla_actor(d: &Data, loc: &str) -> Res<String> {
         }
     }
     if let Some(l) = d.cat.by_name(loc) {
+        if l.item == crate::slice::trap_chests::ACTOR {
+            let item: &str = d.pool_item(loc).ok_or_else(|| E::Msg(format!("{loc} has no vanilla item")))?;
+            return d.item(item).and_then(|i| i.actor.clone()).ok_or_else(|| E::Msg(format!("{item} has no remake item actor")));
+        }
         return Ok(l.item.clone());
     }
     d.flow

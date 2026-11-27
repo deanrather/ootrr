@@ -260,6 +260,10 @@ fn guard_of(family: &str) -> Option<&str> {
     family.strip_prefix(GUARD)
 }
 
+pub fn is_guard(family: &str) -> bool {
+    guard_of(family).is_some()
+}
+
 pub fn guard(f: &mut Flow, actor: &str) -> Res<()> {
     let name: String = entry_name(&guard_family(actor));
     if f.entries.iter().any(|e| e.name == name) {
@@ -272,9 +276,17 @@ pub fn guard(f: &mut Flow, actor: &str) -> Res<()> {
         .map(|e| e.pad)
         .ok_or(Error::Format("progressive: the chest flow has no Success_ entry"))?;
     let bags: &[&str] = bags_of(actor).ok_or_else(|| Error::Msg(format!("progressive: {actor} is not ammo that needs a bag")))?;
-    let (a, q) = ensure_query(f)?;
     let keep: u16 = give(f, actor)?;
     let none: u16 = give(f, NO_BAG)?;
+    let at: u16 = bag_check(f, bags, keep, none)?;
+    f.entries.push(Entry { name, subs: vec![keep, none], vars: Vec::new(), main: at, pad });
+    Ok(())
+}
+
+/// Questions that lead to `keep` for an owner of one of `bags`, else to `none` followed by the
+/// extra rupees of a no-bag give. `none` must be a sub flow call that ends the flow.
+fn bag_check(f: &mut Flow, bags: &[&str], keep: u16, none: u16) -> Res<u16> {
+    let (a, q) = ensure_query(f)?;
     let more: u16 = extra_rupees(f, NONE)?;
     if let Kind::Sub { next, .. } = &mut f.events[usize::from(none)].kind {
         *next = more;
@@ -285,7 +297,22 @@ pub fn guard(f: &mut Flow, actor: &str) -> Res<()> {
         let cases: Vec<Case> = vec![Case { val: 0, ev: keep }, Case { val: 1, ev: at }];
         at = push(f, Kind::Switch { actor: a, query: q, cases, params: Some(c) })?;
     }
-    f.entries.push(Entry { name, subs: vec![keep, none], vars: Vec::new(), main: at, pad });
+    Ok(at)
+}
+
+/// A new entry `name` that runs the entry `inner` of the same flow: with the chest's own
+/// ContentName for a player who owns a bag for `actor`, with the no-bag rupee for anyone else.
+pub fn guard_entry(f: &mut Flow, name: &str, inner: &str, actor: &str) -> Res<()> {
+    if f.entries.iter().any(|e| e.name == name) {
+        return Ok(());
+    }
+    let pad: u16 = f.entries.iter().find(|e| e.name == inner).map(|e| e.pad).ok_or_else(|| Error::Msg(format!("progressive: the flow has no {inner} entry")))?;
+    let bags: &[&str] = bags_of(actor).ok_or_else(|| Error::Msg(format!("progressive: {actor} is not ammo that needs a bag")))?;
+    let call = |content: Val| Kind::Sub { next: NONE, params: Some(Cont { items: vec![("ContentName".to_string(), content)] }), flow: String::new(), entry: inner.to_string() };
+    let keep: u16 = push(f, call(Val::Arg("ContentName".to_string())))?;
+    let none: u16 = push(f, call(Val::Str(NO_BAG.to_string())))?;
+    let at: u16 = bag_check(f, bags, keep, none)?;
+    f.entries.push(Entry { name: name.to_string(), subs: vec![keep, none], vars: Vec::new(), main: at, pad });
     Ok(())
 }
 

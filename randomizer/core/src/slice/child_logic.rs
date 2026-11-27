@@ -201,17 +201,16 @@ pub(crate) mod tests {
         assert!(reach(&w, &d, &no_strength, "Death Mountain"));
     }
 
-    // An Armos is hurt only by explosives or the Hammer, and the child's first Spirit room
-    // opens its doors only when its Armos falls.
+    // The child's metal bridges want the Boomerang or the early torches' silver rupees, and no
+    // explosives; the locked door side still wants them.
     #[test]
-    fn the_spirit_child_side_wants_explosives_for_the_armos() {
+    fn the_spirit_child_bridges_want_no_explosives() {
         let d: Data = Data::load().unwrap();
         let w: World = build(&d);
-        // The locked door room is also reached back down the climb with all five keys.
         let bridges: &str = "Child Spirit Temple Beyond Metal Bridges";
         assert!(reach(&w, &d, &[], bridges));
-        assert!(!reach(&w, &d, &BLAST, bridges));
-        assert!(!reach(&w, &d, &BLAST, "Spirit Temple Child Bridge Chest"));
+        assert!(reach(&w, &d, &BLAST, bridges));
+        assert!(reach(&w, &d, &BLAST, "Spirit Temple Child Bridge Chest"));
         assert!(reach(&w, &d, &BLAST, "Spirit Temple Lobby"));
     }
 }

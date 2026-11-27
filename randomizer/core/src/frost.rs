@@ -297,8 +297,10 @@ fn tier_of(d: &Data, item: &str, held: usize) -> Option<(String, bool)> {
 /// plays Rotate_GetDemo on the item actor, and a stand-in is built on the actor it looks like, so
 /// Link reached up for nothing and the game crashed (a Bolero-look trap at the Kakariko Shooting
 /// Gallery). A real song there is handed out as its pickup actor (crate::ocarina_hold); a trap is not.
+/// The reward scenes the story skips turn into the item get (the bosses, Rauru, Saria, the Light
+/// Arrows, the Ocarina of Time) hold the item up too, whatever their vanilla gift did.
 fn held_without_anim(d: &Data, loc: &str, actor: &str) -> bool {
-    crate::ocarina_hold::no_anim(actor) && d.flow.by_name(loc).is_some_and(crate::slice::flow_rules::holds_up)
+    crate::ocarina_hold::no_anim(actor) && (d.flow.by_name(loc).is_some_and(crate::slice::flow_rules::holds_up) || crate::ocarina_hold::scene_locs().iter().any(|l| l == loc))
 }
 
 fn fits(d: &Data, place: Place, loc: &str, item: &str, actor: &str, tiered: bool) -> bool {
@@ -877,10 +879,19 @@ mod tests {
     #[test]
     fn a_trap_at_a_gift_that_holds_the_item_up_never_looks_like_a_song() {
         let d: Data = Data::load().unwrap();
-        let songs: Vec<String> = d.items.iter().filter(|i| i.kind == "Song").filter_map(|i| i.actor.clone()).collect();
+        let mut songs: Vec<String> = d.items.iter().filter(|i| i.kind == "Song").filter_map(|i| i.actor.clone()).collect();
         assert!(!songs.is_empty());
-        let holds: Vec<String> = d.flow.locs.iter().filter(|l| crate::slice::flow_rules::holds_up(l) && flow_spot(&d, &l.name)).map(|l| l.name.clone()).collect();
+        songs.extend(crate::ocarina_hold::OCARINAS.iter().map(|a| a.to_string()));
+        let scenes: Vec<String> = crate::ocarina_hold::scene_locs();
+        let holds: Vec<String> = d.flow.locs.iter().filter(|l| (crate::slice::flow_rules::holds_up(l) || scenes.contains(&l.name)) && flow_spot(&d, &l.name)).map(|l| l.name.clone()).collect();
         assert!(holds.iter().any(|l| l == "Market Shooting Gallery Reward"), "{holds:?}");
+        // The skips turn these reward scenes into the item get that holds the item up.
+        for l in ["Queen Gohma", "Twinrova", crate::slice::flow_rules::SARIA] {
+            if flow_spot(&d, l) {
+                assert!(holds.iter().any(|h| h == l), "{l} is not checked: {holds:?}");
+            }
+        }
+        assert!(holds.iter().any(|h| scenes.contains(h)), "no reward scene can hold a trap: {holds:?}");
         for l in &holds {
             for a in &songs {
                 assert!(!fits(&d, Place::Flow, l, "", a, false), "{l} can show a trap as {a}");
@@ -1115,8 +1126,9 @@ mod tests {
     }
 
     #[test]
-    fn the_spoiler_shows_a_placeholder() {
-        assert_eq!(crate::spoiler::shown(TRAP), "Rupee (1)");
+    fn the_spoiler_names_a_trap_and_a_hint_passes_it_off_as_junk() {
+        assert_eq!(crate::spoiler::shown(TRAP), TRAP);
+        assert_eq!(crate::spoiler::hinted(TRAP), "Rupee (1)");
     }
 
     #[test]

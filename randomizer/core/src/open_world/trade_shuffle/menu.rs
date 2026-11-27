@@ -548,6 +548,16 @@ fn leave(a: &Ainb) -> Res<(usize, usize)> {
 }
 
 pub fn patch(raw: &[u8]) -> Res<Vec<u8>> {
+    graph(raw, true)
+}
+
+/// The child's frame only (no adult trade shuffle): the child keeps and switches between the Weird
+/// Egg, the cucco and Zelda's Letter; an adult's frame is the game's own.
+pub fn patch_kid(raw: &[u8]) -> Res<Vec<u8>> {
+    graph(raw, false)
+}
+
+fn graph(raw: &[u8], adults: bool) -> Res<Vec<u8>> {
     let mut a: Ainb = Ainb::parse(raw)?;
     if !a.find_els(SET_ENUM).is_empty() {
         return Err(Error::Format("trade menu: the item menu already writes the item button"));
@@ -558,18 +568,27 @@ pub fn patch(raw: &[u8]) -> Res<Vec<u8>> {
     };
     let (sw, at) = idle_branch(&a, trig)?;
     let (st, out) = leave(&a)?;
-    let p: Parts = parts(&mut a, ADULT, ADULT_TAG)?;
-    let kp: Parts = parts(&mut a, KIDS, KID_TAG)?;
-
-    let kept: usize = keep(&mut a, &p)?;
-    let menu: usize = switch(&mut a, &p, trig)?;
-    let adult: usize = parallel(&mut a, "OOTRRTradeMenu#adult_frame", &[kept, menu])?;
-    // The child's frame: the adult trade items go away first, then the child's own are kept.
-    let gone: usize = away(&mut a, &p, &kp)?;
-    let kid_kept: usize = keep(&mut a, &kp)?;
-    let kid_menu: usize = switch(&mut a, &kp, trig)?;
-    let kid: usize = parallel(&mut a, "OOTRRKidMenu#child_frame", &[gone, kid_kept, kid_menu])?;
-    let root: usize = selector(&mut a, "OOTRRTradeMenu#adult", p.child, 0, kid, adult)?;
+    let root: usize = if adults {
+        let p: Parts = parts(&mut a, ADULT, ADULT_TAG)?;
+        let kp: Parts = parts(&mut a, KIDS, KID_TAG)?;
+        let kept: usize = keep(&mut a, &p)?;
+        let menu: usize = switch(&mut a, &p, trig)?;
+        let adult: usize = parallel(&mut a, "OOTRRTradeMenu#adult_frame", &[kept, menu])?;
+        // The child's frame: the adult trade items go away first, then the child's own are kept.
+        let gone: usize = away(&mut a, &p, &kp)?;
+        let kid_kept: usize = keep(&mut a, &kp)?;
+        let kid_menu: usize = switch(&mut a, &kp, trig)?;
+        let kid: usize = parallel(&mut a, "OOTRRKidMenu#child_frame", &[gone, kid_kept, kid_menu])?;
+        selector(&mut a, "OOTRRTradeMenu#adult", p.child, 0, kid, adult)?
+    } else {
+        // The adult trade chain keeps its one item at a time: an adult's frame stays the game's.
+        let old: usize = a.params[sw].plugs[at].a as usize;
+        let kp: Parts = parts(&mut a, KIDS, KID_TAG)?;
+        let kid_kept: usize = keep(&mut a, &kp)?;
+        let kid_menu: usize = switch(&mut a, &kp, trig)?;
+        let kid: usize = parallel(&mut a, "OOTRRKidMenu#child_frame", &[kid_kept, kid_menu])?;
+        selector(&mut a, "OOTRRKidMenu#child", kp.child, 0, kid, old)?
+    };
     a.params[sw].plugs[at].a = root as u32;
 
     // Leaving hands the borrowed counter back at zero.
@@ -1031,6 +1050,42 @@ mod tests {
         m.frame(&mut w);
         assert!(m.press(&mut w).is_empty());
         assert_eq!((w.kid_button.as_str(), w.counts[KID0 + LETTER], w.memo), (kid_slot(LETTER), 1, idle(LETTER)));
+    }
+
+    fn menu_kid(rf: &Romfs) -> Menu {
+        let raw: Vec<u8> = rf.read(FILE).unwrap();
+        let before: Ainb = Ainb::parse(&raw).unwrap();
+        let out: Vec<u8> = patch_kid(&raw).unwrap();
+        let a: Ainb = Ainb::parse(&out).unwrap();
+        assert!(audit(&a).is_empty());
+        assert_eq!(a.write().unwrap(), out, "the patched graph rewrites byte for byte");
+        assert!(patch_kid(&out).is_err() && patch(&out).is_err(), "a second patch is refused");
+        let trig: usize = a.find_els(TRIG)[0];
+        let (sw, at) = idle_branch(&before, trig).unwrap();
+        let root: usize = a.params[sw].plugs[at].a as usize;
+        Menu { a, root }
+    }
+
+    #[test]
+    fn without_adult_trade_shuffle_the_child_still_switches_and_adult_items_stay_put() {
+        let Some(rf) = real() else {
+            return;
+        };
+        let m: Menu = menu_kid(&rf);
+        let redraw: Vec<String> = [CLOSE, OPEN, HIT_TEST, SET_CATEGORY].iter().map(|s| s.to_string()).collect();
+        // No adult parking: an adult trade item the child somehow holds is left as it is.
+        let mut w: World = kid_world(kid_slot(WAKER), "Bow", &[(SAW, 1), (KID0 + WAKER, 1), (KID0 + LETTER, 1)]);
+        m.frame(&mut w);
+        assert_eq!((w.counts[SAW], w.counts[KID0 + WAKER], w.counts[KID0 + LETTER]), (1, 1, PARKED));
+        assert_eq!(m.settle(&mut w), redraw);
+        for want in [LETTER, WAKER] {
+            assert_eq!(m.press(&mut w), redraw);
+            assert_eq!(w.kid_button, kid_slot(want));
+            for k in [WAKER, LETTER] {
+                assert_eq!(w.counts[KID0 + k], if k == want { 1 } else { PARKED });
+            }
+            assert_eq!((w.button.as_str(), w.counts[SAW]), ("Bow", 1));
+        }
     }
 
     #[test]

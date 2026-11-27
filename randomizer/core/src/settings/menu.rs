@@ -170,12 +170,12 @@ const GANON_BK: View = View {
 const FOREST: View = View {
     id: "open_forest",
     label: "Kokiri Forest",
-    tip: "Whether the way out of the forest and into the Deku Tree is blocked.\n\nOpen - Nothing blocks the forest or the Deku Tree.\n\nClosed - The forest and the Deku Tree stay closed until the story opens them, and the Kakariko gate stays closed.
+    tip: "Whether the way out of the forest and into the Deku Tree is blocked.\n\nOpen - Nothing blocks the forest or the Deku Tree.\n\nClosed - The forest and the Deku Tree stay closed until the story opens them.
 
-Open Kakariko needs Open: with the Kakariko gate open, Closed is locked out.",
+Skip Zelda Meeting needs Open: with it on, Closed is locked out.",
     kind: Kind::Pick,
-    // An open Kakariko gate needs the forest open (settings/list.rs), so the closed choice locks out.
-    opts: &[yes("Open", "open"), needs("Closed", "closed", "open_kakariko!=open")],
+    // Skip Zelda Meeting needs the forest open (settings/list.rs), so the closed choice locks out.
+    opts: &[yes("Open", "open"), needs("Closed", "closed", "!skip_child_zelda")],
 };
 
 const GV_BRIDGE: View = View {
@@ -428,11 +428,14 @@ const AREA_ACCESS: PortSection = port(
                 "Area Access",
                 &[
                     Entry::View(&FOREST),
+                    Entry::Plain("skip_child_zelda"),
                     Entry::Plain("open_kakariko"),
                     Entry::View(&DOOR_OF_TIME),
                     Entry::Plain("door_of_time_escape"),
                     Entry::Plain("door_of_time_song"),
                     Entry::Hidden("open_door_of_time"),
+                    // Always on now (open_world::read); kept for old settings strings.
+                    Entry::Hidden("time_always_passes"),
                     Entry::View(&ZORAS_FOUNTAIN),
                     gray_pick(
                         "Sleeping Waterfall",
@@ -684,6 +687,7 @@ const LOCATIONS_TAB: &[PortSection] = &[
         &[
             Entry::Plain("shuffle_treasure_reward"),
             Entry::Plain("shuffle_potion_shop"),
+            Entry::Plain("shuffle_weird_egg"),
             Entry::Plain("shuffle_trade_checks"),
             Entry::Plain("adult_trade_shuffle"),
             Entry::View(&COWS),
@@ -768,7 +772,7 @@ pub const MENU: &[Page] = &[
         id: "tweaks",
         label: "Tweaks",
         heading: GAMEPLAY,
-        sections: &[sec("Time of day", &["time_always_passes", "early_beds"]), sec("Link and Navi", &["navi_return", "bunny_hood", "disable_low_health_warnings"])],
+        sections: &[sec("Time of day", &["early_beds"]), sec("Link and Navi", &["navi_return", "bunny_hood", "disable_low_health_warnings"])],
     },
     Page { id: "hints", label: "Hints", heading: GAMEPLAY, sections: &[sec("Hints", &["gossip_hints", "chests_match_contents", "misc_hints", "scrub_hint_text"])] },
     Page {

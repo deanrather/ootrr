@@ -6,10 +6,12 @@ import { open_picker, close_picker } from "./color_pop.js";
 const SWATCH = {
   kokiri: "#2f8f3a", kokiri_pants: "#3d7a33", kokiri_shirt: "#d8d1bd", kokiri_belt: "#6b4a2b", feathers: "#e6dfcf",
   goron: "#b3262c", goron_trim: "#d4a634", goron_belt: "#6b4a2b", goron_beads: "#c9b07a",
-  zora: "#2a4fb0", zora_belt: "#8a3c8e", zora_shirt: "#d4d8de", zora_scales: "#3d8fb8",
-  boots: "#5b3f26", gloves: "#7a5534", leather_trim: "#9c2f25", kokiri_sword: "#b03040", master_sword: "#4a3fa8",
-  biggoron_sword: "#8c8f99", deku_shield: "#b8562e", hylian_shield: "#2d55a8", mirror_shield: "#b42a2a",
-  boomerang: "#c0302e", gauntlets: "#2a8fc0", hair: "#e0b84a", navi: "#dff3ff", hearts: "#e8364a",
+  kokiri_cloth: "#3f9a45", kokiri_ropes: "#4f8a3a",
+  zora: "#2a4fb0", zora_pattern: "#4f78c8", zora_ropes: "#3456a8", zora_belt: "#8a3c8e", zora_shirt: "#d4d8de", zora_scales: "#3d8fb8", zora_feather: "#6fb0c0",
+  boots: "#5b3f26", gloves: "#7a5534", leather_trim: "#9c2f25", kokiri_sword: "#b03040", master_sword: "#4a3fa8", master_blade: "#cfe3ea",
+  biggoron_sword: "#2d4fb0", biggoron_gold: "#d4a634", biggoron_blade: "#d0d2d6", deku_shield: "#b8562e", hylian_shield: "#2d55a8", hylian_trim: "#a8a8a8",
+  mirror_shield: "#b42a2a", mirror_face: "#d9d2f0", boomerang: "#c0302e", gauntlets: "#2a8fc0", silver_gauntlets: "#b8b6b0", golden_gauntlets: "#d8a838",
+  goron_bracelet: "#dbb24a", bracelet_gem: "#e05070", hair: "#e0b84a", eyebrows: "#7a4520", eyes: "#3a70c0", navi: "#dff3ff", hearts: "#e8364a",
 };
 
 const ICONS = {
@@ -41,15 +43,35 @@ function ib(name, label, onclick, pressed) {
   return h("button", { type: "button", class: "cib", title: label, "aria-label": label, "aria-pressed": pressed === undefined ? null : String(pressed), onclick }, icon(name));
 }
 
+function part(id) {
+  return ((state.info && state.info.color_parts) || []).find((p) => p.id === id);
+}
+
+// A part split off another (the tunic's weave, the eyebrows) takes that part's pick until it has its own.
+function follows(id) {
+  const p = part(id);
+  return p && p.parent && !state.cosmetic.parts[id] ? p.parent : null;
+}
+
 function shown(id) {
   const v = state.cosmetic.parts[id];
-  return HEX.test(v || "") ? v : SWATCH[id] || "#808080";
+  if (HEX.test(v || "")) return v;
+  const up = follows(id);
+  return up ? shown(up) : SWATCH[id] || "#808080";
 }
 
 function said(id) {
   const v = state.cosmetic.parts[id];
   if (HEX.test(v || "")) return v;
-  return v === "random" ? "new colour each build" : "original";
+  if (v === "random") return "new colour each build";
+  const up = follows(id);
+  return up ? `same as ${(part(up) || {}).label || up}` : "original";
+}
+
+// Whether the part shows a colour of its own choosing or its parent's, not the game's.
+function changed_look(id) {
+  const up = follows(id);
+  return up ? changed_look(up) : !!state.cosmetic.parts[id];
 }
 
 async function rolled(style) {
@@ -89,8 +111,8 @@ export function colour_editor() {
 
   const row = (g, p) => {
     const lk = !!cos.locks[p.id];
-    const text = h("span", { class: `chex${said(p.id) === "original" ? "" : " on"}` }, said(p.id));
-    const sw = tinted(h("button", { type: "button", class: "cswatch", "aria-label": `${g} ${p.label} colour, ${said(p.id)}`, "aria-haspopup": "dialog" }), shown(p.id));
+    const text = h("span", { class: `chex${changed_look(p.id) ? " on" : ""}`, "data-said": p.id }, said(p.id));
+    const sw = tinted(h("button", { type: "button", class: "cswatch", "data-sw": p.id, "aria-label": `${g} ${p.label} colour, ${said(p.id)}`, "aria-haspopup": "dialog" }), shown(p.id));
     sw.addEventListener("click", () => open_picker(sw, {
       title: `${g} · ${p.label}`,
       value: shown(p.id),
@@ -100,7 +122,13 @@ export function colour_editor() {
         text.className = "chex on";
         sw.style.background = hex;
         sw.setAttribute("aria-label", `${g} ${p.label} colour, ${hex}`);
-        for (const c of box.querySelectorAll(`[data-chip="${p.id}"]`)) c.style.background = hex;
+        // Parts that follow this one change with it.
+        for (const c of box.querySelectorAll("[data-chip]")) c.style.background = shown(c.dataset.chip);
+        for (const c of box.querySelectorAll("[data-sw]")) c.style.background = shown(c.dataset.sw);
+        for (const c of box.querySelectorAll("[data-said]")) {
+          c.textContent = said(c.dataset.said);
+          c.className = `chex${changed_look(c.dataset.said) ? " on" : ""}`;
+        }
         touch();
       },
       onreset: () => {

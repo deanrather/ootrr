@@ -230,7 +230,7 @@ export function render_seed(redraw) {
     kids.push(h("div", { class: "msec" }, h("h4", null, "Build"),
       job && !job.finished ? h("progress", { max: "100", value: String(job.percent), "aria-label": "Build progress" }) : null,
       job ? steps_view(job) : h("p", { class: "muted" }, run.line),
-      done && run.target ? h("p", { class: "genline ready" }, `Mod written to ${run.target}${state.spoiler_log ? ", with Spoiler.txt" : ""}.`) : null,
+      done && run.target ? h("p", { class: "genline ready" }, `Mod written to ${run.target}${state.spoiler_log ? ", with Spoiler.txt and Seed.ootrr" : ""}.`) : null,
       job && job.message && !done && job.finished ? notice("error", job.message) : null,
       done && job.message ? h("details", { class: "fold" }, h("summary", null, "Build report"), h("pre", { class: "report" }, job.message)) : null));
   }
