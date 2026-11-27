@@ -218,7 +218,7 @@ fn start_items(rf: &mut Romfs, c: &Ctx, more: &mut Vec<Out>) -> Res<()> {
         crate::start_items::stage::stage_list(rf, more, &crate::first_pickups::bag_sets(&c.p.kit))?;
     }
     for h in crate::on_get::hooks(c.p) {
-        crate::start_items::stage::stage_list(rf, more, &(h.start)(&c.p.kit))?;
+        crate::start_items::stage::stage_list(rf, more, &(h.new_game_writes)(&c.p.kit))?;
     }
     crate::start_items::stage::stage(rf, more, &c.p.kit)
 }

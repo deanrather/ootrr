@@ -229,7 +229,7 @@ mod tests {
             for (kind, shelf) in shelves {
                 let mut rf: Romfs = Romfs::open(&p).unwrap();
                 let r: Report = run(&mut rf, h.items[0], shelf, &patch);
-                print(&format!("{} ({kind})", h.title), &r);
+                print(&format!("{} ({kind})", h.name), &r);
                 assert_eq!(r.missed, Vec::<String>::new());
                 assert_eq!((r.checked["shop shelf"], r.checked["ground pickup"], r.checked["chest"]), (3, 2, 2));
                 assert!(r.checked["flow location, give routine"] > 90 && r.checked["flow location, own script add"] == 2);

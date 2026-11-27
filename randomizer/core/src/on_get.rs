@@ -28,18 +28,24 @@ pub enum At {
 }
 
 pub struct OnGet {
-    pub title: &'static str,
-    pub on: fn(&Plan) -> bool,
-    pub tag: &'static str,
+    /// The feature's name, shown in the build report and in errors.
+    pub name: &'static str,
+    /// Whether this build runs the hook: the feature's setting.
+    pub enabled: fn(&Plan) -> bool,
+    /// Prefix of every event the hook adds, unique to the feature.
+    pub event_prefix: &'static str,
+    /// Item actor names. Their Pouch_, Obj_ and progressive names are matched too.
     pub items: &'static [&'static str],
-    pub run: fn(&mut Flow, At, u16) -> Res<u16>,
-    pub start: fn(&Kit) -> Vec<Set>,
+    /// Adds the events that do the work, ending at the given event, and returns the first one.
+    pub add_events: fn(&mut Flow, At, u16) -> Res<u16>,
+    /// Save writes for a new game that starts with the item. Empty for none.
+    pub new_game_writes: fn(&Kit) -> Vec<Set>,
 }
 
 pub static ALL: [&OnGet; 1] = [&crate::full_wallet::ON_GET];
 
 pub fn hooks(p: &Plan) -> Vec<&'static OnGet> {
-    ALL.into_iter().filter(|h| (h.on)(p)).collect()
+    ALL.into_iter().filter(|h| (h.enabled)(p)).collect()
 }
 
 fn flow_files(base: &P) -> Res<Vec<String>> {
@@ -76,7 +82,7 @@ fn apply(h: &OnGet, romfs: &P, load: &P, mod_name: &str, host: Host, mut b: Buil
     let mut rst: Rst = if own.is_file() { Rst::parse(&rf.zs.decompress(&fs::read(&own)?)?)? } else { rsizetable::load(&mut rf)? };
     let pk: Pack = Pack::create_for(load, TITLE_ID, mod_name, host)?;
     if pk.root != b.root {
-        return Err(E::Msg(format!("{}: the event flows went to {} and not to the seed mod {}", h.title, pk.root.display(), b.root.display())));
+        return Err(E::Msg(format!("{}: the event flows went to {} and not to the seed mod {}", h.name, pk.root.display(), b.root.display())));
     }
     let mut lines: Vec<String> = Vec::new();
     for path in flow_files(&base)? {
@@ -100,6 +106,6 @@ fn apply(h: &OnGet, romfs: &P, load: &P, mod_name: &str, host: Host, mut b: Buil
         b.counts.files += usize::from(!modded);
     }
     pk.write_romfs(TABLE_PATH, &rst.to_zs()?)?;
-    b.report.push_str(&format!("{}: added at the get points of {} event flows: {}\n", h.title, lines.len(), lines.join(", ")));
+    b.report.push_str(&format!("{}: added at the get points of {} event flows: {}\n", h.name, lines.len(), lines.join(", ")));
     Ok(b)
 }

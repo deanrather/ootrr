@@ -12,19 +12,19 @@ An item reaches Link by different paths, and each path holds the item's name som
 
 ```rust
 pub const WALLETS: [&str; 2] = ["Item_Wallet_Medium", "Item_Wallet_Large"];
-pub const ON_GET: OnGet = OnGet { title: "Full Wallets", on: |p| p.full_wallet, tag: fill::PREFIX, items: &WALLETS, run: fill::fill, start: start_sets };
+pub const ON_GET: OnGet = OnGet { name: "Full Wallets", enabled: |p| p.full_wallet, event_prefix: fill::PREFIX, items: &WALLETS, add_events: fill::fill, new_game_writes: start_sets };
 ```
 
 | Field | What it says |
 |---|---|
-| `title` | the name in the build report and in errors |
-| `on` | `fn(&Plan) -> bool`: whether a build runs the hook |
-| `tag` | the prefix of every event the hook adds, unique to the feature |
+| `name` | the feature's name in the build report and in errors |
+| `enabled` | `fn(&Plan) -> bool`: whether a build runs the hook |
+| `event_prefix` | the prefix of every event the hook adds, unique to the feature |
 | `items` | item actor names. The hook also asks for the `Pouch_`, `Obj_` and progressive pickup names of each |
-| `run` | `fn(&mut Flow, At, u16) -> Res<u16>`: add the events that do the work, ending at the given event, and return the first one |
-| `start` | `fn(&Kit) -> Vec<Set>`: the new-game save writes for starting with the item. Return an empty list for none |
+| `add_events` | `fn(&mut Flow, At, u16) -> Res<u16>`: add the events that do the work, ending at the given event, and return the first one |
+| `new_game_writes` | `fn(&Kit) -> Vec<Set>`: the save writes for a new game that starts with the item. Return an empty list for none |
 
-`run` is told where it is. `At::Gift` is a get with no menu open. `At::Sale` is a shop or Business Scrub sale, where the rupee counter is already open.
+`add_events` is told where it is. `At::Gift` is a get with no menu open. `At::Sale` is a shop or Business Scrub sale, where the rupee counter is already open.
 
 Add the hook to the list `on_get::ALL`. Nothing else in `slice/` changes.
 
@@ -39,7 +39,7 @@ Add the hook to the list `on_get::ALL`. Nothing else in `slice/` changes.
 | shop shelf | every `EventTriggerGetItemAtShop` in `DisplayShop` | `Shop_SelectItemName` | `Sale` |
 | a script that adds a listed item by name | any other flow | none, the name is fixed | `Gift` |
 
-On a shop shelf that sells a progressive tier, the shelf adds the tier with a script call after the `Event281` and `Event543` purchases (`shelf::hook`). The hook runs after that call, so the tier is owned when `run` starts, also when Ice Traps has put its own questions between the purchase and the call. The shelf adds no tier by script after `Event123`, so there the hook runs right after the purchase event.
+On a shop shelf that sells a progressive tier, the shelf adds the tier with a script call after the `Event281` and `Event543` purchases (`shelf::hook`). The hook runs after that call, so the tier is owned when `add_events` starts, also when Ice Traps has put its own questions between the purchase and the call. The shelf adds no tier by script after `Event123`, so there the hook runs right after the purchase event.
 
 Other literal adds inside `DisplayShop` are not hooked, so a shelf purchase runs the code once.
 
@@ -73,7 +73,7 @@ Limits of the check:
 
 ## What changed for Full Wallets
 
-Full Wallets is the first user. Its own wiring (`full_wallet/sites.rs` and the build step in `full_wallet.rs`) is gone, and its start-with write comes from the hook's `start`.
+Full Wallets is the first user. Its own wiring (`full_wallet/sites.rs` and the build step in `full_wallet.rs`) is gone, and its start-with write comes from the hook's `new_game_writes`.
 
 One behaviour changes: in `DisplayShop` the fill now follows the purchase event itself instead of the script add of the tier. Every other event flow is built as before.
 

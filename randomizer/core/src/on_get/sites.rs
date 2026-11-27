@@ -61,12 +61,12 @@ pub fn names(items: &[&str]) -> Res<Vec<String>> {
 }
 
 pub fn ours(f: &Flow, h: &OnGet, at: u16) -> bool {
-    at != NONE && f.events.get(usize::from(at)).is_some_and(|e| e.name.starts_with(h.tag))
+    at != NONE && f.events.get(usize::from(at)).is_some_and(|e| e.name.starts_with(h.event_prefix))
 }
 
 fn push(f: &mut Flow, h: &OnGet, kind: Kind) -> Res<u16> {
     let at: u16 = u16::try_from(f.events.len()).ok().filter(|i| *i != NONE).ok_or(E::Format("on get: the flow has too many events"))?;
-    f.events.push(Event { name: format!("{}{at}", h.tag), kind });
+    f.events.push(Event { name: format!("{}{at}", h.event_prefix), kind });
     Ok(at)
 }
 
@@ -115,7 +115,7 @@ fn unique(f: &Flow, h: &OnGet, name: &str) -> Res<usize> {
     let hits: Vec<usize> = (0..f.events.len()).filter(|&i| f.events[i].name == name).collect();
     match hits.as_slice() {
         [i] => Ok(*i),
-        _ => Err(E::Msg(format!("{}: {} has {} events named {name}, expected one, the game files differ", h.title, f.name, hits.len()))),
+        _ => Err(E::Msg(format!("{}: {} has {} events named {name}, expected one, the game files differ", h.name, f.name, hits.len()))),
     }
 }
 
@@ -127,20 +127,20 @@ fn num(f: &Flow, i: usize) -> Option<i32> {
 }
 
 fn then_of(f: &Flow, h: &OnGet, i: usize) -> Res<u16> {
-    next_of(f, i).ok_or_else(|| E::Msg(format!("{}: {} event {i} has no next event, the game files differ", h.title, f.name)))
+    next_of(f, i).ok_or_else(|| E::Msg(format!("{}: {} event {i} has no next event, the game files differ", h.name, f.name)))
 }
 
 pub fn give(f: &mut Flow, h: &OnGet, g: &Give) -> Res<bool> {
     let at: usize = unique(f, h, g.event)?;
     let arg: String = match f.events[at].kind.params().and_then(|c| c.get("Actor")) {
         Some(Val::Arg(a)) if is(f, at, POUCH, ADD) && num(f, at).is_some_and(|n| n > 0) => a.clone(),
-        _ => return Err(E::Msg(format!("{}: {} {} is not a pouch add of an argument actor, the game files differ", h.title, f.name, g.event))),
+        _ => return Err(E::Msg(format!("{}: {} {} is not a pouch add of an argument actor, the game files differ", h.name, f.name, g.event))),
     };
     let then: u16 = then_of(f, h, at)?;
     if ours(f, h, then) {
         return Ok(false);
     }
-    let hit: u16 = (h.run)(f, g.at, then)?;
+    let hit: u16 = (h.add_events)(f, g.at, then)?;
     let ask: u16 = asked(f, h, NAME, hit, then)?;
     let head: u16 = named(f, h, &arg, ask)?;
     set_next(f, at, head);
@@ -150,14 +150,14 @@ pub fn give(f: &mut Flow, h: &OnGet, g: &Give) -> Res<bool> {
 pub fn pickup(f: &mut Flow, h: &OnGet, event: &str) -> Res<bool> {
     let at: usize = unique(f, h, event)?;
     if !is(f, at, GUEST, ADD_OWN) {
-        return Err(E::Msg(format!("{}: {} {event} is not the pickup's pouch add, the game files differ", h.title, f.name)));
+        return Err(E::Msg(format!("{}: {} {event} is not the pickup's pouch add, the game files differ", h.name, f.name)));
     }
     let then: u16 = then_of(f, h, at)?;
     if ours(f, h, then) {
         return Ok(false);
     }
     let tails: Vec<usize> = (0..f.events.len()).filter(|&i| i == at || (f.events[i].name.starts_with(crate::pickup_tiers::PREFIX) && next_of(f, i) == Some(then))).collect();
-    let hit: u16 = (h.run)(f, At::Gift, then)?;
+    let hit: u16 = (h.add_events)(f, At::Gift, then)?;
     let head: u16 = asked(f, h, NAME, hit, then)?;
     for i in tails {
         set_next(f, i, head);
@@ -193,7 +193,7 @@ pub fn shelf_end(f: &Flow, grant: usize) -> usize {
 fn shelves(f: &mut Flow, h: &OnGet) -> Res<usize> {
     let grants: Vec<usize> = (0..f.events.len()).filter(|&i| is(f, i, STARTER, GRANT)).collect();
     if grants.is_empty() {
-        return Err(E::Msg(format!("{}: the shop flow has no shelf purchase, the game files differ", h.title)));
+        return Err(E::Msg(format!("{}: the shop flow has no shelf purchase, the game files differ", h.name)));
     }
     let mut n: usize = 0;
     for g in grants {
@@ -202,7 +202,7 @@ fn shelves(f: &mut Flow, h: &OnGet) -> Res<usize> {
         if ours(f, h, then) {
             continue;
         }
-        let hit: u16 = (h.run)(f, At::Sale, then)?;
+        let hit: u16 = (h.add_events)(f, At::Sale, then)?;
         let head: u16 = asked(f, h, ON_SALE, hit, then)?;
         set_next(f, at, head);
         n += 1;
@@ -223,7 +223,7 @@ fn literals(f: &mut Flow, h: &OnGet) -> Res<usize> {
         if ours(f, h, then) {
             continue;
         }
-        let hit: u16 = (h.run)(f, At::Gift, then)?;
+        let hit: u16 = (h.add_events)(f, At::Gift, then)?;
         set_next(f, i, hit);
         n += 1;
     }

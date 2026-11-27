@@ -6,7 +6,7 @@ use crate::start_items::{Kit, Set};
 pub const SETTING: &str = "full_wallets";
 pub const NUM: u16 = 610;
 pub const WALLETS: [&str; 2] = ["Item_Wallet_Medium", "Item_Wallet_Large"];
-pub const ON_GET: OnGet = OnGet { title: "Full Wallets", on: |p| p.full_wallet, tag: fill::PREFIX, items: &WALLETS, run: fill::fill, start: start_sets };
+pub const ON_GET: OnGet = OnGet { name: "Full Wallets", enabled: |p| p.full_wallet, event_prefix: fill::PREFIX, items: &WALLETS, add_events: fill::fill, new_game_writes: start_sets };
 pub const COUNT: &str = "PlayerStatus.CurrentRupee";
 pub const FIRST: (&str, i32) = ("Item_Wallet_Small", 200);
 pub const CAPS: [(&str, i32); 2] = [("Item_Wallet_Medium", 500), ("Item_Wallet_Large", 1000)];
