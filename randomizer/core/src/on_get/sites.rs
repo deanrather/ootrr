@@ -1,7 +1,7 @@
 use crate::bfevfl::flow::NONE;
 use crate::bfevfl::{Case, Cont, Event, Flow, Kind, Val};
 use crate::error::{Error as E, Res};
-use crate::on_get::{At, OnGet, FLOWS};
+use crate::on_get::{GetType, OnGet, FLOWS};
 
 pub const NAME: &str = "UI_MessageTargetActorName";
 pub const ON_SALE: &str = "Shop_SelectItemName";
@@ -21,14 +21,14 @@ pub const WAIT: &str = "EventWait";
 pub struct Give {
     pub flow: &'static str,
     pub event: &'static str,
-    pub at: At,
+    pub get_type: GetType,
 }
 
 pub const GIVES: [Give; 4] = [
-    Give { flow: "GetPouchContent", event: "Event0", at: At::Gift },
-    Give { flow: "Dm_SY_GetInEvent", event: "Event124", at: At::Gift },
-    Give { flow: "Dm_SY_GetInEvent", event: "Event442", at: At::Sale },
-    Give { flow: "Dm_SY_GetInEvent", event: "Event430", at: At::Sale },
+    Give { flow: "GetPouchContent", event: "Event0", get_type: GetType::Gift },
+    Give { flow: "Dm_SY_GetInEvent", event: "Event124", get_type: GetType::Gift },
+    Give { flow: "Dm_SY_GetInEvent", event: "Event442", get_type: GetType::Sale },
+    Give { flow: "Dm_SY_GetInEvent", event: "Event430", get_type: GetType::Sale },
 ];
 pub const PICKUPS: [(&str, &str); 2] = [("Dm_SY_Get", "Event35"), ("Dm_SY_Get_WithoutPlayer", "Event0")];
 
@@ -140,7 +140,7 @@ pub fn give(f: &mut Flow, h: &OnGet, g: &Give) -> Res<bool> {
     if ours(f, h, then) {
         return Ok(false);
     }
-    let hit: u16 = (h.add_events)(f, g.at, then)?;
+    let hit: u16 = (h.add_events)(f, g.get_type, then)?;
     let ask: u16 = asked(f, h, NAME, hit, then)?;
     let head: u16 = named(f, h, &arg, ask)?;
     set_next(f, at, head);
@@ -157,7 +157,7 @@ pub fn pickup(f: &mut Flow, h: &OnGet, event: &str) -> Res<bool> {
         return Ok(false);
     }
     let tails: Vec<usize> = (0..f.events.len()).filter(|&i| i == at || (f.events[i].name.starts_with(crate::pickup_tiers::PREFIX) && next_of(f, i) == Some(then))).collect();
-    let hit: u16 = (h.add_events)(f, At::Gift, then)?;
+    let hit: u16 = (h.add_events)(f, GetType::Gift, then)?;
     let head: u16 = asked(f, h, NAME, hit, then)?;
     for i in tails {
         set_next(f, i, head);
@@ -202,7 +202,7 @@ fn shelves(f: &mut Flow, h: &OnGet) -> Res<usize> {
         if ours(f, h, then) {
             continue;
         }
-        let hit: u16 = (h.add_events)(f, At::Sale, then)?;
+        let hit: u16 = (h.add_events)(f, GetType::Sale, then)?;
         let head: u16 = asked(f, h, ON_SALE, hit, then)?;
         set_next(f, at, head);
         n += 1;
@@ -223,7 +223,7 @@ fn literals(f: &mut Flow, h: &OnGet) -> Res<usize> {
         if ours(f, h, then) {
             continue;
         }
-        let hit: u16 = (h.add_events)(f, At::Gift, then)?;
+        let hit: u16 = (h.add_events)(f, GetType::Gift, then)?;
         set_next(f, i, hit);
         n += 1;
     }
@@ -308,9 +308,9 @@ mod tests {
         ["PouchSystemActor.EventTriggerIncreaseRupee".to_string(), format!("{}.{}", fill::UI, fill::STABLE)].to_vec()
     }
 
-    fn check_fill(f: &Flow, hit: u16, then: u16, at: At) {
-        assert_eq!(line(f, hit, then), if at == At::Gift { popup() } else { sale() });
-        let add: u16 = if at == At::Gift { next_of(f, usize::from(hit)).unwrap() } else { hit };
+    fn check_fill(f: &Flow, hit: u16, then: u16, get_type: GetType) {
+        assert_eq!(line(f, hit, then), if get_type == GetType::Gift { popup() } else { sale() });
+        let add: u16 = if get_type == GetType::Gift { next_of(f, usize::from(hit)).unwrap() } else { hit };
         assert_eq!(param(f, add, "Value"), Some(Val::Int(fill::FILL)));
     }
 
@@ -355,7 +355,7 @@ mod tests {
             assert_eq!(param(&f, settle, "Frames"), Some(Val::Int(1)));
             let first: u16 = next_of(&f, usize::from(settle)).unwrap();
             let hit: u16 = asks(&f, first, then, NAME);
-            check_fill(&f, hit, then, g.at);
+            check_fill(&f, hit, then, g.get_type);
             for (i, e) in was.events.iter().enumerate() {
                 if i != at {
                     assert_eq!(&f.events[i], e, "{} event {i}", g.flow);
@@ -392,7 +392,7 @@ mod tests {
                 let stray: Vec<usize> = (0..f.events.len()).filter(|&i| next_of(&f, i) == Some(then) && !ours(&f, &W, i as u16)).collect();
                 assert!(stray.is_empty(), "{name} tiers {tiers}: {stray:?}");
                 let hit: u16 = asks(&f, head, then, NAME);
-                check_fill(&f, hit, then, At::Gift);
+                check_fill(&f, hit, then, GetType::Gift);
                 assert!(!pickup(&mut f, &W, event).unwrap());
                 let mut bf: Bf = Bf::parse(&rf.read_zs(&path_of(name)).unwrap()).unwrap();
                 let k: usize = bf.flows.iter().position(|x| x.name == *name).unwrap();
@@ -424,7 +424,7 @@ mod tests {
             for (&end, &then) in ends.iter().zip(&thens) {
                 let head: u16 = next_of(f, end).unwrap();
                 let hit: u16 = asks(f, head, then, ON_SALE);
-                check_fill(f, hit, then, At::Sale);
+                check_fill(f, hit, then, GetType::Sale);
             }
             assert_eq!(patch(f, &W).unwrap(), 0);
             let out: Vec<u8> = b.write().unwrap();
@@ -477,7 +477,7 @@ mod tests {
             let to: u16 = next_of(&f, usize::from(*at)).unwrap();
             assert_eq!(ours(&f, &W, to), k == 0 || k == 3, "add {k}");
             if ours(&f, &W, to) {
-                check_fill(&f, to, 0, At::Gift);
+                check_fill(&f, to, 0, GetType::Gift);
             }
         }
         assert_eq!(patch(&mut f, &W).unwrap(), 0);

@@ -1,7 +1,7 @@
 use crate::bfevfl::flow::NONE;
 use crate::bfevfl::{Cont, Event, Flow, Kind, Val};
 use crate::error::{Error as E, Res};
-use crate::on_get::At;
+use crate::on_get::GetType;
 
 pub const PREFIX: &str = "OOTRRFullWallet";
 pub const FILL: i32 = 1000;
@@ -34,15 +34,15 @@ fn act(f: &mut Flow, who: &str, what: &str, items: Vec<(String, Val)>, next: u16
     push(f, Kind::Action { next, actor: a, act: x, params: Some(Cont { items }) })
 }
 
-pub fn fill(f: &mut Flow, at: At, then: u16) -> Res<u16> {
+pub fn fill(f: &mut Flow, get_type: GetType, then: u16) -> Res<u16> {
     let mut next: u16 = then;
-    if at == At::Gift {
+    if get_type == GetType::Gift {
         next = act(f, UI, CLOSE, vec![kv("IsWaitEnd", b(true))], next)?;
         next = act(f, WAITER, WAIT, vec![kv("IsWaitEnd", b(true)), kv("Frames", Val::Int(HOLD))], next)?;
     }
     next = act(f, UI, STABLE, vec![kv("IsWaitEnd", b(true))], next)?;
     next = act(f, POUCH, ADD, vec![kv("Value", Val::Int(FILL))], next)?;
-    if at == At::Gift {
+    if get_type == GetType::Gift {
         let open: Vec<(String, Val)> = vec![kv("IsWaitEnd", b(true)), kv("IsNeedMaxNum", b(false)), kv("IsWaitOpenAnim", b(true)), kv("IsWaitChoiceBtnIn", b(false))];
         next = act(f, UI, OPEN, open, next)?;
     }

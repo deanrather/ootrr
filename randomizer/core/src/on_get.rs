@@ -22,7 +22,7 @@ use crate::TITLE_ID;
 pub const FLOWS: &str = "Event/EventFlow";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum At {
+pub enum GetType {
     Gift,
     Sale,
 }
@@ -36,10 +36,13 @@ pub struct OnGet {
     pub event_prefix: &'static str,
     /// Item actor names. Their Pouch_, Obj_ and progressive names are matched too.
     pub items: &'static [&'static str],
-    /// Adds the events that do the work, ending at the given event, and returns the first one.
-    pub add_events: fn(&mut Flow, At, u16) -> Res<u16>,
-    /// Save writes for a new game that starts with the item. Empty for none.
-    pub new_game_writes: fn(&Kit) -> Vec<Set>,
+    /// Adds the events that should play when Link gets one of the items,
+    /// leading on to `next`. Returns the first event added.
+    /// `GetType` says whether it is a gift or a sale (rupee counter already open).
+    pub add_events: fn(&mut Flow, GetType, next: u16) -> Res<u16>,
+    /// If a new game starts with the item already owned, no get plays:
+    /// these are the save values to set instead. Empty for none.
+    pub start_with: fn(&Kit) -> Vec<Set>,
 }
 
 pub static ALL: [&OnGet; 1] = [&crate::full_wallet::ON_GET];
