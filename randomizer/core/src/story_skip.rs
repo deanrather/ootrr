@@ -2121,6 +2121,7 @@ pub const REQUIEM: &str = "Dm_MelodyGet_Spilit";
 pub const REQUIEM_LOC: &str = "Sheik at Colossus";
 const REQUIEM_ENTRY: &str = "EntryPoint0";
 const REQUIEM_GRANT: &str = "Event17";
+const REQUIEM_CLOSE: &str = "Event14";
 const REQUIEM_PREFIX: &str = "OOTRRRequiem";
 pub const SARIA_ROW: &str = "KokiriForest_ArriveLostWood";
 const ROW_FIELDS: [&str; 3] = ["EventBaseSetting", "EventSettingComponentList", "EventSoundSetting"];
@@ -2140,12 +2141,47 @@ pub fn patch_requiem(b: &mut Bf) -> Res<()> {
     let k2: Kind = player(f, "EventTriggerParticipateEvent", None)?;
     let k3: Kind = player(f, "EventPlayerUnequip", Some(Cont { items: vec![item("IsWaitEnd", Val::Bool(1))] }))?;
     let first: u16 = chain(f, REQUIEM_PREFIX, vec![k1, k2, k3], grant)?;
+    // The game lists the grant in Learn_melody's preload list, and EntryPoint0 now runs it. An
+    // upgrade or ammo turns the grant into owner checks (crate::progressive), so EntryPoint0 lists
+    // the calls those checks lead to, never the checks: a listed non-call makes the game refuse the
+    // event, and the Colossus asked for it again every frame (Bombs (5) at Sheik at Colossus).
+    let close: usize = find_action(f, (REQUIEM_CLOSE, "GameSystemActor.EventCloseMessageDialog"))?;
+    let calls: Vec<u16> = calls_until(f, grant, idx(close)?);
     let e = f.entries.iter_mut().find(|e| e.name == REQUIEM_ENTRY).ok_or(Error::Format("story skip: Requiem has no EntryPoint0"))?;
     e.main = first;
-    if !e.subs.contains(&grant) {
-        e.subs.push(grant);
+    for c in calls {
+        if !e.subs.contains(&c) {
+            e.subs.push(c);
+        }
     }
     Ok(())
+}
+
+/// The sub calls reached from `from` before `stop`, through every branch.
+fn calls_until(f: &Flow, from: u16, stop: u16) -> Vec<u16> {
+    let mut seen: Vec<u16> = Vec::new();
+    let mut out: Vec<u16> = Vec::new();
+    let mut todo: Vec<u16> = vec![from];
+    while let Some(i) = todo.pop() {
+        if i == NONE || i == stop || seen.contains(&i) {
+            continue;
+        }
+        seen.push(i);
+        let Some(e) = f.events.get(usize::from(i)) else { continue };
+        if matches!(e.kind, Kind::Sub { .. } | Kind::SubSwitch { .. }) {
+            out.push(i);
+        }
+        match &e.kind {
+            Kind::Switch { cases, .. } | Kind::SubSwitch { cases, .. } => todo.extend(cases.iter().map(|c| c.ev)),
+            Kind::Fork { join, forks } => {
+                todo.extend(forks.iter().copied());
+                todo.push(*join);
+            }
+            k => todo.extend(next_of(k)),
+        }
+    }
+    out.sort_unstable();
+    out
 }
 
 fn player(f: &mut Flow, act: &str, params: Option<Cont>) -> Res<Kind> {
@@ -2345,6 +2381,46 @@ mod tests {
                 for e in f.entries.iter().filter(|e| ins.contains(&e.name)) {
                     assert!(e.subs.contains(&(i as u16)), "{}: entry {} does not preload {}", t.flow, e.name, f.events[i].name);
                 }
+            }
+        }
+    }
+
+    /// Bombs (5) at Sheik at Colossus: the ammo guard turned the grant into bag checks, and the skip
+    /// listed those checks in EntryPoint0's preload list instead of the gives behind them, so the
+    /// game refused the event and the Colossus asked for it every frame (HUD gone, Link stuttering).
+    #[test]
+    fn requiem_preloads_the_gives_behind_an_ammo_or_upgrade_grant_and_no_check() {
+        let Some(root) = dump() else { return };
+        let mut rf: Romfs = Romfs::open(&root).unwrap();
+        let raw: Vec<u8> = rf.read_zs(&sheik_file(REQUIEM)).unwrap();
+        let cut: &SheikCut = SHEIK_CUTS.iter().find(|c| c.scene == REQUIEM).unwrap();
+        for (actor, family) in [("Item_BombBundle_Small", None), ("Item_Hookshot", Some("Hookshot")), ("Item_Bottle", None)] {
+            let mut b: Bf = Bf::parse(&raw).unwrap();
+            {
+                let f: &mut Flow = flow_mut(&mut b, REQUIEM).unwrap();
+                let g: usize = find(f, REQUIEM_GRANT).unwrap();
+                set_param(&mut f.events[g].kind, "ActorName", Val::Str(actor.to_string())).unwrap();
+                match family {
+                    Some(fam) => crate::progressive::wrap_grant(f, g, REQUIEM_GRANT, "ActorName", fam).unwrap(),
+                    None => {
+                        crate::progressive::ammo_guard(f, g, REQUIEM_GRANT, "ActorName").unwrap();
+                    }
+                }
+            }
+            patch_sheik(&mut b, cut).unwrap();
+            patch_requiem(&mut b).unwrap();
+            let f: &Flow = flow_mut(&mut b, REQUIEM).unwrap();
+            for e in &f.entries {
+                for s in &e.subs {
+                    assert!(matches!(f.events[usize::from(*s)].kind, Kind::Sub { .. } | Kind::SubSwitch { .. }), "{actor}: {} preloads {}, which is not a call", e.name, f.events[usize::from(*s)].name);
+                }
+            }
+            let e: &crate::bfevfl::Entry = f.entries.iter().find(|e| e.name == REQUIEM_ENTRY).unwrap();
+            let close: u16 = find_action(f, (REQUIEM_CLOSE, "GameSystemActor.EventCloseMessageDialog")).unwrap() as u16;
+            let calls: Vec<u16> = calls_until(f, e.main, close);
+            assert!(calls.iter().any(|&c| matches!(&f.events[usize::from(c)].kind, Kind::Sub { flow, .. } if flow == ITEM_GET.0)), "{actor}: no item get");
+            for c in calls {
+                assert!(e.subs.contains(&c), "{actor}: EntryPoint0 does not preload {}", f.events[usize::from(c)].name);
             }
         }
     }
