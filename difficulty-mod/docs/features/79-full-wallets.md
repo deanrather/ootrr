@@ -124,7 +124,7 @@ The scrub sale was not scripted: the Hyrule Field grotto scrub asked for a passw
 
 ## Tested
 
-Merged with nightly 4fa6e5a6 (merge commit 239b1775), with `OOTRR_ROMFS` set: `cargo test --workspace` 2447 passed, 0 failed, 13 ignored; audits 0 FAIL (15 hex-string warnings, none in this feature's files). The feature's code, the settings code and `slice/` are unchanged since fa14bb97, the commit of the 27 Nov hands-on. The default-output comparison with nightly 4fa6e5a6 has not been run.
+Merged with nightly 4fa6e5a6 (merge commit 239b1775), with `OOTRR_ROMFS` set: `cargo test --workspace` 2447 passed, 0 failed, 13 ignored; audits 0 FAIL (15 hex-string warnings, none in this feature's files). The feature's code, the settings code and `slice/` are unchanged since fa14bb97, the commit of the 27 Nov hands-on. The default preset builds byte-identical to nightly 4fa6e5a6 (286 files).
 
 Before that, merged with nightly 52db1a16 (merge commit fa14bb97, conflicts in `slice/edit.rs` and `slice/support.rs` resolved by keeping both sides), all runs with `OOTRR_ROMFS` set: `cargo test --workspace` 2445 passed, 0 failed, 13 ignored; audits clean; the default preset builds byte-identical to nightly 52db1a16 (286 files). The 27 Nov hand-played results are from this commit.
 
@@ -174,7 +174,7 @@ The setting was a stub. The pouch table column that fills bags on get (`IsItemSt
 ## Checked
 
 - `cargo test --workspace`: 2447 passed, 0 failed, with 9 `full_wallet` tests among them.
-- Default settings: every file built is byte-identical to nightly 52db1a16. Setting off: byte-identical to nightly 240af8b2 with three more (chest and person plando, shop deals and freestanding plando, pot and Gold Skulltula reward plando).
+- Default settings: every file built is byte-identical to nightly 4fa6e5a6. Setting off: byte-identical to nightly 240af8b2 with three more (chest and person plando, shop deals and freestanding plando, pot and Gold Skulltula reward plando).
 - On: `ootrr flow-loads` finds no missing loads on 9 mods with the setting on.
 - Game, played by hand and passed: a chest, a pot, a Deku Scrub sale, a person's gift, a shop purchase, a ground pickup, the Gold Skulltula reward, and a new game with and without the Adult's Wallet. Scripted only: the Great Fairy's offering reward.
 
