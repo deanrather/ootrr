@@ -46,7 +46,7 @@ mod tests {
     }
 
     fn sale(s: &Scrub, item: &str) -> Sale {
-        Sale { entry: s.entry(), flag: flag_of(s), actor: item.to_string(), price: s.price }
+        Sale { entry: s.entry(), flag: flag_of(s), actor: item.to_string(), price: s.price, family: None, forms: Vec::new() }
     }
 
     fn with_sales(r: &P, base: Flow, sales: &[Sale]) -> Flow {
@@ -264,7 +264,7 @@ mod tests {
         let b: &Book = book().unwrap();
         let v: Flow = vanilla(&r);
         let items: [&str; 10] = ["Item_Longshot", "Item_HoverBoot", "Item_GlassTruth", "Item_Hookshot", "Item_Boomerang", "Item_Hammer", "Item_Bottle", "Item_DinFire", "Item_MirrorShield", "Item_IronBoot"];
-        let sales: Vec<Sale> = b.scrubs.iter().zip(items).enumerate().map(|(i, (s, it))| Sale { entry: s.entry(), flag: if i % 2 == 0 { SPARE.to_string() } else { "HavePlayedEvent.Enemy_Scrub_Business_DekuStick_01".to_string() }, actor: it.to_string(), price: s.price }).collect();
+        let sales: Vec<Sale> = b.scrubs.iter().zip(items).enumerate().map(|(i, (s, it))| Sale { entry: s.entry(), flag: if i % 2 == 0 { SPARE.to_string() } else { "HavePlayedEvent.Enemy_Scrub_Business_DekuStick_01".to_string() }, actor: it.to_string(), price: s.price, family: None, forms: Vec::new() }).collect();
         let e: Flow = with_sales(&r, v.clone(), &sales);
         assert_eq!(e.events.len(), v.events.len() + 40);
         assert_eq!(e.entries.len(), v.entries.len() + 10);

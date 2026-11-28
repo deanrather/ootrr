@@ -71,3 +71,14 @@ export async function get_blob(path) {
   if (!res.ok) throw new ApiError(res.status, `The server answered ${res.status}.`);
   return res.blob();
 }
+
+export async function post_blob(path, body) {
+  let res;
+  try {
+    res = await fetch(path, { method: "POST", headers: { "X-OOTRR-Token": token, "Content-Type": "application/json" }, body: JSON.stringify(body), cache: "no-store", credentials: "omit", referrerPolicy: "no-referrer" });
+  } catch {
+    throw new ApiError(0, "The local server did not answer. Is ootrr serve still running?");
+  }
+  if (!res.ok) throw new ApiError(res.status, `The server answered ${res.status}.`);
+  return res.blob();
+}

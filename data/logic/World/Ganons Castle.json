@@ -19,7 +19,7 @@
             "Ganons Castle Forest Trial": "True",
             "Ganons Castle Water Trial": "True",
             "Ganons Castle Shadow Trial": "True",
-            "Ganons Castle Fire Trial": "logic_fewer_tunic_requirements or can_use(Goron_Tunic)",
+            "Ganons Castle Fire Trial": "logic_fewer_tunic_requirements or can_use(Goron_Tunic) or can_use(Nayrus_Love)",
             "Ganons Castle Light Trial": "can_use(Golden_Gauntlets)",
             "Ganons Castle Spirit Trial": "True",
             "Ganons Castle Deku Scrubs": "logic_lens_castle or can_use(Lens_of_Truth)",

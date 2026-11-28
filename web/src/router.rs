@@ -29,6 +29,10 @@ fn api(sh: &Shared, r: &Req) -> Hr<Resp> {
         need(r, "GET")?;
         return api_items::icon(sh, r);
     }
+    if r.path == "/api/hash-icon" {
+        need(r, "POST")?;
+        return api_items::hash_icon(sh, &body::json(r)?);
+    }
     if r.path == "/api/ap/world" {
         need(r, "GET")?;
         return api_ap::world_file();

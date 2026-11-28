@@ -71,12 +71,12 @@
             "Gerudo Training Ground Underwater Silver Rupee Top": "
                 can_play(Song_of_Time) and
                 (can_use(Iron_Boots) or (logic_gtg_underwater_highest and (Progressive_Scale, 2))) and
-                (logic_fewer_tunic_requirements or can_use(Zora_Tunic))"
+                (logic_fewer_tunic_requirements or can_use(Zora_Tunic) or can_use(Nayrus_Love))"
         },
         "exits": {
             "Gerudo Training Ground Underwater": "
                 can_play(Song_of_Time) and can_use(Iron_Boots) and
-                (logic_fewer_tunic_requirements or can_use(Zora_Tunic))"
+                (logic_fewer_tunic_requirements or can_use(Zora_Tunic) or can_use(Nayrus_Love))"
         }
     },
     {

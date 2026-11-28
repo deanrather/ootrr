@@ -83,8 +83,11 @@ fn give_and_wrap(d: &Data, placed: &BM<String, String>, loc: &str, item: &str, f
     let shelf: bool = crate::shops::is_loc(loc) && crate::shops::jobs::tiered_family(d, item).is_some();
     if shelf {
         if covered(d, placed, f) { (Give::Flow, true) } else { (Give::Open, false) }
-    } else if fixed_spot(d, loc) || (crate::slice::flow_rules::priced_sale(d, loc) && !crate::scrubs_a::home(d, loc, item)) {
+    } else if fixed_spot(d, loc) {
         (Give::Open, false)
+    } else if d.flow.by_name(loc).is_some_and(crate::scrubs_b::is_b) && !crate::scrubs_a::home(d, loc, item) {
+        // A menu scrub's sale entry asks the tier chain too (scrubs_b::flow::add).
+        if covered(d, placed, f) { (Give::Flow, true) } else { (Give::Open, false) }
     } else if is_sale(d, loc) {
         if crate::scrubs_a::home(d, loc, item) {
             (native(d, f, loc), false)
@@ -270,6 +273,24 @@ pub fn chest_views(d: &Data, seed: &SeedFile) -> Res<BM<String, String>> {
 }
 
 pub fn fixed_actors(d: &Data, seed: &SeedFile) -> Res<Verdict> {
+    // An Ice Trap gives nothing, so the spot counts as junk here (as it did when the seed was
+    // generated), not as the item it looks like: a look that opened a route would let the player
+    // reach a fixed spot sooner than the logic allows, and the build would refuse a good seed.
+    let plain: SeedFile;
+    let seed: &SeedFile = if seed.cold.is_empty() {
+        seed
+    } else {
+        let mut s: SeedFile = seed.clone();
+        for loc in &seed.cold {
+            s.placements.insert(loc.clone(), crate::frost::fake::RUPEE_ITEM.to_string());
+            // A shop deal's entry names the same item as its placement (shops::seed::layout).
+            if let Some(e) = s.shops.get_mut(loc).filter(|e| e.deal) {
+                e.item = crate::frost::fake::RUPEE_ITEM.to_string();
+            }
+        }
+        plain = s;
+        &plain
+    };
     if !slots(d, &seed.placements).iter().any(|s| s.give == Give::Open) {
         return Ok(Verdict::default());
     }
@@ -437,23 +458,25 @@ mod tests {
     }
 
     #[test]
-    fn a_priced_sale_gets_the_tier_of_the_reach_order_and_not_the_top_tier() {
+    fn a_priced_sale_sells_the_next_tier_at_run_time_and_fixes_none() {
         let d: Data = Data::load().unwrap();
         let s: Settings = with(&[("shuffle_chests", "overworld")]);
-        // A scrub sale stays one plain call (crate::slice::flow_rules::priced_sale), so an upgrade
-        // there sells the tier the copies reachable before it fix.
+        // A scrub sale is wrapped in the tier chain (flow_wrap, progressive::wrap_sale_as), so an
+        // upgrade there sells the next tier the player lacks, however early another copy is found.
         let sale: &str = "HF Deku Scrub Grotto";
         assert!(crate::slice::flow_rules::priced_sale(&d, sale));
         let (w, mut place): (World, Placement) = lone_slingshot(&d, &s, sale);
         let placed: BM<String, String> = map(&[(sale, "Slingshot"), ("Deku Tree Slingshot Chest", "Rupees (5)")]);
-        assert_eq!(give(&slots(&d, &placed), sale), Some(Give::Open));
+        assert_eq!(give(&slots(&d, &placed), sale), Some(Give::Flow));
         let v: Verdict = judge(&d, &w, &place, &placed).unwrap();
-        assert_eq!(v.assign.get(sale).map(|s| s.as_str()), Some("Item_Range_SlingShot"));
+        assert!(!v.assign.contains_key(sale), "{:?}", v.assign);
         assert!(!v.bad.iter().any(|b| b.starts_with(sale)), "{:?}", v.bad);
         place.put(w.loc("KF Midos Top Left Chest").unwrap(), w.item("Slingshot").unwrap());
         let early: BM<String, String> = map(&[(sale, "Slingshot"), ("KF Midos Top Left Chest", "Slingshot"), ("Deku Tree Slingshot Chest", "Rupees (5)")]);
+        assert_eq!(give(&slots(&d, &early), sale), Some(Give::Flow));
         let v: Verdict = judge(&d, &w, &place, &early).unwrap();
-        assert_eq!(v.assign.get(sale).map(|s| s.as_str()), Some("Item_BulletBag_Medium"));
+        assert!(!v.assign.contains_key(sale), "{:?}", v.assign);
+        assert!(crate::slice::flow_wrap::wraps(&d, &SeedFile::new("t", &s, &d.scan.game, early).unwrap()).contains_key(sale));
     }
 
     #[test]
@@ -511,4 +534,20 @@ mod tests {
         assert_eq!(seeds, 50);
         assert!(open > 0, "no seed had a fixed upgrade slot, the test proves nothing");
     }
+    #[test]
+    fn ice_trap_looks_do_not_count_as_items_in_the_build_check() {
+        // Races preset seed "p7" (2026-11-27): the fill kept every tier in order, but the build
+        // read its Ice Traps as the items they look like (Hover Boots, Din's Fire, ...), reached
+        // Sheik in Forest too soon and refused the seed. The traps count as junk now.
+        let d: Data = Data::load().unwrap();
+        let races = crate::settings::presets::builtin().unwrap().into_iter().find(|p| p.id == "races").unwrap();
+        let s: Settings = races.apply(&Settings::default()).unwrap();
+        let g: Generated = generate_data(&d, &s, "p7", &GenOpts { extras: true, ..GenOpts::default() }).unwrap();
+        let (prep, traps) = crate::frost::prepare(&g.seed_file).unwrap();
+        assert!(!traps.is_empty() && prep.cold.len() == traps.len());
+        assert!(fixed_actors(&d, &g.seed_file).unwrap().bad.is_empty());
+        let v: Verdict = fixed_actors(&d, &prep).unwrap();
+        assert!(v.bad.is_empty(), "{:?}", v.bad);
+    }
 }
+

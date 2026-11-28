@@ -14,7 +14,8 @@ pub const PRIZES: &[(&str, &str, bool)] = &[
 pub fn wraps(d: &Data, seed: &SeedFile) -> BM<String, &'static str> {
     let mut out: BM<String, &'static str> = BM::new();
     for (loc, item) in &seed.placements {
-        if !is_sale(d, loc) || !d.flow_ok(loc) || crate::scrubs_a::home(d, loc, item) || crate::slice::flow_rules::priced_sale(d, loc) {
+        // The menu scrubs sell through entries of their own (scrubs_b::flow::add wraps those).
+        if !is_sale(d, loc) || !d.flow_ok(loc) || crate::scrubs_a::home(d, loc, item) || d.flow.by_name(loc).is_some_and(crate::scrubs_b::is_b) {
             continue;
         }
         let Some(f) = d.family(item) else {
@@ -41,10 +42,12 @@ pub fn grants(d: &Data, seed: &SeedFile, chest_families: &BS<&str>, placed: &BM<
             continue;
         };
         let forms: Vec<String> = crate::ocarina_hold::forms(d, loc, f);
+        // A sale returns whether or not the player bought (progressive::wrap_sale_as).
+        let wrap: Wrap = if crate::slice::flow_rules::priced_sale(d, loc) { Wrap::Sale } else { Wrap::Chain };
         for e in &l.edits {
             let files: Vec<&String> = std::iter::once(&e.file).chain(e.also.iter()).collect();
             for file in files {
-                out.push(Grant { file: file.clone(), index: e.index, event: e.event.clone(), param: e.param.clone(), family: f, wrap: Wrap::Chain, forms: forms.clone() });
+                out.push(Grant { file: file.clone(), index: e.index, event: e.event.clone(), param: e.param.clone(), family: f, wrap, forms: forms.clone() });
             }
         }
     }

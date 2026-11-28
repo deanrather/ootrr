@@ -55,6 +55,27 @@ pub fn icon(sh: &Shared, r: &Req) -> Hr<Resp> {
     }
 }
 
+/// `POST /api/hash-icon` with `{ game_dir, update_dir, id }`: a race seed's hash icon, read from
+/// the game folder the builder was given (the tracker may have none set). Only the icons a hash
+/// can show are served.
+pub fn hash_icon(sh: &Shared, b: &Json) -> Hr<Resp> {
+    let id: &str = crate::body::short(b, "id")?;
+    if !ootrr_core::hash_art::ICONS.iter().any(|(i, _)| *i == id) {
+        return Err(Fail::new(404, "no such hash icon"));
+    }
+    let game: PB = crate::pathsafe::abs(crate::body::short(b, "game_dir")?)?;
+    let upd: Option<PB> = api_validate::opt_path(crate::body::opt_text(b, "update_dir")?)?;
+    let rep = api_validate::inspect_with(&game, upd.as_deref());
+    if !rep.ok {
+        return Err(Fail::new(404, "the game folder could not be read"));
+    }
+    let root: PB = rep.romfs.unwrap_or(game);
+    match sh.tracker.icons.get(&root, None, id) {
+        Ok(p) => Ok(Resp::new(200, PNG, p.to_vec())),
+        Err(e) => Err(Fail::new(404, &e.to_string())),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -121,5 +142,27 @@ mod tests {
         }
         assert!(items(&s).to_string().contains("\"ready\":true"));
         let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn hash_icons_come_from_the_builders_game_folder_and_only_hash_ids_are_served() {
+        let s: Shared = sh();
+        let body = |id: &str, game: &str| Json::obj().with("id", id.into()).with("game_dir", game.into());
+        let d: PB = fake_game("hash", &["Item_Bomb"]);
+        let fake: String = d.to_string_lossy().into_owned();
+        // Not a hash icon (the tracker shows it, the title screen never does), and no game folder.
+        assert_eq!(hash_icon(&s, &body("Item_Longshot", &fake)).unwrap_err().status, 404);
+        assert_eq!(hash_icon(&s, &body("../Item_Bomb", &fake)).unwrap_err().status, 404);
+        assert_eq!(hash_icon(&s, &body("Item_Bomb", &fake)).unwrap_err().status, 404);
+        assert!(hash_icon(&s, &Json::obj().with("id", "Item_Bomb".into())).is_err());
+        let _ = std::fs::remove_dir_all(&d);
+        let Ok(game) = std::env::var("OOTRR_TEST_ROMFS") else {
+            return;
+        };
+        for (id, _) in ootrr_core::hash_art::ICONS {
+            let r: Resp = hash_icon(&s, &body(id, &game)).unwrap_or_else(|e| panic!("{id}: {}", e.status));
+            assert_eq!((r.status, r.ctype), (200, PNG), "{id}");
+            assert!(png::looks_ok(&r.body), "{id}");
+        }
     }
 }
