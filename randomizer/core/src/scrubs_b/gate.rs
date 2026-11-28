@@ -40,6 +40,11 @@ pub fn fits(d: &Data, name: &str, i: &Item) -> bool {
     }
 }
 
+pub fn shares_sale(d: &Data, placed: &std::collections::BTreeMap<String, String>, loc: &str) -> bool {
+    let calls: bool = d.flow.by_name(loc).is_some_and(|l| l.edits.iter().any(|e| e.file == crate::scrubs_b::flow::FILE && crate::scrubs_b::flow::is_sale(e.index, &e.event)));
+    calls && placed.iter().any(|(l, i)| d.flow.by_name(l).is_some_and(is_b) && d.vanilla_of(l) != Some(i.as_str()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

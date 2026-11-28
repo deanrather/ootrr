@@ -91,6 +91,8 @@ fn give_and_wrap(d: &Data, placed: &BM<String, String>, loc: &str, item: &str, f
     } else if is_sale(d, loc) {
         if crate::scrubs_a::home(d, loc, item) {
             (native(d, f, loc), false)
+        } else if crate::scrubs_b::shares_sale(d, placed, loc) {
+            (Give::Open, false)
         } else if d.flow_ok(loc) && covered(d, placed, f) {
             (Give::Flow, true)
         } else {

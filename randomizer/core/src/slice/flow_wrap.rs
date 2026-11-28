@@ -15,7 +15,12 @@ pub fn wraps(d: &Data, seed: &SeedFile) -> BM<String, &'static str> {
     let mut out: BM<String, &'static str> = BM::new();
     for (loc, item) in &seed.placements {
         // The menu scrubs sell through entries of their own (scrubs_b::flow::add wraps those).
-        if !is_sale(d, loc) || !d.flow_ok(loc) || crate::scrubs_a::home(d, loc, item) || d.flow.by_name(loc).is_some_and(crate::scrubs_b::is_b) {
+        if !is_sale(d, loc)
+            || !d.flow_ok(loc)
+            || crate::scrubs_a::home(d, loc, item)
+            || d.flow.by_name(loc).is_some_and(crate::scrubs_b::is_b)
+            || crate::scrubs_b::shares_sale(d, &seed.placements, loc)
+        {
             continue;
         }
         let Some(f) = d.family(item) else {
@@ -177,6 +182,52 @@ mod tests {
             assert_eq!(item(at(1)), base, "{file} {i}");
         }
         let _ = std::fs::remove_dir_all(&load);
+    }
+
+    fn built_with_menu_scrubs(dmc: &str, menu: &str, scrubs_b: bool, tag: &str) -> Result<(), String> {
+        use crate::slice::generate::{generate_data, GenOpts, Generated};
+        use crate::slice::plando::Entry;
+        let r: std::path::PathBuf = ootrr_game::test_romfs::path();
+        let d: Data = Data::load().unwrap();
+        let mut st: crate::settings::Settings = crate::settings::Settings::default();
+        st.set("shuffle_rewards", crate::settings::Value::s("supported")).unwrap();
+        st.set(crate::scrubs_a::SETTING, crate::settings::Value::Bool(true)).unwrap();
+        st.set(crate::scrubs_b::SETTING, crate::settings::Value::Bool(scrubs_b)).unwrap();
+        let mut plando: Vec<Entry> = vec![Entry { location: "DMC Deku Scrub".to_string(), item: dmc.to_string() }];
+        if scrubs_b {
+            plando.push(Entry { location: "Jabu Jabus Belly Deku Scrub".to_string(), item: menu.to_string() });
+        }
+        let g: Generated = generate_data(&d, &st, tag, &GenOpts { plando, ..GenOpts::default() }).map_err(|e| e.to_string())?;
+        let load: std::path::PathBuf = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/dmc_scrub_mods").join(tag);
+        let _ = std::fs::remove_dir_all(&load);
+        let out: Result<(), String> = crate::slice::edit::build_for(&g.seed_file, &r, &load, "ootrr-dmc-scrub", crate::modpack::Host::Eden).map(|_| ()).map_err(|e| e.to_string());
+        let _ = std::fs::remove_dir_all(&load);
+        out?;
+        let w: BM<String, &'static str> = wraps(&d, &g.seed_file);
+        assert_eq!(w.contains_key("DMC Deku Scrub"), !scrubs_b, "{w:?}");
+        Ok(())
+    }
+
+    #[test]
+    fn a_family_item_at_the_crater_scrub_builds_with_the_menu_scrubs_on_and_off() {
+        if !ootrr_game::test_romfs::path().join("Pack").join("ZsDic.pack.zs").is_file() {
+            return;
+        }
+        built_with_menu_scrubs("Progressive Hookshot", "Rupees (50)", true, "dmc on").unwrap();
+        built_with_menu_scrubs("Progressive Hookshot", "Rupees (50)", false, "dmc off").unwrap();
+    }
+
+    #[test]
+    fn the_crater_scrub_is_not_wrapped_only_while_a_menu_scrub_sells_another_item() {
+        let d: Data = Data::load().unwrap();
+        let mut early: BM<String, String> = BM::new();
+        early.insert("DMC Deku Scrub".to_string(), "Progressive Hookshot".to_string());
+        assert!(!crate::scrubs_b::shares_sale(&d, &early, "DMC Deku Scrub"));
+        early.insert("Jabu Jabus Belly Deku Scrub".to_string(), d.vanilla_of("Jabu Jabus Belly Deku Scrub").unwrap().to_string());
+        assert!(!crate::scrubs_b::shares_sale(&d, &early, "DMC Deku Scrub"));
+        early.insert("Jabu Jabus Belly Deku Scrub".to_string(), "Rupees (50)".to_string());
+        assert!(crate::scrubs_b::shares_sale(&d, &early, "DMC Deku Scrub"));
+        assert!(!crate::scrubs_b::shares_sale(&d, &early, "HF Deku Scrub Grotto"));
     }
 
     #[test]
