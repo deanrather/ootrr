@@ -27,11 +27,13 @@ pub enum Hurt {
     Double,
     Quadruple,
     OneHit,
+    God,
 }
 
 impl Hurt {
     pub fn from_setting(t: &str) -> Hurt {
         match t {
+            "god" => Hurt::God,
             "double" => Hurt::Double,
             "quadruple" => Hurt::Quadruple,
             "one_hit" => Hurt::OneHit,
@@ -42,6 +44,7 @@ impl Hurt {
     pub fn times(self) -> i32 {
         match self {
             Hurt::Normal => 1,
+            Hurt::God => 0,
             Hurt::Double => 2,
             Hurt::Quadruple => 4,
             Hurt::OneHit => KILL_INT,
@@ -59,6 +62,7 @@ impl Hurt {
 pub fn note(h: Hurt) -> String {
     match h {
         Hurt::Normal => String::new(),
+        Hurt::God => "The damage values for enemy and boss attacks, projectiles, grabs, fire and falls are set to zero, and a hit plays no stagger. Falling into a pit or lava, drowning and scripted hazards may still cost hearts.".to_string(),
         Hurt::OneHit => "Every hit takes all of Link's hearts: enemy and boss attacks, projectiles, grabs and falls. A bottled fairy still revives him. Falling into a pit or lava still costs one heart.".to_string(),
         h => format!("Link takes {} times the damage from enemy and boss attacks, projectiles, grabs and falls. Falling into a pit or lava still costs one heart.", h.times()),
     }
@@ -71,6 +75,7 @@ fn cut() -> Error {
 fn put(out: &mut Vec<(usize, u32)>, s: Slot, h: Hurt) {
     match s.ty {
         FLOAT => out.push((s.at, (f32::from_bits(s.val) * h.rate()).to_bits())),
+        INT if s.val != 0 && h == Hurt::God => out.push((s.at, 0)),
         INT if s.val != 0 => out.push((s.at, (s.val as i32).saturating_mul(h.times()).min(KILL_INT) as u32)),
         _ => {}
     }
@@ -158,6 +163,17 @@ mod tests {
         assert!(note(Hurt::Double).contains("2 times"));
         assert!(note(Hurt::Quadruple).contains("4 times"));
         assert!(note(Hurt::OneHit).contains("all of Link") && note(Hurt::OneHit).contains("fairy"));
+        assert!(note(Hurt::God).contains("zero") && note(Hurt::God).contains("stagger"));
+    }
+
+    #[test]
+    fn god_mode_zeroes_every_damage_value_and_every_grab() {
+        assert_eq!(Hurt::from_setting("god"), Hurt::God);
+        assert_eq!([Hurt::God.times(), Hurt::God.rate() as i32], [0, 0]);
+        let one: Vec<u8> = restraint(vec![(GRAB_KEY, Node::I32(3))]);
+        assert_eq!(damage_of(&grab(&one, Hurt::God).unwrap().unwrap()), Some(Node::I32(0)));
+        let none: Vec<u8> = restraint(vec![("GachaInputFrame", Node::F32(330.0))]);
+        assert_eq!(damage_of(&grab(&none, Hurt::God).unwrap().unwrap()), Some(Node::I32(0)));
     }
 
     #[test]

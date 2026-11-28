@@ -395,6 +395,41 @@
 "ops": [
 {"kind": "next", "file": "Npc_Gerudo_006.bfevfl", "index": 31, "event": "Event6", "old": 4, "new": 87}
 ]
+},
+{
+"name": "Bean planting talk",
+"why": "cut scene:a first bean sale (Get_MagicBean_After false, case 1 of event 71) when the Zora River soil is not planted (event 70 sends planted soil straight to event 64) plays the Talk_12 to Talk_22 lecture on planting beans with two camera saves (events 69, 74, 114, 75, 76, 73), the check in event 71 now sends it straight to the payment talk of event 64 like a later sale, the bean count, the explanation flag and the grant stay",
+"ops": [
+{"kind": "retarget", "file": "SimpleShop.bfevfl", "index": 71, "event": "Event196", "case": 1, "old": 69, "new": 64}
+]
+},
+{
+"name": "Silver Scale lecture",
+"why": "cut scene:after the Silver Scale grant (event 316) and the clear sub (event 14) a Zora lecture talk plays (event 33, Talk_67), event 14 goes straight to event 29, the MiniGame_Diving_Cleared write",
+"ops": [
+{"kind": "next", "file": "MiniGame_Diving.bfevfl", "index": 14, "event": "Event27", "old": 33, "new": 29}
+]
+},
+{
+"name": "Malon egg speech",
+"why": "cut scene:after the Weird Egg grant (event 149) Malon's talk (event 13) plays before the quest step of event 18, event 149 goes straight to event 18",
+"ops": [
+{"kind": "next", "file": "Goto_HyruleCastle.bfevfl", "index": 149, "event": "Event35", "old": 13, "new": 18}
+]
+},
+{
+"name": "Anju adult cucco speech",
+"why": "cut scene:after Anju hands over the Pocket Egg (event 223) her talk (event 85) plays before the quest step of event 14, event 223 goes straight to event 14",
+"ops": [
+{"kind": "next", "file": "Npc_Hylia_049_Adult.bfevfl", "index": 223, "event": "Event264", "old": 85, "new": 14}
+]
+},
+{
+"name": "Talon milk speech",
+"why": "cut scene:after the milk grant (event 262) Talon's two talks (events 24 and 25) play before the clear flag of event 57, event 262 goes straight to event 57",
+"ops": [
+{"kind": "next", "file": "Minigame_FindOutCucco.bfevfl", "index": 262, "event": "Event23", "old": 24, "new": 57}
+]
 }
 ]
 }

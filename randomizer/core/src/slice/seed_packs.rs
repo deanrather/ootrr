@@ -204,7 +204,7 @@ pub fn build_hooked(seed: &SeedFile, romfs: &P, load: &P, mod_name: &str, host: 
     if wants.is_empty() && twins.is_empty() {
         return crate::slice::edit::build_data(Data::load()?, seed, romfs, load, mod_name, host, &Extra::default(), hook);
     }
-    if let Some(b) = order.bad.first() {
+    if let Some(b) = order.bad.first().filter(|_| seed.giver_test.is_none()) {
         return Err(E::Msg(format!("this seed places key items at pickup spots out of upgrade tier order, generate it again with this build: {b}")));
     }
     let x: Extra = if wants.is_empty() { Extra::default() } else { pool(romfs, host, &wants)? };

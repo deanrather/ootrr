@@ -58,6 +58,9 @@ fn setting_json(s: &Setting) -> Json {
         if s.times > 0 {
             o.put("times", s.times.into());
         }
+        if let Some(l) = &s.min_label {
+            o.put("min_label", l.as_str().into());
+        }
     }
     if s.kind == Kind::List {
         o.put("max_items", Json::Int(s.max_items as i64));

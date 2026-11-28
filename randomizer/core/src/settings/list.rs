@@ -197,9 +197,10 @@ fn starting_songs() -> Setting {
 fn difficulty() -> Vec<Setting> {
     use crate::difficulty as d;
     vec![
-        Setting::number(d::HEALTH_NUM, d::HEALTH, "difficulty", "Enemy health", d::NORMAL, d::STAT_RANGE.0, d::STAT_RANGE.1)
+        Setting::number(d::HEALTH_NUM, d::HEALTH, "difficulty", "Enemy health", d::NORMAL, d::HEALTH_RANGE.0, d::HEALTH_RANGE.1)
             .multiplier(d::STAT_STEP, d::NORMAL)
-            .tip("How much health enemies and bosses have, from 0.5x to 5x. Health tops out at 99."),
+            .min_label("Insta-kill")
+            .tip("How much health enemies and bosses have, from 0.5x to 5x. Health tops out at 99. The lowest stop, Insta-kill, sets every enemy and boss to 1 health."),
         Setting::number(d::DAMAGE_NUM, d::DAMAGE, "difficulty", "Enemy damage", d::NORMAL, d::STAT_RANGE.0, d::STAT_RANGE.1)
             .multiplier(d::STAT_STEP, d::NORMAL)
             .tip("How hard enemies and their projectiles hit, from 0.5x to 5x. Traps, lava, falls and grabs do their usual damage."),
@@ -208,7 +209,8 @@ fn difficulty() -> Vec<Setting> {
             .opt("double", "Double", "Everything that hurts Link, enemy hits, grabs and falls, does twice the damage.")
             .opt("quadruple", "Quadruple", "Everything that hurts Link does four times the damage.")
             .opt("one_hit", "One hit kills", "Any hit takes all of Link's hearts. A bottled fairy still revives him.")
-            .tip("How much damage Link takes from enemy hits, boss attacks, grabs, projectiles and falls. Double and Quadruple multiply it. One hit kills takes every heart at once, and a bottled fairy still revives you. Falling into a pit or lava still costs one heart. Stacks with Enemy damage."),
+            .opt("god", "God mode", "Damage values are set to zero and hits play no stagger.")
+            .tip("How much damage Link takes from enemy hits, boss attacks, grabs, projectiles and falls. Double and Quadruple multiply it. One hit kills takes every heart at once, and a bottled fairy still revives you. God mode sets those damage values to zero and plays no stagger on a hit. Falling into a pit or lava, drowning and scripted hazards may still cost hearts. Stacks with Enemy damage."),
         Setting::number(d::SPEED_NUM, d::SPEED, "difficulty", "Enemy speed", d::NORMAL, d::SPEED_RANGE.0, d::SPEED_RANGE.1)
             .multiplier(d::SPEED_STEP, d::NORMAL)
             .tip("How fast enemies move and attack, from 0.75x to 2x. Experimental: most enemies ignore it so far, and only Lizalfos clearly speed up."),

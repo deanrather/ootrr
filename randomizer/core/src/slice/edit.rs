@@ -151,10 +151,12 @@ pub fn build_for(seed: &SeedFile, romfs: &P, load: &P, mod_name: &str, host: Hos
 pub fn build_for_with(seed: &SeedFile, romfs: &P, load: &P, mod_name: &str, host: Host, hook: Option<&mut Hook>) -> Res<Built> {
     // The race hash is the checksum of the seed as it was generated, before the build's own passes.
     let race: Option<SeedFile> = crate::race::is_race(seed).then(|| seed.clone());
-    let (seed, cold): (SeedFile, Vec<crate::frost::Trap>) = crate::frost::prepare(seed)?;
+    let (seed, cold): (SeedFile, Vec<crate::frost::Trap>) = crate::frost::prepare(&crate::giver_test::counted(seed))?;
     let b: Built = crate::slice::seed_packs::build_hooked(&seed, romfs, load, mod_name, host, hook)?;
     let b: Built = crate::shelf::seed::after(&seed, romfs, load, mod_name, host, b)?;
     let b: Built = crate::frost::after(&cold, &seed.seed, romfs, load, mod_name, host, b)?;
+    let b: Built = crate::giver_test::story::after(&seed, romfs, load, mod_name, host, b)?;
+    let b: Built = crate::giver_test::scrub::after(&seed, romfs, load, mod_name, host, b)?;
     let on: bool = crate::slice::support::plan(&seed.settings()?.settings)?.full_wallet;
     let mut b: Built = crate::full_wallet::after(on, romfs, load, mod_name, host, b)?;
     if let Some(full) = &race {
@@ -652,6 +654,11 @@ pub fn build_data(d: Data, seed: &SeedFile, romfs: &P, load: &P, mod_name: &str,
         // Zelda meeting skipped none of them is in the game).
         crate::open_world::trade_shuffle::stage_kid(&mut rf, &mut late, &work)?;
     }
+    if seed.no_knockback || p.difficulty.hurt == crate::difficulty::hurt::Hurt::God {
+        for pack in crate::no_knockback::PACKS {
+            crate::story_skip::stage_late_file(&mut rf, &mut late, &work, pack, crate::no_knockback::patch_pack)?;
+        }
+    }
     let mut debug_missed: Vec<String> = Vec::new();
     let mut paths: BS<&str> = BS::new();
     if let Some(o) = late.iter().find(|o| !paths.insert(o.path.as_str())) {
@@ -803,6 +810,9 @@ pub fn build_data(d: Data, seed: &SeedFile, romfs: &P, load: &P, mod_name: &str,
     };
     let mut notes: Vec<String> = p.notes.clone();
     notes.extend(difficulty_notes);
+    if seed.no_knockback {
+        notes.push(crate::no_knockback::NOTE.to_string());
+    }
     if !debug_missed.is_empty() {
         notes.push(format!("Debug location names could not hook: {}", debug_missed.join(", ")));
     }

@@ -33,6 +33,7 @@ pub struct GenOpts {
     pub live: Option<Arc<Live>>,
     pub switch: u32,
     pub extras: bool,
+    pub giver: Option<String>,
     /// A race seed (crate::race): rolls with its own seed text, makes no spoiler log and leaves
     /// where items went out of the report.
     pub race: bool,
@@ -40,7 +41,7 @@ pub struct GenOpts {
 
 impl Default for GenOpts {
     fn default() -> GenOpts {
-        GenOpts { spoiler: false, tries: TRIES, plando: Vec::new(), limit: None, live: None, switch: SWITCH, extras: false, race: false }
+        GenOpts { spoiler: false, tries: TRIES, plando: Vec::new(), limit: None, live: None, switch: SWITCH, extras: false, giver: None, race: false }
     }
 }
 
@@ -329,7 +330,10 @@ pub fn generate_data(d: &Data, s: &Settings, seed: &str, o: &GenOpts) -> Res<Gen
         seed
     };
     let watch: Watch = Watch::new(o.limit, o.live.clone());
-    let Prep { p, mut lay, owned, w, vanilla, pk, gates, base } = prepare(d, s, seed, &o.plando)?;
+    let gt: Option<crate::giver_test::Mode> = o.giver.as_ref().map(|a| crate::giver_test::Mode::new(d, s, a)).transpose()?;
+    let s: &Settings = gt.as_ref().map(|m| &m.settings).unwrap_or(s);
+    let forced: Vec<Entry> = o.plando.iter().cloned().chain(gt.iter().flat_map(|m| m.entries())).collect();
+    let Prep { p, mut lay, owned, w, vanilla, pk, gates, mut base } = prepare(d, s, seed, &forced)?;
     let d: &Data = owned.as_ref().unwrap_or(d);
     let seen: Vec<Cell<u8>> = vec![Cell::new(0); w.items.len() * w.locs.len()];
     let ok = |it: ItemId, l: LocId| {
@@ -374,6 +378,18 @@ pub fn generate_data(d: &Data, s: &Settings, seed: &str, o: &GenOpts) -> Res<Gen
     }
     let hand: usize = plan.len();
     let mut plan: Vec<(LocId, ItemId)> = plan;
+    let mut gt_notes: Vec<String> = gt.iter().flat_map(|m| m.notes.clone()).collect();
+    let mut mark: Option<crate::giver_test::Mark> = None;
+    if let Some(m) = &gt {
+        let (kept, n): (Vec<(LocId, ItemId)>, Vec<String>) = m.keep(d, &w, &pk.free, &ok)?;
+        if let Some((l, _)) = kept.iter().find(|(l, _)| plan.iter().any(|(x, _)| x == l)) {
+            return Err(E::Msg(format!("plando: {} is given more than once", w.locs[*l].name)));
+        }
+        let copies: BM<String, i64> = crate::giver_test::fill_pool(d, &w, &pk.free, &kept, &mut base)?;
+        gt_notes.extend(n);
+        plan.extend(kept);
+        mark = Some(crate::giver_test::Mark { item: m.item.clone(), copies });
+    }
     let lacs: Vec<(LocId, ItemId)> = crate::lacs_key::forced(&w, &p, &pk.free, &base, &plan)?;
     plan.extend(lacs);
     let mut rng: Rng = Rng::from_text(seed);
@@ -409,7 +425,7 @@ pub fn generate_data(d: &Data, s: &Settings, seed: &str, o: &GenOpts) -> Res<Gen
                 }
                 Err(e) => return Err(crate::slice::advice::explain(&p, e)),
             };
-            if crate::slice::tier_order::fits(d, &w, &g, &pk.free)? {
+            if gt.is_some() || crate::slice::tier_order::fits(d, &w, &g, &pk.free)? {
                 return Ok(g);
             }
             if fix {
@@ -520,6 +536,10 @@ pub fn generate_data(d: &Data, s: &Settings, seed: &str, o: &GenOpts) -> Res<Gen
     if hand > 0 {
         let _ = writeln!(rep, "Plandomizer: {hand} placements were fixed by hand.");
     }
+    for n in &gt_notes {
+        let _ = writeln!(rep, "{n}");
+    }
+    seed_file.giver_test = mark;
     if let Some(l) = gates.as_ref().filter(|_| !o.race) {
         rep.push_str(&crate::entr::text::report(l));
     }

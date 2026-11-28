@@ -667,6 +667,8 @@ mod tests {
             tiers: BTreeMap::new(),
             drops: BTreeMap::new(),
             kits: BTreeMap::new(),
+            no_knockback: false,
+            giver_test: None,
             cold: Default::default(),
         }
     }

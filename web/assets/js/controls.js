@@ -32,6 +32,7 @@ export function marked(text, terms) {
 }
 
 function shown(s, v) {
+  if (s.min_label && Number(v) === s.min) return s.min_label;
   return s.times ? `${Number(v) / s.times}x` : String(v);
 }
 

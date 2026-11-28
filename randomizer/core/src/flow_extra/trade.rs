@@ -409,7 +409,10 @@ mod tests {
         let Some(r) = root() else { return };
         let mut rf: Romfs = Romfs::open(&r).unwrap();
         let fl: HM<String, Flow> = all(&mut rf, NEW);
-        assert!(!fl.contains_key("Goto_HyruleCastle"));
+        let was: Flow = crate::bfevfl::Bf::parse(&rf.read_zs("Event/EventFlow/Goto_HyruleCastle.bfevfl.zs").unwrap()).unwrap().flows.remove(0);
+        let now: &Flow = &fl["Goto_HyruleCastle"];
+        let diff: Vec<usize> = (0..was.events.len()).filter(|i| was.events[*i] != now.events[*i]).collect();
+        assert_eq!(diff, vec![149], "only Malon's egg speech is cut");
         let mut s: Sim = sim(&r, fl).unwrap();
         let mut st: State = State::new();
         set(&mut s, &mut st, "Step_Goto_HyruleCastle", "Step02_01");

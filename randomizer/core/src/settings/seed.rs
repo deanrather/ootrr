@@ -27,6 +27,8 @@ pub struct SeedFile {
     pub tiers: Map<String, String>,
     pub drops: Map<String, String>,
     pub kits: Map<String, String>,
+    pub no_knockback: bool,
+    pub giver_test: Option<crate::giver_test::Mark>,
     /// Build-time only, never written: the locations crate::frost::prepare turned from Ice Traps
     /// into the items they look like. Logic that judges the seed (crate::slice::tier_order) reads
     /// them as junk, as the generator did.
@@ -87,6 +89,8 @@ impl SeedFile {
             tiers: Map::new(),
             drops: Map::new(),
             kits: Map::new(),
+            no_knockback: false,
+            giver_test: None,
             cold: Default::default(),
         };
         f.check_fields()?;
@@ -148,6 +152,15 @@ impl SeedFile {
         for (k, v) in &self.entrances {
             t.push_str(&format!("E\t{k}\t{v}\n"));
         }
+        if self.no_knockback {
+            t.push_str("no_knockback\ttrue\n");
+        }
+        if let Some(g) = &self.giver_test {
+            t.push_str(&format!("G\t{}\n", g.item));
+            for (k, v) in &g.copies {
+                t.push_str(&format!("G\t{k}\t{v}\n"));
+            }
+        }
         sha256_hex(t.as_bytes())
     }
 
@@ -180,7 +193,33 @@ impl SeedFile {
             let e: Vec<(String, Json)> = self.entrances.iter().map(|(k, v)| (k.clone(), Json::Str(v.clone()))).collect();
             j = j.with("entrances", Json::Obj(e));
         }
+        if self.no_knockback {
+            j = j.with("no_knockback", Json::Bool(true));
+        }
+        if let Some(g) = &self.giver_test {
+            let c: Vec<(String, Json)> = g.copies.iter().map(|(k, v)| (k.clone(), Json::Int(*v))).collect();
+            j = j.with("giver_test", Json::obj().with("item", g.item.as_str().into()).with("copies", Json::Obj(c)));
+        }
         j.with("checksum", self.checksum().into())
+    }
+
+    fn giver_from(j: &Json) -> Res<Option<crate::giver_test::Mark>> {
+        let Some(g) = j.get("giver_test") else {
+            return Ok(None);
+        };
+        let item: &str = g.get("item").and_then(|x| x.as_str()).filter(|s| ident_ok(s)).ok_or_else(|| bad("field giver_test must name its item"))?;
+        let mut copies: Map<String, i64> = Map::new();
+        if let Some(c) = g.get("copies") {
+            for (k, v) in c.as_obj().ok_or_else(|| bad("field giver_test.copies must be an object"))? {
+                let n: i64 = v.as_i64().filter(|_| ident_ok(k)).ok_or_else(|| bad(&format!("giver_test copy count {k:?} must be an integer")))?;
+                copies.insert(k.clone(), n);
+            }
+        }
+        let placed = |k: &str| k == item || crate::giver_test::SHELVES.iter().any(|s| s.1 == k);
+        if copies.values().sum::<i64>() != 0 || copies.iter().any(|(k, v)| *v > 0 && !placed(k)) {
+            return Err(bad("giver_test.copies must only trade junk for copies of its item"));
+        }
+        Ok(Some(crate::giver_test::Mark { item: item.to_string(), copies }))
     }
 
     fn shops_from(j: &Json) -> Res<Map<String, ShopEntry>> {
@@ -273,6 +312,12 @@ impl SeedFile {
             tiers: Map::new(),
             drops: Map::new(),
             kits: Map::new(),
+            no_knockback: match j.get("no_knockback") {
+                None => false,
+                Some(Json::Bool(true)) => true,
+                Some(_) => return Err(bad("field no_knockback must be true or absent")),
+            },
+            giver_test: SeedFile::giver_from(j)?,
             cold: Default::default(),
         };
         f.check_fields()?;
@@ -414,6 +459,24 @@ mod tests {
             let e: String = SeedFile::parse(&edit(&t, find, with)).unwrap_err().to_string();
             assert!(e.contains("checksum"), "{find}: {e}");
         }
+    }
+
+    #[test]
+    fn no_knockback_is_absent_without_the_flag_and_round_trips_with_it() {
+        let plain: SeedFile = sample();
+        assert!(!plain.no_knockback);
+        assert!(!plain.to_text().contains("no_knockback"));
+        let mut f: SeedFile = plain.clone();
+        f.no_knockback = true;
+        let t: String = f.to_text();
+        assert!(t.contains("\"no_knockback\": true"));
+        let back: SeedFile = SeedFile::parse(&t).unwrap();
+        assert_eq!(back, f);
+        assert_ne!(f.checksum(), plain.checksum());
+        let e: String = SeedFile::parse(&edit(&t, "  \"no_knockback\": true,\n", "")).unwrap_err().to_string();
+        assert!(e.contains("checksum"), "{e}");
+        assert!(SeedFile::parse(&edit(&t, "\"no_knockback\": true", "\"no_knockback\": false")).is_err());
+        assert!(SeedFile::parse(&edit(&t, "\"no_knockback\": true", "\"no_knockback\": \"still\"")).is_err());
     }
 
     #[test]

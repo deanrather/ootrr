@@ -11,6 +11,7 @@ pub const PACE_DIR: &str = "GameBalance/AttackInterval/";
 pub const PACE_EXT: &str = ".game__gamebalance__AttackInterval.bgyml";
 
 pub const SCRIPTED_LIFE: i32 = 100;
+pub const INSTA_KILL: i64 = 25;
 pub const EXTRA_ATTACKERS: [&str; 3] = ["Keese", "BeamosBeam", "ScrubDeku_DekuNut"];
 
 pub fn stem<'a>(name: &'a str, dir: &str, ext: &str) -> Option<&'a str> {
@@ -31,6 +32,9 @@ pub fn is_enemy_attack(stem: &str) -> bool {
 pub fn scaled_life(v: i32, pct: i64) -> i32 {
     if v <= 0 || v >= SCRIPTED_LIFE {
         return v;
+    }
+    if pct == INSTA_KILL {
+        return 1;
     }
     let n: i64 = (v as i64 * pct + 50) / 100;
     n.clamp(1, (SCRIPTED_LIFE - 1) as i64) as i32
@@ -158,6 +162,15 @@ mod tests {
         assert_eq!(scaled_life(70, 500), 99);
         assert_eq!(scaled_life(100, 500), 100);
         assert_eq!(scaled_life(0, 500), 0);
+    }
+
+    #[test]
+    fn insta_kill_gives_one_health_and_keeps_scripted_and_empty_values() {
+        assert_eq!(scaled_life(70, INSTA_KILL), 1);
+        assert_eq!(scaled_life(18, INSTA_KILL), 1);
+        assert_eq!(scaled_life(1, INSTA_KILL), 1);
+        assert_eq!(scaled_life(100, INSTA_KILL), 100);
+        assert_eq!(scaled_life(0, INSTA_KILL), 0);
     }
 
     #[test]

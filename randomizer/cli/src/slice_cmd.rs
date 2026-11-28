@@ -7,6 +7,7 @@ use ootrr_core::cosmetic::{self, Cosmetics, Music};
 use ootrr_core::sfx::Sfx;
 use ootrr_core::error::{Error, Res};
 use ootrr_core::modpack::Host;
+use ootrr_core::no_knockback;
 use ootrr_core::json::{self, Json};
 use ootrr_core::settings::presets::{self, Preset};
 use ootrr_core::settings::seed::SeedFile;
@@ -49,6 +50,7 @@ pub fn generate(a: &[String]) -> Res<()> {
     let out: &str = arg(a, 2, "missing out file")?;
     let mut o: GenOpts = GenOpts { extras: true, ..GenOpts::default() };
     let mut spoiler: Option<&str> = None;
+    let mut knock: bool = false;
     let mut race: bool = false;
     let mut i: usize = 3;
     while i < a.len() {
@@ -70,7 +72,14 @@ pub fn generate(a: &[String]) -> Res<()> {
                     o.plando.push(plando::parse(line)?);
                 }
             }
-            other => return Err(Error::Msg(format!("unknown option {other}"))),
+            x if x == ootrr_core::giver_test::FLAG => return Err(ootrr_core::giver_test::bare_flag()),
+            x if x.starts_with(&format!("{}=", ootrr_core::giver_test::FLAG)) => o.giver = Some(x[ootrr_core::giver_test::FLAG.len() + 1..].to_string()),
+            other => {
+                if !no_knockback::from_flag(other)? {
+                    return Err(Error::Msg(format!("unknown option {other}")));
+                }
+                knock = true;
+            }
         }
         i += 1;
     }
@@ -96,7 +105,8 @@ pub fn generate(a: &[String]) -> Res<()> {
     }
     let r: Res<Generated> = slice::generate_with(&s.settings, seed, &o);
     line.stop();
-    let g: Generated = r?;
+    let mut g: Generated = r?;
+    g.seed_file.no_knockback = knock;
     g.seed_file.write(P::new(out))?;
     if let (Some(p), Some(t)) = (spoiler, &g.spoiler) {
         fs::write(p, t)?;

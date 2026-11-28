@@ -146,6 +146,7 @@ pub struct Setting {
     pub max_by: Option<String>,
     pub step: i64,
     pub times: i64,
+    pub min_label: Option<String>,
     pub max_items: usize,
     pub deps: Vec<Dep>,
     pub disabled: Option<Value>,
@@ -170,6 +171,7 @@ impl Setting {
             max_by: None,
             step: 1,
             times: 0,
+            min_label: None,
             max_items: 0,
             deps: Vec::new(),
             disabled: None,
@@ -233,6 +235,11 @@ impl Setting {
     pub fn multiplier(mut self, step: i64, times: i64) -> Setting {
         self.step = step;
         self.times = times;
+        self
+    }
+
+    pub fn min_label(mut self, label: &str) -> Setting {
+        self.min_label = Some(label.to_string());
         self
     }
 

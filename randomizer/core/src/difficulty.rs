@@ -121,6 +121,7 @@ pub const SIZES_HEALTH_NUM: u16 = 146;
 
 pub const NORMAL: i64 = 100;
 pub const STAT_RANGE: (i64, i64) = (50, 500);
+pub const HEALTH_RANGE: (i64, i64) = (stats::INSTA_KILL, 500);
 pub const SPEED_RANGE: (i64, i64) = (75, 200);
 pub const STAT_STEP: i64 = 25;
 pub const SPEED_STEP: i64 = 5;
@@ -205,7 +206,9 @@ impl Opts {
 
     pub fn notes(&self) -> Vec<String> {
         let mut out: Vec<String> = Vec::new();
-        if self.health != NORMAL {
+        if self.health == stats::INSTA_KILL {
+            out.push("Every enemy and boss is set to 1 health. Enemies that always go down to one scripted hit, like Deku Scrubs, are not changed.".to_string());
+        } else if self.health != NORMAL {
             out.push(format!("Enemies and bosses have {} times their usual health, up to 99. Enemies that always go down to one scripted hit, like Deku Scrubs, are not changed.", times(self.health)));
         }
         if self.damage != NORMAL {
@@ -338,7 +341,7 @@ fn chosen<'a>(r: Res<&'a str>, bad: &mut Vec<String>) -> Option<&'a str> {
 pub fn read(s: &Settings, bad: &mut Vec<String>) -> Opts {
     let mut num = |id: &str, r: (i64, i64)| -> i64 {
         match s.int(id) {
-            Ok(v) if (r.0..=r.1).contains(&v) => v,
+            Ok(v) if (r.0..=r.1).contains(&v) && !(id == HEALTH && v > stats::INSTA_KILL && v < STAT_RANGE.0) => v,
             Ok(v) => {
                 bad.push(format!("{id} is {v}, which is outside {} to {}", r.0, r.1));
                 NORMAL
@@ -349,7 +352,7 @@ pub fn read(s: &Settings, bad: &mut Vec<String>) -> Opts {
             }
         }
     };
-    let health: i64 = num(HEALTH, STAT_RANGE);
+    let health: i64 = num(HEALTH, HEALTH_RANGE);
     let damage: i64 = num(DAMAGE, STAT_RANGE);
     let speed: i64 = num(SPEED, SPEED_RANGE);
     let extra: i64 = num(MORE, MORE_RANGE) - NORMAL;
@@ -729,7 +732,7 @@ mod tests {
         assert!(o.notes()[0].contains("2.5 times"));
         assert!(o.notes()[1].contains("0.5 times"));
         assert!(o.notes()[2].contains("2 times"));
-        assert!(s.set(HEALTH, Value::Int(49)).is_err() || s.clone().finish().is_err());
+        assert!(s.set(HEALTH, Value::Int(24)).is_err() || s.clone().finish().is_err());
         let mut t: Settings = Settings::default();
         assert!(t.set(SPEED, Value::Int(74)).is_err() || t.finish().is_err());
     }
@@ -825,11 +828,73 @@ mod tests {
     }
 
     #[test]
+    fn insta_kill_is_read_noted_and_survives_the_settings_string() {
+        let mut s: Settings = Settings::default();
+        s.set(HEALTH, Value::Int(stats::INSTA_KILL)).unwrap();
+        let back: Settings = Settings::decode(&s.encode().unwrap()).unwrap().settings;
+        let mut bad: Vec<String> = Vec::new();
+        let o: Opts = read(&back, &mut bad);
+        assert!(bad.is_empty());
+        assert_eq!(o.health, stats::INSTA_KILL);
+        assert!(o.any() && o.packs() && o.notes().len() == 1 && o.notes()[0].contains("1 health"));
+        let mut t: Settings = Settings::default();
+        assert!(t.set(HEALTH, Value::Int(24)).is_err() || t.finish().is_err());
+        let mut u: Settings = Settings::default();
+        u.set(HEALTH, Value::Int(40)).unwrap();
+        let mut bad: Vec<String> = Vec::new();
+        read(&u, &mut bad);
+        assert_eq!(bad.len(), 1);
+    }
+
+    #[test]
+    fn insta_kill_leaves_every_enemy_in_the_game_with_one_health_except_scripted_and_empty_values() {
+        let Some(root) = dump() else {
+            eprintln!("skipped: set OOTRR_ROMFS");
+            return;
+        };
+        let mut rf: Romfs = Romfs::open(&root).unwrap();
+        let o: Opts = Opts { health: stats::INSTA_KILL, ..Opts::default() };
+        let outs: Vec<Out> = stage(&mut rf, &o, &none, "seed").unwrap();
+        let mut ones: usize = 0;
+        let mut kept: Vec<String> = Vec::new();
+        for x in outs.iter().filter(|x| x.path.ends_with(".pack.zs")) {
+            let now: Vec<Entry> = sarc::parse(&rf.zs.decompress(&x.z).unwrap()).unwrap();
+            let was: Vec<Entry> = sarc::parse(&rf.read_zs(&x.path).unwrap()).unwrap();
+            for e in now.iter() {
+                let Some(s) = stats::stem(&e.name, stats::LIFE_DIR, stats::LIFE_EXT) else {
+                    continue;
+                };
+                if !stats::is_enemy(s) {
+                    continue;
+                }
+                let Some(Node::I32(a)) = max_life(&was, &e.name) else {
+                    continue;
+                };
+                let Some(Node::I32(b)) = max_life(&now, &e.name) else {
+                    continue;
+                };
+                if a > 0 && a < stats::SCRIPTED_LIFE {
+                    assert_eq!(b, 1, "{} in {}", e.name, x.path);
+                    ones += 1;
+                    if s.contains("Boss") {
+                        kept.push(format!("{s}:{a}->1"));
+                    }
+                } else {
+                    assert_eq!(a, b);
+                    kept.push(format!("{s}={a}"));
+                }
+            }
+        }
+        eprintln!("insta-kill: {ones} life files set to 1, kept: {kept:?}");
+        assert!(ones > 80);
+    }
+
+    #[test]
     fn the_damage_taken_setting_is_read_and_survives_the_settings_string() {
         let mut s: Settings = Settings::default();
         s.set(HURT, Value::s("normal")).unwrap();
         assert_eq!(s.encode().unwrap(), Settings::default().encode().unwrap());
-        for (id, h) in [("double", hurt::Hurt::Double), ("quadruple", hurt::Hurt::Quadruple), ("one_hit", hurt::Hurt::OneHit)] {
+        for (id, h) in [("double", hurt::Hurt::Double), ("quadruple", hurt::Hurt::Quadruple), ("one_hit", hurt::Hurt::OneHit), ("god", hurt::Hurt::God)] {
             s.set(HURT, Value::s(id)).unwrap();
             let back: Settings = Settings::decode(&s.encode().unwrap()).unwrap().settings;
             let mut bad: Vec<String> = Vec::new();
@@ -881,6 +946,49 @@ mod tests {
         }
         assert_eq!(grabber("Pack/Actor/Enemy_Wallmaster.pack.zs", "Enemy_Wallmaster"), None);
         assert_eq!(o.notes(), vec![hurt::note(hurt::Hurt::OneHit)]);
+    }
+
+    #[test]
+    fn god_mode_zeroes_the_players_damage_file_in_the_game() {
+        let Some(root) = dump() else {
+            eprintln!("skipped: set OOTRR_ROMFS");
+            return;
+        };
+        let mut rf: Romfs = Romfs::open(&root).unwrap();
+        let o: Opts = Opts { hurt: hurt::Hurt::God, ..Opts::default() };
+        let outs: Vec<Out> = stage(&mut rf, &o, &none, "seed").unwrap();
+        for p in ["Pack/Actor/Player_Base.pack.zs", "Pack/Actor/Player_Child.pack.zs", "Pack/Actor/Player_Adult.pack.zs"] {
+            let out: &Out = outs.iter().find(|x| x.path == p).unwrap_or_else(|| panic!("{p} was not staged"));
+            let es: Vec<Entry> = sarc::parse(&rf.zs.decompress(&out.z).unwrap()).unwrap();
+            let old: Vec<Entry> = sarc::parse(&rf.read_zs(p).unwrap()).unwrap();
+            let raw: &[u8] = &sarc::get(&es, hurt::FILE).unwrap().data;
+            let was: &[u8] = &sarc::get(&old, hurt::FILE).unwrap().data;
+            let d: lottery::Doc = lottery::Doc::open(raw).unwrap();
+            let w: lottery::Doc = lottery::Doc::open(was).unwrap();
+            let top: Vec<(String, lottery::Slot)> = d.map(d.root().unwrap()).unwrap();
+            let wtop: Vec<(String, lottery::Slot)> = w.map(w.root().unwrap()).unwrap();
+            let ext: Vec<(String, lottery::Slot)> = d.map(lottery::find(&top, hurt::EXTERNAL).unwrap()).unwrap();
+            let rates: Vec<(u32, lottery::Slot)> = d.hash(lottery::find(&ext, hurt::RATES).unwrap()).unwrap();
+            assert!(rates.iter().all(|r| f32::from_bits(r.1.val) == 0.0));
+            let int: Vec<(String, lottery::Slot)> = d.map(lottery::find(&top, hurt::INTERNAL).unwrap()).unwrap();
+            let wint: Vec<(String, lottery::Slot)> = w.map(lottery::find(&wtop, hurt::INTERNAL).unwrap()).unwrap();
+            let mut left: Vec<String> = Vec::new();
+            for (g, s) in int.iter() {
+                let ws: Vec<(String, lottery::Slot)> = w.map(lottery::find(&wint, g).unwrap()).unwrap();
+                for (k, v) in d.map(*s).unwrap() {
+                    assert!(lottery::find(&ws, &k).is_some());
+                    if hurt::FLAT.contains(&k.as_str()) || k == hurt::FALL_MIN || hurt::FALL_RATES.contains(&k.as_str()) {
+                        assert_eq!(v.val, 0, "{g}.{k}");
+                    } else if v.val != 0 {
+                        left.push(format!("{g}.{k}={:#x}", v.val));
+                    }
+                }
+            }
+            if p.ends_with("Base.pack.zs") {
+                eprintln!("god mode: internal values left as they were: {left:?}");
+            }
+        }
+        assert_eq!(o.notes(), vec![hurt::note(hurt::Hurt::God)]);
     }
 
     #[test]

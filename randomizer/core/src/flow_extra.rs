@@ -1,6 +1,7 @@
 pub mod analyzed;
 mod apply;
 mod clone;
+mod cuts;
 pub mod cows;
 mod data;
 pub mod entries;
