@@ -69,11 +69,7 @@
             "Kak Impas Ledge": "is_adult and can_use(Hookshot)",
             "Kak Impas Rooftop": "
                 can_use(Hookshot) or (logic_kakariko_rooftop_gs and can_use(Hover_Boots))",
-            "Kak Odd Medicine Rooftop": "
-                can_use(Hookshot) or
-                (logic_man_on_roof and
-                    (is_adult or (at_day and not gold_skulls_ignore_daytime) or Slingshot or has_bombchus or
-                        (logic_kakariko_tower_gs and (Sticks or Kokiri_Sword))))",
+            "Kak Odd Medicine Rooftop": "is_child or (is_adult and can_use(Longshot))",
             "Kak Backyard": "is_adult or at_day",
             "Graveyard": "True",
             # The seemingly redundant `open_kakariko == 'open'` check is to allow supplementary searches, which can't collect events, to use this path.
