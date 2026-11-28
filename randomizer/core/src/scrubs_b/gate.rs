@@ -136,13 +136,19 @@ mod tests {
         for n in 0..3 {
             let g: Generated = generate_data(&d, &with(true, Some(true)), &format!("scrubs b {n}"), &GenOpts::default()).unwrap();
             assert_eq!(g.seed_file.placements.len(), a.seed_file.placements.len() + NEW.len());
-            // An upgrade at a menu scrub sells the tier the reach order fixes for the sale.
-            let fixed: crate::slice::tier_order::Verdict = crate::slice::tier_order::fixed_actors(&d, &g.seed_file).unwrap();
+            // An upgrade at a menu scrub sells the next tier at run time when the family's chain
+            // is in use (scrubs_b::flow::add), or else the tier the reach order fixes for the sale.
+            use crate::slice::tier_order::{fixed_actors, give_of, Give, Verdict};
+            let fixed: Verdict = fixed_actors(&d, &g.seed_file).unwrap();
             for x in NEW {
                 let it: &str = &g.seed_file.placements[x];
                 assert!(fits(&d, x, d.item(it).unwrap()), "{x} holds {it}");
-                assert!(d.family(it).is_none() || fixed.assign.contains_key(x), "{x} holds {it}");
+                if let Some(f) = d.family(it) {
+                    let chain: bool = give_of(&d, &g.seed_file.placements, x, it, f) == Give::Flow;
+                    assert!(chain != fixed.assign.contains_key(x), "{x} holds {it}");
+                }
             }
+            crate::scrubs_b::jobs(&d, &g.seed_file).unwrap();
             assert!(g.report.contains(NOTE));
         }
     }
