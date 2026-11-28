@@ -82,6 +82,24 @@ fn units(t: &Table) -> Vec<(String, Vec<&Slot>)> {
     out
 }
 
+/// The shelf groups whose goods trade places: each left side position on its own, and one group
+/// for the whole right side, so the right side shelves a deal leaves mix across all positions.
+const GROUPS: usize = 5;
+const RIGHT: usize = 4;
+
+/// Whether `s` stands on the right side of its shop, the four shelves deals take first.
+pub fn right_side(t: &Table, s: &Slot) -> bool {
+    t.shop(&s.shop).is_some_and(|sh| sh.deal_order.iter().take(4).any(|i| *i == s.slot))
+}
+
+fn group(t: &Table, s: &Slot) -> usize {
+    if right_side(t, s) {
+        RIGHT
+    } else {
+        s.slot.min(RIGHT - 1)
+    }
+}
+
 fn deal_slots(t: &Table, o: &Opts, room: Room, rng: &mut Rng, forced: &[String]) -> (BS<String>, usize) {
     let mut all: Vec<(usize, usize, String)> = Vec::new();
     for (si, sh) in t.shops.iter().enumerate().filter(|(_, s)| s.deals) {
@@ -173,8 +191,8 @@ pub fn make_with(o: &Opts, seed: &str, room: Room, forced: &[String]) -> Res<Lay
     let mut given: BM<String, Goods> = BM::new();
     let goods_of = |ss: &[&Slot]| Goods { item: ss[0].item.clone(), actor: ss[0].actor.clone(), price: ss[0].price };
     let mut at_pos: Vec<Vec<Goods>> = Vec::new();
-    for at in 0..8usize {
-        let mut goods: Vec<Goods> = open.iter().filter(|(_, ss)| ss[0].slot == at).map(|(_, ss)| goods_of(ss)).collect();
+    for at in 0..GROUPS {
+        let mut goods: Vec<Goods> = open.iter().filter(|(_, ss)| group(t, ss[0]) == at).map(|(_, ss)| goods_of(ss)).collect();
         rng.shuffle(&mut goods);
         at_pos.push(goods);
     }
@@ -184,14 +202,14 @@ pub fn make_with(o: &Opts, seed: &str, room: Room, forced: &[String]) -> Res<Lay
         if !needed(&g.item) || own_pool(&g.item).is_some() || at_pos.iter().flatten().any(|x| x.item == g.item) {
             continue;
         }
-        let at: usize = ss[0].slot;
-        let spot: Option<(usize, usize)> = std::iter::once(at).chain((0..8).filter(|p| *p != at)).find_map(|p| at_pos[p].iter().rposition(|x| !needed(&x.item)).map(|i| (p, i)));
+        let at: usize = group(t, ss[0]);
+        let spot: Option<(usize, usize)> = std::iter::once(at).chain((0..GROUPS).filter(|p| *p != at)).find_map(|p| at_pos[p].iter().rposition(|x| !needed(&x.item)).map(|i| (p, i)));
         if let Some((p, i)) = spot {
             at_pos[p][i] = g;
         }
     }
     for (at, mut goods) in at_pos.into_iter().enumerate() {
-        let here: Vec<&(String, Vec<&Slot>)> = open.iter().copied().filter(|(_, ss)| ss[0].slot == at).collect();
+        let here: Vec<&(String, Vec<&Slot>)> = open.iter().copied().filter(|(_, ss)| group(t, ss[0]) == at).collect();
         let mut keys: Vec<String> = here.iter().map(|(k, _)| k.clone()).collect();
         for (item, shop) in &t.pin {
             let Some(i) = goods.iter().position(|g| &g.item == item) else {
@@ -288,6 +306,27 @@ mod tests {
             (0..8).any(|i| l.get(&t.at("Market Potion Shop", i).unwrap().name).unwrap().item != l.get(&t.at("Kak Potion Shop", i).unwrap().name).unwrap().item)
         });
         assert!(differ, "the two Potion Shops stock their shelves apart");
+    }
+
+    #[test]
+    fn right_side_goods_mix_across_positions_and_the_left_side_keeps_them() {
+        let t: &Table = table().unwrap();
+        for l in [Level::Shuffle, Level::Deals(1), Level::Deals(2), Level::Deals(3)] {
+            let mut crossed: bool = false;
+            for n in 0..20 {
+                let lay: Layout = make(&opts(l), &format!("mix{n}"), Room::any(64)).unwrap();
+                for p in lay.places.iter().filter(|p| !p.deal) {
+                    let s: &Slot = t.slot(&p.loc).unwrap();
+                    let from: Vec<&Slot> = t.slots.iter().filter(|x| x.item == p.item).collect();
+                    if right_side(t, s) {
+                        crossed |= from.iter().all(|x| x.slot != s.slot);
+                    } else if l == Level::Shuffle {
+                        assert!(from.iter().any(|x| x.slot == s.slot && !right_side(t, x)), "{l:?}: {} sells {} from another position", p.loc, p.item);
+                    }
+                }
+            }
+            assert!(crossed, "{l:?}: right side goods never left their shelf position");
+        }
     }
 
     #[test]

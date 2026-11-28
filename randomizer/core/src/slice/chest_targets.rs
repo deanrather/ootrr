@@ -184,7 +184,12 @@ pub(crate) fn targets_with(d: &Data, seed: &SeedFile, roam: bool, fixed: &BM<Str
             if wrapped.contains_key(loc) {
                 continue;
             }
-            let actor: String = fixed.get(loc).or_else(|| given.get(loc)).cloned().ok_or_else(|| E::Msg(format!("{loc} was given no item actor")))?;
+            // A priced sale's upgrade is the tier the reach order fixed (tier_order); a hold up
+            // cannot show an Ocarina tier, so it sells its pickup actor (crate::ocarina_hold).
+            let actor: String = match fixed.get(loc) {
+                Some(a) => crate::ocarina_hold::shown_at(d, loc, a).unwrap_or_else(|| a.clone()),
+                None => given.get(loc).cloned().ok_or_else(|| E::Msg(format!("{loc} was given no item actor")))?,
+            };
             if Some(actor.as_str()) == d.flow.by_name(loc).and_then(|l| l.item.as_deref()) {
                 same += 1;
             } else {

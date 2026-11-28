@@ -127,3 +127,9 @@ export async function get_blob(path) {
   if (r.status < 200 || r.status > 299) throw new ApiError(r.status, `The generator answered ${r.status}.`);
   return new Blob([r.body], { type: r.ctype });
 }
+
+export async function post_blob(path, body) {
+  const r = await raw("POST", path, body);
+  if (r.status < 200 || r.status > 299) throw new ApiError(r.status, `The generator answered ${r.status}.`);
+  return new Blob([r.body], { type: r.ctype });
+}

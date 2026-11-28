@@ -264,7 +264,30 @@ fn text<'a>(n: &'a Node, k: &str) -> &'a str {
     n.get(k).and_then(|v| v.as_str()).unwrap_or("")
 }
 
+/// The trap chests (crate::slice::trap_chests) that hold a Silver Rupee. A Silver Rupee skips the
+/// chest targets, so [`mark`] opens these chests itself and the build gives them a saved flag.
+pub fn trap_hashes(d: &Data, seed: &SeedFile) -> Vec<u64> {
+    seed.placements
+        .iter()
+        .filter(|(_, i)| is_item(i))
+        .filter_map(|(l, _)| d.cat.by_name(l))
+        .filter(|c| c.item == crate::slice::trap_chests::ACTOR)
+        .flat_map(|c| c.refs.iter().map(|r| r.hash))
+        .collect()
+}
+
 pub fn mark(y: &mut Byml, g: &BM<u64, &'static str>, used: &mut BS<&'static str>, hit: &mut BS<u64>) -> Res<usize> {
+    // A trap chest has no drop field and its trap logic would still fire: it becomes a plain
+    // chest first, as for any other item placed there (slice::banc_edit).
+    let traps: Vec<u64> = y
+        .root
+        .get("Actors")
+        .and_then(|a| a.as_arr())
+        .map(|l| l.iter().filter(|a| text(a, "Gyaml") == crate::slice::trap_chests::ACTOR).filter_map(hash_of).filter(|h| g.contains_key(h)).collect())
+        .unwrap_or_default();
+    for h in traps {
+        crate::slice::trap_chests::open(y, h, CONTENT)?;
+    }
     let Some(list) = y.root.get_mut("Actors").and_then(|a| a.as_arr_mut()) else {
         return Ok(0);
     };
@@ -809,6 +832,37 @@ mod tests {
             let logic: String = r.item.replace("Silver Rupee (", "Silver_Rupee_").replace(')', "").replace(' ', "_");
             assert!(world.contains(&format!("({logic}, 5)")), "{logic}");
         }
+    }
+
+    #[test]
+    fn a_silver_rupee_in_a_trap_chest_opens_the_trap_chest_and_routes_it() {
+        let Some(r) = root() else { return };
+        let d: Data = Data::load().unwrap();
+        let mut rf: Romfs = Romfs::open(&r).unwrap();
+        for name in crate::slice::trap_chests::NAMES {
+            let c = d.cat.by_name(name).unwrap();
+            assert_eq!(c.item, crate::slice::trap_chests::ACTOR, "{name}");
+            for x in &c.refs {
+                let g: BM<u64, &'static str> = BM::from([(x.hash, "Light")]);
+                for f in &x.files {
+                    let mut y: Byml = Byml::parse(&rf.read_zs(f).unwrap()).unwrap();
+                    let (mut used, mut hit): (BS<&'static str>, BS<u64>) = (BS::new(), BS::new());
+                    assert_eq!(mark(&mut y, &g, &mut used, &mut hit).unwrap(), 1, "{name} in {f}");
+                    all_found(&g, &hit).unwrap();
+                    let y: Byml = Byml::parse(&y.write().unwrap()).unwrap();
+                    let a: &Node = y.root.get("Actors").unwrap().as_arr().unwrap().iter().find(|a| hash_of(a) == Some(x.hash)).unwrap();
+                    assert_eq!(text(a, "Gyaml"), crate::slice::trap_chests::CHEST, "{name}");
+                    let dy: &Node = a.get("Dynamic").unwrap();
+                    assert_eq!(text(dy, DROP), CONTENT, "{name}");
+                    assert_eq!(text(dy, "GetEventName"), event_name("Light", Size::of_gyaml(crate::slice::trap_chests::CHEST)), "{name}");
+                }
+            }
+        }
+        // The build gives such a chest a saved flag (trap_chests::stage) through trap_hashes.
+        let mut s: crate::settings::seed::SeedFile = generate_data(&d, &with(true), "silver trap", &GenOpts::default()).unwrap().seed_file;
+        let light: &str = crate::slice::trap_chests::NAMES[3];
+        s.placements.insert(light.to_string(), ROOMS[1].item.to_string());
+        assert!(trap_hashes(&d, &s).contains(&d.cat.by_name(light).unwrap().refs[0].hash));
     }
 
     #[test]

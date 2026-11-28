@@ -223,6 +223,75 @@ pub fn stage(rf: &mut crate::romfs::Romfs, late: &mut Vec<crate::staging::Out>, 
     Ok(())
 }
 
+fn ocarina_form(actor: &str) -> bool {
+    tier_of(actor).is_some_and(|t| OCARINAS.contains(&t))
+}
+
+/// The sale events that hand out an Ocarina's pickup actor at a priced sale (a scrub's one time
+/// sale, Medigoron) as one plain call, as (flow file, event index, event name). A sale sells the
+/// next tier through the tier chain (progressive::wrap_sale_as), which adds the Ocarina after its
+/// give; only where the chain cannot be used (tier_order::covered) does it sell the tier the reach
+/// order fixed, and then [`follow_sale`] adds it.
+pub fn sale_events(d: &Data, flows: &[crate::flow_locations::Choice], scrubs: &[crate::scrubs_b::Job]) -> Vec<(String, usize, String)> {
+    let mut out: Vec<(String, usize, String)> = Vec::new();
+    for c in flows.iter().filter(|c| ocarina_form(&c.item) && crate::slice::flow_rules::priced_sale(d, &c.location)) {
+        let Some(l) = d.flow.by_name(&c.location) else {
+            continue;
+        };
+        for e in l.edits.iter().filter(|e| e.role == "grant") {
+            for file in std::iter::once(&e.file).chain(e.also.iter()) {
+                out.push((file.clone(), e.index, e.event.clone()));
+            }
+        }
+    }
+    // The menu scrubs sell through the Death Mountain Crater scrub's sale event (scrubs_b::base).
+    if scrubs.iter().any(|j| j.sale.family.is_none() && ocarina_form(&j.sale.actor)) {
+        let (i, n) = crate::scrubs_b::flow::SALE;
+        out.push((crate::scrubs_b::FILE.to_string(), i, n.to_string()));
+    }
+    out.sort();
+    out.dedup();
+    out
+}
+
+/// After the sale event `i` (named `name`) returns, the best Ocarina the player owns is added like
+/// Saria's gift and equipped ([`after`]), as a picked up Ocarina is ([`patch_get`]). The sale
+/// returns whether or not the player bought, so it asks what the player owns: a refused sale only
+/// equips an Ocarina the player already had.
+pub fn follow_sale(f: &mut Flow, i: usize, name: &str) -> Res<()> {
+    let then: u16 = match f.events.get(i) {
+        Some(crate::bfevfl::Event { name: n, kind: Kind::Action { next, .. } | Kind::Sub { next, .. } }) if n == name => *next,
+        _ => return Err(Error::Msg(format!("ocarina: event {i} of {} is not the sale {name}, the game files differ", f.name))),
+    };
+    let best: &str = OCARINAS[1];
+    let to_best: u16 = after(f, best, then)?;
+    let to_first: u16 = after(f, OCARINAS[0], then)?;
+    let first: u16 = owns(f, OCARINAS[0], to_first, then)?;
+    let ask: u16 = owns(f, best, to_best, first)?;
+    if let Kind::Action { next, .. } | Kind::Sub { next, .. } = &mut f.events[i].kind {
+        *next = ask;
+    }
+    Ok(())
+}
+
+pub fn stage_sales(rf: &mut crate::romfs::Romfs, late: &mut Vec<crate::staging::Out>, work: &std::path::Path, events: &[(String, usize, String)]) -> Res<()> {
+    let mut by: std::collections::BTreeMap<&str, Vec<(usize, &str)>> = std::collections::BTreeMap::new();
+    for (file, i, name) in events {
+        by.entry(file.as_str()).or_default().push((*i, name.as_str()));
+    }
+    for (file, list) in by {
+        let flow: &str = file.strip_suffix(".bfevfl").unwrap_or(file);
+        crate::story_skip::stage_late(rf, late, work, flow, |b| {
+            let f: &mut Flow = b.flows.iter_mut().find(|x| x.name == flow).ok_or_else(|| Error::Msg(format!("ocarina: no {flow} flow")))?;
+            for (i, name) in list {
+                follow_sale(f, i, name)?;
+            }
+            Ok(())
+        })?;
+    }
+    Ok(())
+}
+
 fn forms_in(d: &Data, item: &str) -> Vec<String> {
     d.item(item).map(|i| i.actor.iter().chain(i.tiers.iter()).filter(|a| no_anim(a)).cloned().collect()).unwrap_or_default()
 }
@@ -556,6 +625,89 @@ mod pickup_tests {
                 assert_eq!(&w[2..4], [add(tier), equip(tier)], "{flow} {n} {w:?}");
                 assert_eq!(&w[4..], &before[1..], "{flow} {n}");
             }
+        }
+    }
+
+    #[test]
+    fn a_scrub_sale_of_an_ocarina_equips_the_best_ocarina_owned_after_it() {
+        let root: std::path::PathBuf = ootrr_game::test_romfs::path();
+        if !root.join("Pack").join("ZsDic.pack.zs").is_file() {
+            eprintln!("skipped: no romfs at {}, set OOTRR_ROMFS", root.display());
+            return;
+        }
+        let d: Data = Data::load().unwrap();
+        let loc: &str = "LW Deku Scrub Grotto Front";
+        assert!(crate::slice::flow_rules::priced_sale(&d, loc) && super::holds_up(&d, loc));
+        assert_eq!(super::shown_at(&d, loc, "Item_Ocarina_Fairy").as_deref(), Some("Obj_Ocarina_Fairy"));
+        let cs = [crate::flow_locations::Choice { location: loc.to_string(), item: "Obj_Ocarina_Fairy".to_string() }];
+        let evs: Vec<(String, usize, String)> = super::sale_events(&d, &cs, &[]);
+        assert_eq!(evs.len(), 2, "{evs:?}");
+        assert!(super::sale_events(&d, &[crate::flow_locations::Choice { location: loc.to_string(), item: "Obj_Rupee_Blue".to_string() }], &[]).is_empty());
+        let mut rf: crate::romfs::Romfs = crate::romfs::Romfs::open(&root).unwrap();
+        let (file, _, _) = &evs[0];
+        let mut b = crate::bfevfl::Bf::parse(&rf.read_zs(&crate::flow_locations::path_of(file)).unwrap()).unwrap();
+        let flow: &str = file.strip_suffix(".bfevfl").unwrap();
+        let f = b.flows.iter_mut().find(|x| x.name == flow).unwrap();
+        for (_, i, name) in &evs {
+            super::follow_sale(f, *i, name).unwrap();
+        }
+        let b = crate::bfevfl::Bf::parse(&b.write().unwrap()).unwrap();
+        let f = b.flows.iter().find(|x| x.name == flow).unwrap();
+        let sale: String = ":SimpleShopSub_Scrub_Business_OneTime".to_string();
+        let add = |t: &str| format!("EventTriggerAddOrRemovePouchContent {t}");
+        let equip = |t: &str| format!("EventTriggerSetGameDataString64 {t}");
+        for (_, i, _) in &evs {
+            assert_eq!(walk(f, *i as u16, "", &[]), [sale.clone()]);
+            assert_eq!(walk(f, *i as u16, "", &["Item_Ocarina_Fairy"]), [sale.clone(), add("Item_Ocarina_Fairy"), equip("Item_Ocarina_Fairy")]);
+            assert_eq!(walk(f, *i as u16, "", &["Item_Ocarina_Fairy", "Item_Ocarina_Time"]), [sale.clone(), add("Item_Ocarina_Time"), equip("Item_Ocarina_Time")]);
+        }
+    }
+
+    #[test]
+    fn a_wrapped_scrub_sale_sells_the_next_ocarina_and_equips_it_only_once_owned() {
+        use crate::bfevfl::{Kind, Val};
+        let root: std::path::PathBuf = ootrr_game::test_romfs::path();
+        if !root.join("Pack").join("ZsDic.pack.zs").is_file() {
+            eprintln!("skipped: no romfs at {}, set OOTRR_ROMFS", root.display());
+            return;
+        }
+        let d: Data = Data::load().unwrap();
+        let loc: &str = "LW Deku Scrub Grotto Front";
+        let forms: Vec<String> = super::forms(&d, loc, "Ocarina");
+        assert_eq!(forms, ["Obj_Ocarina_Fairy", "Obj_Ocarina_TimeLand"]);
+        let l = d.flow.by_name(loc).unwrap();
+        let e = &l.edits[0];
+        let mut rf: crate::romfs::Romfs = crate::romfs::Romfs::open(&root).unwrap();
+        let mut b = crate::bfevfl::Bf::parse(&rf.read_zs(&crate::flow_locations::path_of(&e.file)).unwrap()).unwrap();
+        let f = &mut b.flows[0];
+        crate::progressive::wrap_sale_as(f, e.index, &e.event, &e.param, "Ocarina", &forms).unwrap();
+        let b = crate::bfevfl::Bf::parse(&b.write().unwrap()).unwrap();
+        let f = &b.flows[0];
+        let sale: String = ":SimpleShopSub_Scrub_Business_OneTime".to_string();
+        // Before the sale the chain picks the tier the player lacks; owning nothing, the sale of the
+        // Fairy Ocarina's pickup returns to an ownership question that ends the flow when unowned.
+        assert_eq!(walk(f, e.index as u16, "", &[]), [sale.clone()]);
+        for (owned, form, tier) in [(&[][..], "Obj_Ocarina_Fairy", "Item_Ocarina_Fairy"), (&["Item_Ocarina_Fairy"][..], "Obj_Ocarina_TimeLand", "Item_Ocarina_Time")] {
+            let mut at: usize = e.index;
+            let give: usize = loop {
+                match &f.events[at].kind {
+                    Kind::Switch { cases, params, .. } => {
+                        let asked = params.as_ref().and_then(|c| c.get("ActorName")).cloned();
+                        let yes: bool = matches!(&asked, Some(Val::Str(a)) if owned.contains(&a.as_str()));
+                        at = usize::from(cases.iter().find(|c| c.val == if yes { 0 } else { 1 }).unwrap().ev);
+                    }
+                    Kind::Sub { .. } => break at,
+                    k => panic!("{k:?}"),
+                }
+            };
+            let Kind::Sub { next, params, .. } = &f.events[give].kind else { unreachable!() };
+            assert_eq!(params.as_ref().unwrap().get("ActorName"), Some(&Val::Str(form.to_string())));
+            let Kind::Switch { cases, params, .. } = &f.events[usize::from(*next)].kind else { panic!("no ownership gate after the {form} sale") };
+            assert_eq!(params.as_ref().unwrap().get("ActorName"), Some(&Val::Str(tier.to_string())));
+            let bought: u16 = cases.iter().find(|c| c.val == 0).unwrap().ev;
+            let refused: u16 = cases.iter().find(|c| c.val == 1).unwrap().ev;
+            assert_eq!(refused, crate::bfevfl::flow::NONE);
+            assert_eq!(walk(f, bought, "", &[]), [format!("EventTriggerAddOrRemovePouchContent {tier}"), format!("EventTriggerSetGameDataString64 {tier}")]);
         }
     }
 

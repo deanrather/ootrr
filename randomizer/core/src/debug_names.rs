@@ -1008,8 +1008,7 @@ pub struct KeyCredit {
 pub fn key_credits(d: &Data, seed: &crate::settings::seed::SeedFile) -> Vec<KeyCredit> {
     let mut out: Vec<KeyCredit> = Vec::new();
     for (loc, item) in &seed.placements {
-        let skull: bool = d.cat.by_name(loc).is_some_and(|l| l.kind == SKULL_KIND);
-        if !skull {
+        if !crate::slice::skulls::is_skull(d, loc) {
             continue;
         }
         let Some(i) = d.item(item) else { continue };
@@ -1480,6 +1479,24 @@ mod tests {
         assert_eq!((cs[0].item, cs[0].dungeon), (crate::gift_keys::Item::Small, forest.dungeon));
         let pack: String = crate::slice::key_spots::dungeon_pick(&d, "Small Key (Forest Temple)").unwrap().pack;
         assert!(cs[0].names.contains(&pack), "{:?} {pack}", cs[0].names);
+    }
+
+    #[test]
+    fn a_boss_key_at_a_skulltula_named_only_by_skull_names_gets_its_texts_and_credit() {
+        let d: Data = Data::load().unwrap();
+        let extra: Vec<&str> = crate::slice::skull_names::extra(&d);
+        assert!(extra.contains(&"Colossus GS Hill"), "{extra:?}");
+        for loc in extra {
+            assert!(d.cat.by_name(loc).is_none(), "{loc} has a catalog row now");
+            let m: std::collections::BTreeMap<String, String> = [(loc.to_string(), "Boss Key (Spirit Temple)".to_string())].into_iter().collect();
+            let seed: crate::settings::seed::SeedFile = crate::settings::seed::SeedFile::new("s", &crate::settings::Settings::default(), "g", m).unwrap();
+            let cs: Vec<KeyCredit> = key_credits(&d, &seed);
+            assert_eq!(cs.len(), 1, "{loc}");
+            let hang: String = crate::slice::key_spots::dungeon_pick(&d, "Boss Key (Spirit Temple)").unwrap().hang();
+            assert!(cs[0].names.contains(&hang), "{loc} {:?} {hang}", cs[0].names);
+            assert_eq!(cs[0].pack.map(|p| p.kind), Some(crate::dungeon_packs::Kind::Boss), "{loc}");
+            assert!(crate::dungeon_packs::credits(&d, &seed).contains_key(&hang), "{loc}");
+        }
     }
 
     fn shown(d: &Data, h: u64) -> Option<String> {

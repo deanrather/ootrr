@@ -331,7 +331,7 @@ fn looks(d: &Data, seed: &SeedFile, places: &BM<String, Place>) -> Res<BM<String
         }
         start + w.real.iter().filter(|l| place.get(**l) == Some(it) && at.get(*l).is_some_and(|s| *s < here)).count()
     };
-    let skull = |l: &str| d.cat.by_name(l).is_some_and(|c| c.kind == "gs");
+    let skull = |l: &str| crate::slice::skulls::is_skull(d, l);
     let at_skulls: Vec<&String> = seed.placements.iter().filter(|(l, i)| *i != TRAP && skull(l)).map(|(_, i)| i).collect();
     let at_shops: Vec<&String> = seed.placements.iter().filter(|(l, i)| *i != TRAP && crate::shops::is_loc(l)).map(|(_, i)| i).collect();
     let mut out: BM<String, (String, String, bool)> = BM::new();
@@ -424,6 +424,7 @@ pub fn prepare(seed: &SeedFile) -> Res<(SeedFile, Vec<Trap>)> {
             Place::Chest => {}
         }
         out.placements.insert(loc.clone(), stand);
+        out.cold.insert(loc.clone());
         traps.push(Trap { loc, place, look: look.clone(), item: look, fake, actor, kit });
     }
     Ok((out, traps))

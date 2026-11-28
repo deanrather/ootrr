@@ -210,7 +210,9 @@ fn showing_a_trade_item_to_nobody_selects_the_next_held_one() {
     let child: &str = crate::flow_sim::ask::CHILD;
     let three: Vec<&str> = vec!["Item_CojiroCucco", "Item_Prescription", "Item_PocketEgg"];
     let cases: [(&str, Vec<&str>, Option<i32>, &str); 5] = [
-        ("CojiroCucco", three.clone(), Some(41), "Step03"),
+        // Every held item is out here (count 1): the quest follows the earliest one out once Cojiro
+        // is parked.
+        ("CojiroCucco", three.clone(), Some(41), "Step08"),
         ("Prescription", three.clone(), Some(34), "Step03"),
         ("PocketEgg", three, Some(36), "Step03"),
         ("ClaimCheck", vec!["Item_ClaimCheck"], None, "Step11"),
@@ -357,7 +359,7 @@ fn the_show_switch_brings_the_next_item_out_and_parks_the_shown_one() {
     for (f, p) in fins.iter().zip(picks(&fins, &show_flow)) {
         assert_eq!(p, Some(41), "a parked item counts as held: the Prescription is next");
         assert_eq!((count(&mut s, f, "Item_CojiroCucco"), count(&mut s, f, "Item_Prescription"), count(&mut s, f, "Item_PocketEgg")), (P, 1, P));
-        assert_eq!(step(&s, f), "Step03", "the parked Cojiro still sets the quest step");
+        assert_eq!(step(&s, f), "Step08", "the quest follows the trade item now out, not the parked Cojiro");
     }
     // The pouch add comes before the button: the game may not select an item the pouch lacks.
     let order: Vec<&str> = show_flow.events.iter().filter(|e| e.name.starts_with("OOTRRTradeShuffle")).filter_map(|e| match &e.kind {
@@ -410,8 +412,8 @@ fn a_hand_in_puts_the_trade_item_before_it_on_the_button() {
         for f in took {
             assert_eq!((count(&mut s, f, shown), count(&mut s, f, near), count(&mut s, f, far)), (0, 1, P), "{flow} {entry}");
             assert_eq!(last_pick(f, &flows[flow]), Some(ORDER[at(near)].index), "{flow} {entry}: {near} goes on the button");
-            let want: &str = ORDER.iter().find(|x| x.actor == early).and_then(|x| x.step).unwrap();
-            assert_eq!(step(&s, f), want, "{flow} {entry}: the quest follows the earliest item left, parked or not");
+            let want: &str = ORDER.iter().find(|x| x.actor == near).and_then(|x| x.step).unwrap();
+            assert_eq!(step(&s, f), want, "{flow} {entry}: the quest follows the trade item that came out");
         }
         // Another one is out already: it goes on the button and nothing parked comes out.
         let fins: Vec<Fin> = run(&mut s, &counted(flow, entry, &[(STEP, "Step07")], &[(shown, 1), (late, 1), (early, P)])).unwrap();
@@ -434,8 +436,9 @@ fn a_new_trade_item_is_parked_while_the_button_s_own_is_out() {
     let fl: HM<String, Flow> = patched(&mut rf);
     let mut s: Sim = sim(&r, fl).unwrap();
     // Button, the Claim Check's count before, then the new Cojiro's and the Claim Check's after.
-    let cases: [(&str, i64, i64, i64); 4] = [("ClaimCheck", 1, P, 1), ("Bomb", 1, 1, 1), ("ClaimCheck", 0, 1, 0), ("CojiroCucco", 1, 1, P)];
-    for (button, check, want, left) in cases {
+    // Last, the quest step: the trade item out (the earliest out when several are).
+    let cases: [(&str, i64, i64, i64, &str); 4] = [("ClaimCheck", 1, P, 1, "Step11"), ("Bomb", 1, 1, 1, "Step03"), ("ClaimCheck", 0, 1, 0, "Step03"), ("CojiroCucco", 1, 1, P, "Step03")];
+    for (button, check, want, left, quest) in cases {
         let sc: Scene = counted(GET_FLOW, GET_FLOW, &[(BUTTON, button), (STEP, "Step07")], &[("Item_ClaimCheck", check)]);
         let fins: Vec<Fin> = run_args(&mut s, &sc, &[("ActorName", "Item_CojiroCucco")]).unwrap();
         let got: Vec<&Fin> = fins.iter().filter(|f| granted(f, "Item_CojiroCucco") == 1).collect();
@@ -443,7 +446,7 @@ fn a_new_trade_item_is_parked_while_the_button_s_own_is_out() {
         for f in got {
             assert_eq!(count(&mut s, f, "Item_CojiroCucco"), want, "button {button}, Claim Check count {check}");
             assert_eq!(count(&mut s, f, "Item_ClaimCheck"), left, "button {button}: only the button's own trade item stays out");
-            assert_eq!(step(&s, f), "Step03", "parked or not, the new item settles the quest");
+            assert_eq!(step(&s, f), quest, "button {button}: the item out settles the quest");
         }
     }
 }
@@ -695,5 +698,25 @@ fn without_adult_trade_shuffle_a_new_child_trade_item_is_parked_and_adult_ones_a
     let fins: Vec<Fin> = run_args(&mut s, &sc, &[("ActorName", "Item_CojiroCucco")]).unwrap();
     for f in fins.iter().filter(|f| granted(f, "Item_CojiroCucco") == 1) {
         assert_eq!(count(&mut s, f, "Item_CojiroCucco"), 1, "adult trade items stay the game's");
+    }
+}
+
+#[test]
+fn every_trade_npc_talk_follows_the_trade_item_out() {
+    let Some(r) = root() else { return };
+    let mut rf: Romfs = Romfs::open(&r).unwrap();
+    let fl: HM<String, Flow> = patched(&mut rf);
+    let talkers: Vec<&str> = NPCS.iter().copied().filter(|n| fl[*n].entries.iter().any(|e| e.name == "Talk")).collect();
+    assert_eq!(talkers.len(), NPCS.len() - 1, "every trade NPC but the Death Mountain scene has a Talk entry");
+    let mut s: Sim = sim(&r, fl).unwrap();
+    for flow in talkers {
+        // The Claim Check is out, the Broken Sword parked: Biggoron and the others talk to the
+        // Claim Check.
+        let fins: Vec<Fin> = run(&mut s, &counted(flow, "Talk", &[(STEP, "Step07")], &[("Item_ClaimCheck", 1), ("Item_BrokenSword", P)])).unwrap();
+        assert!(!fins.is_empty(), "{flow}");
+        assert!(fins.iter().all(|f| step(&s, f) == "Step11"), "{flow}: {:?}", fins.iter().map(|f| step(&s, f)).collect::<Vec<_>>());
+        // Nothing out: the earliest held one.
+        let fins: Vec<Fin> = run(&mut s, &counted(flow, "Talk", &[(STEP, "Step11")], &[("Item_ClaimCheck", P), ("Item_OddPowder", P)])).unwrap();
+        assert!(fins.iter().all(|f| step(&s, f) == "Step05"), "{flow}");
     }
 }

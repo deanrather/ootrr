@@ -6,10 +6,6 @@
         "events": {
             "Cojiro Access": "is_adult and at_day and 'Wake Up Adult Talon'",
             "Pocket Egg Given": "is_adult and at_day and not adult_trade_shuffle",
-            # Adult trade shuffle: the quest follows the earliest trade item held, so Grog and
-            # Fado only stand once Anju gave her first adult gift and the earlier items (Pocket
-            # Cucco for Anju, Odd Mushroom for Granny) can be handed over.
-            "Adult Trade Takers": "is_adult and at_day",
             "Kakariko Village Gate Open": "is_child and Zeldas_Letter"
         },
         "locations": {

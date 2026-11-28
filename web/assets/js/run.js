@@ -1,5 +1,6 @@
 import { h, fill, notice, copy, save_text } from "./dom.js";
 import { get, post, q } from "./api.js";
+import { get_blob, post_blob } from "./api.js";
 import { state, touch, color_request } from "./store.js";
 import { effective } from "./rules.js";
 import { button as report_button } from "./report.js";
@@ -30,7 +31,7 @@ export function progress_text(p) {
 }
 
 function spoiler_for(res) {
-  if (!state.spoiler_log) return "";
+  if (!state.spoiler_log || res.race) return "";
   return full_text(res, { schema: state.schema, vals: state.vals, pages, plando: state.plando, cosmetic: state.cosmetic, version: state.info && state.info.version });
 }
 
@@ -96,7 +97,7 @@ export async function generate() {
     }
   }, 1000);
   try {
-    const res = await post("/api/generate", { seed: state.seed.trim(), settings: effective(state.schema, state.vals), spoiler: state.spoiler_log, plando: state.plando, ticket });
+    const res = await post("/api/generate", { seed: state.seed.trim(), settings: effective(state.schema, state.vals), spoiler: state.spoiler_log && !state.race_seed, race: !!state.race_seed, plando: state.plando, ticket });
     clearInterval(timer);
     state.result = res;
     state.last_error = "";
@@ -196,6 +197,62 @@ async function open_file(pick, out, redraw) {
   redraw();
 }
 
+function files_note() {
+  const res = state.result;
+  if (res && res.race) return ", with the race file Seed.ootrr (no spoiler log)";
+  return state.spoiler_log ? ", with Spoiler.txt and Seed.ootrr" : "";
+}
+
+// The game's item icons, read from the game folder set on the Config page (the tracker's game
+// folder when that one is empty or unreadable). The icon API needs the session token and the page
+// only shows images from itself, so they are fetched and drawn on a canvas, as the tracker does.
+// Only icons that loaded are kept, so a game folder set later still brings them.
+const hash_icons = new Map();
+
+async function icon_blob(id) {
+  const game = state.paths.game.trim();
+  if (game) {
+    try {
+      return await post_blob("/api/hash-icon", { id, game_dir: game, update_dir: state.paths.update.trim() });
+    } catch {
+      // Fall back to the tracker's game folder.
+    }
+  }
+  return get_blob(`/api/tracker/icon?id=${q(id)}`);
+}
+
+function icon_of(id) {
+  const key = `${state.paths.game.trim()}\n${id}`;
+  if (!hash_icons.has(key)) {
+    const p = icon_blob(id).then((b) => createImageBitmap(b)).catch(() => null);
+    hash_icons.set(key, p);
+    p.then((bmp) => {
+      if (!bmp) hash_icons.delete(key);
+    });
+  }
+  return hash_icons.get(key);
+}
+
+// The seed hash a race seed shows on the title screen: the game's own item icons, by name.
+export function hash_row(res) {
+  const names = Array.isArray(res.hash) ? res.hash : [];
+  const ids = Array.isArray(res.hash_ids) ? res.hash_ids : [];
+  return h(
+    "span",
+    { class: "hashrow" },
+    names.map((n, i) => {
+      const cv = ids[i] ? h("canvas", { width: "56", height: "56", "aria-hidden": "true", class: "hashicon" }) : null;
+      if (cv) {
+        icon_of(ids[i]).then((bmp) => {
+          if (!bmp) return cv.remove();
+          cv.getContext("2d").drawImage(bmp, 0, 0, 56, 56);
+        });
+      }
+      return h("span", { class: "hashitem" }, cv, n);
+    }),
+  );
+}
+
 function summary(res) {
   return h(
     "dl",
@@ -206,8 +263,9 @@ function summary(res) {
     h("dd", { class: "mono" }, res.settings_string),
     h("dt", null, "Checksum"),
     h("dd", { class: "mono" }, res.checksum),
+    res.race ? [h("dt", null, "Seed hash"), h("dd", null, hash_row(res))] : null,
     h("dt", null, "Placements"),
-    h("dd", null, String(res.placement_count)),
+    h("dd", null, res.race ? "Hidden: this is a race seed" : String(res.placement_count)),
     run.target ? [h("dt", null, "Mod written to"), h("dd", { class: "mono" }, run.target)] : null,
   );
 }
@@ -230,7 +288,7 @@ export function render_seed(redraw) {
     kids.push(h("div", { class: "msec" }, h("h4", null, "Build"),
       job && !job.finished ? h("progress", { max: "100", value: String(job.percent), "aria-label": "Build progress" }) : null,
       job ? steps_view(job) : h("p", { class: "muted" }, run.line),
-      done && run.target ? h("p", { class: "genline ready" }, `Mod written to ${run.target}${state.spoiler_log ? ", with Spoiler.txt and Seed.ootrr" : ""}.`) : null,
+      done && run.target ? h("p", { class: "genline ready" }, `Mod written to ${run.target}${files_note()}.`) : null,
       job && job.message && !done && job.finished ? notice("error", job.message) : null,
       done && job.message ? h("details", { class: "fold" }, h("summary", null, "Build report"), h("pre", { class: "report" }, job.message)) : null));
   }
@@ -268,7 +326,7 @@ export function render_seed(redraw) {
       h(
         "div",
         { class: "row" },
-        h("button", { type: "button", class: "btn", onclick: () => save_text(res.file_name || "seed.ootrr", res.seed_text) }, "Download seed file"),
+        h("button", { type: "button", class: "btn", onclick: () => save_text(res.file_name || "seed.ootrr", res.seed_text) }, res.race ? "Download race file" : "Download seed file"),
         h("button", { type: "button", class: "btn", onclick: () => copy(res.settings_string) }, "Copy settings string"),
         report_button(res),
         open_mod,
@@ -278,7 +336,11 @@ export function render_seed(redraw) {
       ),
       out,
     ),
-    h("div", { class: "msec" }, h("h4", null, "Spoiler"), spoiler_panel(res, true)),
+    res.race
+      ? h("div", { class: "msec" }, h("h4", null, "Race seed"),
+        notice("info", "No spoiler log exists for this seed, for anyone. Share the race file: anyone can open it here and build the same seed. Everyone should see these icons under the logo on the title screen:"),
+        h("p", null, hash_row(res)))
+      : h("div", { class: "msec" }, h("h4", null, "Spoiler"), spoiler_panel(res, true)),
     instructions(),
   );
   return kids;
