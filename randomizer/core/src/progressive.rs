@@ -373,6 +373,17 @@ pub fn wrap_grant(f: &mut Flow, index: usize, event: &str, param: &str, family: 
 /// wrap_grant, with each tier's branch handing out `forms[i]` instead of the tier actor (the
 /// ownership questions still ask about the tier actors). Empty `forms` means the tiers.
 pub fn wrap_grant_as(f: &mut Flow, index: usize, event: &str, param: &str, family: &str, forms: &[String]) -> Res<()> {
+    wrap_with(f, index, event, param, family, forms, false)
+}
+
+/// wrap_grant_as for a sale: the chain picks the next tier the player lacks before the sale, and
+/// what a branch adds after its give (the Ocarina add and equip, the starting bag) runs only when
+/// the player owns that tier once the sale returns, so a refused sale adds nothing.
+pub fn wrap_sale_as(f: &mut Flow, index: usize, event: &str, param: &str, family: &str, forms: &[String]) -> Res<()> {
+    wrap_with(f, index, event, param, family, forms, true)
+}
+
+fn wrap_with(f: &mut Flow, index: usize, event: &str, param: &str, family: &str, forms: &[String], sale: bool) -> Res<()> {
     let tiers_of: &[&str] = tiers(family)?;
     if !forms.is_empty() && forms.len() != tiers_of.len() {
         return Err(Error::Msg(format!("progressive: {family} has {} tiers but {} forms", tiers_of.len(), forms.len())));
@@ -391,8 +402,9 @@ pub fn wrap_grant_as(f: &mut Flow, index: usize, event: &str, param: &str, famil
     };
     let (a, q) = ensure_query(f)?;
     let mut gives: Vec<u16> = Vec::new();
-    for (x, tier) in t.iter().zip(tiers_of) {
+    for (k, (x, tier)) in t.iter().zip(tiers_of).enumerate() {
         let mut give: Kind = with_param(&base, param, x)?;
+        let then: Option<u16> = next_of(&give);
         // A pickup actor handed out in place of a tier with no animation (crate::ocarina_hold) is
         // followed by the tier item added like Saria's gift.
         if x != tier && crate::ocarina_hold::no_anim(tier) {
@@ -405,6 +417,14 @@ pub fn wrap_grant_as(f: &mut Flow, index: usize, event: &str, param: &str, famil
             && let Some(bag) = crate::starter_bags::line(f, tier, then)?
         {
             set_next(&mut give, bag)?;
+        }
+        if sale
+            && let (Some(then), Some(added)) = (then, next_of(&give))
+            && added != then
+        {
+            let c: Cont = Cont { items: vec![("ActorName".to_string(), Val::Str(o[k].to_string()))] };
+            let bought: u16 = push(f, Kind::Switch { actor: a, query: q, cases: vec![Case { val: 0, ev: added }, Case { val: 1, ev: then }], params: Some(c) })?;
+            set_next(&mut give, bought)?;
         }
         gives.push(push(f, give)?);
     }
@@ -532,6 +552,10 @@ pub fn ammo_guard(f: &mut Flow, index: usize, event: &str, param: &str) -> Res<b
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Wrap {
     Chain,
+    /// A [`Wrap::Chain`] around a sale (a scrub's one time sale, Medigoron), which returns whether
+    /// or not the player bought: what a tier's branch adds after its give runs only once the
+    /// player owns that tier ([`wrap_sale_as`]).
+    Sale,
     Base { plain: bool },
 }
 
@@ -552,6 +576,7 @@ impl Grant {
     pub fn apply(&self, f: &mut Flow) -> Res<()> {
         match self.wrap {
             Wrap::Chain => wrap_grant_as(f, self.index, &self.event, &self.param, self.family, &self.forms),
+            Wrap::Sale => wrap_sale_as(f, self.index, &self.event, &self.param, self.family, &self.forms),
             Wrap::Base { plain } => guard_grant(f, self.index, &self.event, &self.param, self.family, plain),
         }
     }

@@ -1,5 +1,5 @@
 use crate::bfevfl::flow::NONE;
-use crate::bfevfl::{Bf, Cont, Entry, Event, Flow, Kind, Val};
+use crate::bfevfl::{Bf, Case, Cont, Entry, Event, Flow, Kind, Val};
 use crate::byml::{Byml, Node};
 use crate::chest_slot::LIST;
 use crate::error::{Error, Res};
@@ -10,6 +10,7 @@ use crate::sarc;
 use crate::settings::seed::SeedFile;
 use crate::slice::data::Data;
 use crate::staging::Out;
+use crate::quest_events::Ev;
 use crate::world::{Placement, World};
 
 pub const MENU_PACK: &str = "Pack/Bootup.Nin_Ounce_NVN2.pack.zs";
@@ -19,6 +20,10 @@ pub const MENU_OPEN: &str = "UI_IsFinishChallengeMenuOpenEvent";
 pub const PARENT: &str = "OOTRR_DungeonKeys";
 pub const BOOT_FLOW: &str = "DefaultBootEvent";
 pub const UPDATE: &str = "OOTRRKeyUpdate";
+pub const INTRO: &str = "OOTRRKeyIntro";
+pub const GET_FLOW: &str = "GetPouchContent";
+pub const GET_CHECK: &str = "OOTRREventCheck";
+const WINDOW_PREFIX: &str = "OpenGetWindow";
 const ROW_ID: &str = "__RowId";
 const TEMPLATE_ROW: &str = "Work/Challenge/SubEvent_GetMelodySun.game__challenge__Challenge.gyml";
 const TEMPLATE_FLAG: &str = "Step_SubEvent_GetMelodySun";
@@ -27,17 +32,22 @@ const EXP_TEMPLATE: &str = "SageOfForest_IsCompleted_Exp";
 const ANY_FLAG: &str = "IsGet.Weapon_Sword_Kokiri";
 const ALWAYS: &str = "OOTRR_Keys_Always_Exp";
 const DESCRIPTION: &str = "Total keys earned for this location.";
-const SUMMARY: &str = "Small Keys and Boss Keys for each dungeon.";
+const SUMMARY: &str = "Tracks your current keys and total keys found.";
 const HEADING: &str = "Keys";
+const PARENT_PAD: usize = 12;
 const MAIN: u32 = 460_120_899;
 const DROPPED: [&str; 6] = ["DependFlagName", "GameSafetySetting", "RequestActor", "RequestLocation", "IsCompleteTarget", "IsListAdventureLog"];
 const PARENT_PANEL: &str = "DoorOfTime";
 const CHILD_PANEL: &str = "Get_StoneOfFire";
+const EVENT_PANEL: &str = "Meet_DekuTree";
 const OURS: &str = "OOTRR_";
 const QUIET: &str = "IsNotChangeAdventureLog";
 const STEP: &str = "Tracking";
+const DONE: &str = "Complete";
 const PREFIX: &str = "OOTRRKeys";
 const CHECKLIST_KEYS: [&str; 3] = ["NextActionContent", "UseNextActionContentStep", "IsDisplayGameDataFalse"];
+const TRUE: u32 = 0;
+const FALSE: u32 = 1;
 const OP_BOOL: u64 = 0;
 const OP_OR: u64 = 4;
 const OP_NOT: u64 = 5;
@@ -67,6 +77,7 @@ pub const DUNGEONS: [Dungeon; 8] = [
 #[derive(Clone, Debug, Default)]
 pub struct Plan {
     pub caps: Vec<u32>,
+    pub events: Vec<Ev>,
 }
 
 pub fn start_ops() -> crate::start_state::Ops {
@@ -117,7 +128,7 @@ pub fn plan(d: &Data, seed: &SeedFile) -> Res<Plan> {
             u32::try_from(n).unwrap_or(u32::MAX)
         })
         .collect();
-    Ok(Plan { caps })
+    Ok(Plan { caps, events: Vec::new() })
 }
 
 pub fn read_flags() -> Vec<String> {
@@ -138,17 +149,28 @@ struct Quest {
 }
 
 fn quests(p: &Plan) -> Res<Vec<Quest>> {
-    let mut v: Vec<Quest> = vec![Quest {
+    let mut v: Vec<Quest> = p
+        .events
+        .iter()
+        .map(|e| Quest {
+            id: e.id(),
+            texts: vec![
+                ("Name".to_string(), e.title.to_string()),
+                ("Ready".to_string(), e.line()),
+                (STEP.to_string(), e.line()),
+                ("Complete".to_string(), e.line()),
+            ],
+        })
+        .collect();
+    v.push(Quest {
         id: PARENT.to_string(),
         texts: vec![
             ("Name".to_string(), "Dungeon Keys".to_string()),
             ("Ready".to_string(), SUMMARY.to_string()),
-            ("Ready_NextAction".to_string(), HEADING.to_string()),
             (STEP.to_string(), SUMMARY.to_string()),
-            (format!("{STEP}_NextAction"), HEADING.to_string()),
-            ("Complete".to_string(), SUMMARY.to_string()),
+            ("Complete".to_string(), format!("{SUMMARY}{}", "\n".repeat(PARENT_PAD))),
         ],
-    }];
+    });
     for (dn, cap) in DUNGEONS.iter().zip(&p.caps) {
         let mut texts: Vec<(String, String)> = vec![
             ("Name".to_string(), dn.title.to_string()),
@@ -170,6 +192,10 @@ fn quests(p: &Plan) -> Res<Vec<Quest>> {
 
 fn ids() -> Vec<String> {
     std::iter::once(PARENT.to_string()).chain(DUNGEONS.iter().map(child_id)).collect()
+}
+
+fn all_ids(evs: &[Ev]) -> Vec<String> {
+    evs.iter().map(Ev::id).chain(ids()).collect()
 }
 
 pub fn row_id(q: &str) -> String {
@@ -195,14 +221,14 @@ fn hash_of(r: &Node) -> Option<u32> {
     }
 }
 
-pub fn edit_table(y: &mut Byml) -> Res<usize> {
+pub fn edit_table(y: &mut Byml, evs: &[Ev]) -> Res<usize> {
     let rows: &mut Vec<Node> = y.root.as_arr_mut().ok_or(Error::Format("key log: the quest table is not a list"))?;
     if rows.iter().any(|r| id_of(r) == row_id(PARENT)) {
         return Err(Error::Format("key log: the quest table already has the key quests"));
     }
     let base: Node = rows.iter().find(|r| id_of(r) == TEMPLATE_ROW).cloned().ok_or(Error::Format("key log: no template quest row"))?;
     let step: Node = base.get("Steps").and_then(Node::as_arr).and_then(|s| s.first()).cloned().ok_or(Error::Format("key log: the template quest has no steps"))?;
-    let qs: Vec<String> = ids();
+    let qs: Vec<String> = all_ids(evs);
     for q in &qs {
         let mut r: Node = base.clone();
         for k in DROPPED {
@@ -210,6 +236,9 @@ pub fn edit_table(y: &mut Byml) -> Res<usize> {
         }
         r.set(ROW_ID, Node::Str(row_id(q)));
         r.set("Category", Node::U32(MAIN));
+        if DUNGEONS.iter().any(|d| *q == child_id(d)) {
+            r.set("IsListAdventureLog", Node::Bool(false));
+        }
         let steps: Vec<Node> = ["Ready", STEP]
             .iter()
             .map(|s| {
@@ -224,18 +253,15 @@ pub fn edit_table(y: &mut Byml) -> Res<usize> {
     Ok(qs.len())
 }
 
-/// The game pops a "next objective" card each time a quest step moves on, unless the step is
-/// marked as not changing the adventure log (minigame and in-dungeon steps already are). Threads of
-/// Time no longer lists the game's quests, so every game step gets the mark; our key quests keep
-/// theirs off, their menu text follows the step and their requests already skip the card.
 pub fn quiet_steps(y: &mut Byml) -> Res<usize> {
     let rows: &mut Vec<Node> = y.root.as_arr_mut().ok_or(Error::Format("key log: the quest table is not a list"))?;
     let ours: String = format!("Work/Challenge/{OURS}");
     let mut seen: usize = 0;
     let mut n: usize = 0;
-    for r in rows.iter_mut().filter(|r| !id_of(r).starts_with(&ours)) {
+    for r in rows.iter_mut() {
+        let mine: bool = id_of(r).starts_with(&ours);
         let Some(steps) = r.get_mut("Steps").and_then(Node::as_arr_mut) else { continue };
-        for st in steps.iter_mut() {
+        for st in steps.iter_mut().filter(|st| !(mine && st.get("Name").and_then(Node::as_str) == Some(STEP))) {
             match st.get(QUIET) {
                 Some(Node::Bool(true)) => seen += 1,
                 Some(Node::Bool(false)) => {
@@ -264,11 +290,11 @@ fn tok(op: u64, a: Option<u64>) -> Node {
     Node::Arr(std::iter::once(Node::U64(op)).chain(a.map(Node::U64)).collect())
 }
 
-pub fn add_flags(y: &mut Byml) -> Res<usize> {
+pub fn add_flags(y: &mut Byml, evs: &[Ev]) -> Res<usize> {
     let list: &mut Vec<Node> = y.root.get_mut("Data").and_then(|d| d.get_mut("Enum")).and_then(Node::as_arr_mut).ok_or(Error::Format("key log: the game data list has no Enum table"))?;
     let k: u32 = hash_name(TEMPLATE_FLAG);
     let base: Node = list.iter().find(|r| hash_of(r) == Some(k)).cloned().ok_or(Error::Format("key log: no template step flag"))?;
-    let qs: Vec<String> = ids();
+    let qs: Vec<String> = all_ids(evs);
     let values: [&str; 4] = ["NotReady", "Ready", STEP, "Complete"];
     for q in &qs {
         let h: u32 = hash_name(&flag(q));
@@ -321,15 +347,25 @@ fn panel_name(r: &Node) -> &str {
     r.get("ChallengeShort").and_then(Node::as_str).unwrap_or("")
 }
 
-pub fn edit_menu(y: &mut Byml) -> Res<usize> {
+pub fn edit_menu(y: &mut Byml, evs: &[Ev]) -> Res<usize> {
     let rows: &mut Vec<Node> = y.root.get_mut("ChallengeMenuParamArray").and_then(Node::as_arr_mut).ok_or(Error::Format("key log: the menu table has no panel list"))?;
     let mut parent: Node = rows.iter().find(|r| panel_name(r) == PARENT_PANEL).cloned().ok_or(Error::Format("key log: no Door of Time panel"))?;
     let child: Node = rows.iter().find(|r| panel_name(r) == CHILD_PANEL).cloned().ok_or(Error::Format("key log: no Fire Stone panel"))?;
+    let single: Node = rows.iter().find(|r| panel_name(r) == EVENT_PANEL).cloned().ok_or(Error::Format("key log: no Deku Tree panel"))?;
     parent.set("ChallengeShort", Node::Str(PARENT.to_string()));
     for k in CHECKLIST_KEYS {
         parent.remove(k);
     }
-    let mut group: Vec<Node> = vec![parent];
+    let mut group: Vec<Node> = Vec::new();
+    for e in evs {
+        let mut x: Node = single.clone();
+        x.set("ChallengeShort", Node::Str(e.id()));
+        for k in CHECKLIST_KEYS {
+            x.remove(k);
+        }
+        group.push(x);
+    }
+    group.push(parent);
     for dn in &DUNGEONS {
         let mut x: Node = child.clone();
         x.set("ChallengeShort", Node::Str(child_id(dn)));
@@ -346,14 +382,14 @@ pub fn edit_menu(y: &mut Byml) -> Res<usize> {
     Ok(n)
 }
 
-pub fn stage_menu(rf: &mut Romfs, more: &mut Vec<Out>) -> Res<()> {
+pub fn stage_menu(rf: &mut Romfs, more: &mut Vec<Out>, evs: &[Ev]) -> Res<()> {
     let zc: Vec<u8> = rf.read(MENU_PACK)?;
     let dict: Option<u32> = crate::zs::dict_of(&zc);
     let raw: Vec<u8> = rf.zs.decompress(&zc)?;
     let mut es: Vec<sarc::Entry> = sarc::parse(&raw)?;
     let e: &sarc::Entry = sarc::get(&es, MENU_FILE).ok_or(Error::Format("key log: the boot pack has no menu table"))?;
     let mut y: Byml = Byml::parse(&e.data)?;
-    edit_menu(&mut y)?;
+    edit_menu(&mut y, evs)?;
     sarc::set(&mut es, MENU_FILE, y.write()?);
     let out: Vec<u8> = sarc::write(&es)?;
     more.push(Out { path: MENU_PACK.to_string(), z: crate::zs::compress_raw(&out, dict)?, old: raw.len(), new: out.len() });
@@ -361,7 +397,7 @@ pub fn stage_menu(rf: &mut Romfs, more: &mut Vec<Out>) -> Res<()> {
 }
 
 pub fn stage(rf: &mut Romfs, more: &mut Vec<Out>, p: &Plan) -> Res<()> {
-    stage_menu(rf, more)?;
+    stage_menu(rf, more, &p.events)?;
     let l: crate::flags::FlagList = crate::flags_build::load(rf)?;
     let missing: Vec<String> = read_flags().into_iter().filter(|f| l.by_hash(hash_name(f) as u64).is_none()).collect();
     if !missing.is_empty() {
@@ -369,7 +405,8 @@ pub fn stage(rf: &mut Romfs, more: &mut Vec<Out>, p: &Plan) -> Res<()> {
     }
     crate::dungeon_grant::merge(rf, more, LIST, |raw| {
         let mut y: Byml = Byml::parse(raw)?;
-        add_flags(&mut y)?;
+        add_flags(&mut y, &p.events)?;
+        crate::ap::saved::add_bools(&mut y, &p.events.iter().map(Ev::seen).collect::<Vec<String>>())?;
         y.write()
     })?;
     for lang in crate::hints::languages(rf)? {
@@ -378,10 +415,10 @@ pub fn stage(rf: &mut Romfs, more: &mut Vec<Out>, p: &Plan) -> Res<()> {
     Ok(())
 }
 
-pub fn stage_table(rf: &mut Romfs, outs: &mut Vec<Out>) -> Res<()> {
+pub fn stage_table(rf: &mut Romfs, outs: &mut Vec<Out>, evs: &[Ev]) -> Res<()> {
     crate::dungeon_grant::merge(rf, outs, TABLE, |raw| {
         let mut y: Byml = Byml::parse(raw)?;
-        edit_table(&mut y)?;
+        edit_table(&mut y, evs)?;
         quiet_steps(&mut y)?;
         y.write()
     })
@@ -398,30 +435,150 @@ fn push(f: &mut Flow, k: Kind) -> Res<u16> {
 }
 
 fn ask_step(q: &str, s: &str) -> Cont {
+    ask_step_ui(q, s, false)
+}
+
+fn ask_step_ui(q: &str, s: &str, card: bool) -> Cont {
     Cont {
         items: vec![
             ("ChallengeName".to_string(), Val::Str(q.to_string())),
             ("StepName".to_string(), Val::Str(s.to_string())),
             ("IsIgnoreCompletedChallenge".to_string(), Val::Bool(1)),
-            ("IsIgnoreChallengeProgressUI".to_string(), Val::Bool(1)),
+            ("IsIgnoreChallengeProgressUI".to_string(), Val::Bool(if card { 0 } else { 1 })),
             ("IsWaitEnd".to_string(), Val::Bool(1)),
         ],
     }
 }
 
-pub fn add_update(b: &mut Bf) -> Res<u16> {
+fn game_data(name: String) -> Cont {
+    Cont { items: vec![("GameDataName".to_string(), Val::Str(name)), ("Index".to_string(), Val::Int(-1))] }
+}
+
+fn add_event(f: &mut Flow, e: &Ev, a: u16, x: u16, next: u16) -> Res<u16> {
+    let (qa, qb): (u16, u16) = crate::start_state::query_slot(f, "GameDataActor", "EventQueryIsGameDataBool")?;
+    let new: u16 = add_count(f, e, a, x, next)?;
+    let quiet: u16 = push(f, Kind::Action { next, actor: a, act: x, params: Some(ask_step(&e.id(), DONE)) })?;
+    push(f, Kind::Switch { actor: qa, query: qb, cases: vec![Case { val: TRUE, ev: quiet }, Case { val: FALSE, ev: new }], params: Some(game_data(e.seen())) })
+}
+
+fn add_new(f: &mut Flow, e: &Ev, a: u16, x: u16, next: u16) -> Res<u16> {
+    let (qa, qb): (u16, u16) = crate::start_state::query_slot(f, "GameDataActor", "EventQueryIsGameDataBool")?;
+    let start: u16 = add_count(f, e, a, x, next)?;
+    push(f, Kind::Switch { actor: qa, query: qb, cases: vec![Case { val: TRUE, ev: next }, Case { val: FALSE, ev: start }], params: Some(game_data(e.seen())) })
+}
+
+fn add_count(f: &mut Flow, e: &Ev, a: u16, x: u16, next: u16) -> Res<u16> {
+    let (qa, qb): (u16, u16) = crate::start_state::query_slot(f, "GameDataActor", "EventQueryIsGameDataBool")?;
+    let (sa, sb): (u16, u16) = crate::start_state::slot(f, "GameDataActor", "EventTriggerSetGameDataBool")?;
+    let mark: u16 = push(f, Kind::Action { next, actor: sa, act: sb, params: Some(crate::dungeon_credit::set_bool(e.seen())) })?;
+    let loud: u16 = push(f, Kind::Action { next: mark, actor: a, act: x, params: Some(ask_step_ui(&e.id(), DONE, true)) })?;
+    let flags: &[&str] = e.goal.flags();
+    let n: usize = usize::from(e.goal.n());
+    let mut memo: std::collections::HashMap<(usize, usize), u16> = std::collections::HashMap::new();
+    count_node(f, (qa, qb), flags, n, 0, 0, loud, next, &mut memo)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn count_node(f: &mut Flow, q: (u16, u16), flags: &[&str], n: usize, i: usize, c: usize, yes: u16, no: u16, memo: &mut std::collections::HashMap<(usize, usize), u16>) -> Res<u16> {
+    if c >= n {
+        return Ok(yes);
+    }
+    if c + (flags.len() - i) < n {
+        return Ok(no);
+    }
+    if let Some(e) = memo.get(&(i, c)) {
+        return Ok(*e);
+    }
+    let held: u16 = count_node(f, q, flags, n, i + 1, c + 1, yes, no, memo)?;
+    let not: u16 = count_node(f, q, flags, n, i + 1, c, yes, no, memo)?;
+    let at: u16 = push(f, Kind::Switch { actor: q.0, query: q.1, cases: vec![Case { val: TRUE, ev: held }, Case { val: FALSE, ev: not }], params: Some(game_data(flags[i].to_string())) })?;
+    memo.insert((i, c), at);
+    Ok(at)
+}
+
+
+fn next_of(k: &Kind) -> Vec<u16> {
+    match k {
+        Kind::Action { next, .. } | Kind::Join { next } | Kind::Sub { next, .. } => vec![*next],
+        Kind::Switch { cases, .. } | Kind::SubSwitch { cases, .. } => cases.iter().map(|c| c.ev).collect(),
+        Kind::Fork { join, forks } => forks.iter().copied().chain([*join]).collect(),
+        Kind::Label { .. } => Vec::new(),
+    }
+}
+
+pub fn add_get_check(b: &mut Bf, evs: &[Ev]) -> Res<usize> {
+    let f: &mut Flow = b.flows.iter_mut().find(|f| f.name == GET_FLOW).ok_or(Error::Format("key log: GetPouchContent has no flow"))?;
+    if evs.is_empty() || f.entries.iter().any(|e| e.name == GET_CHECK) {
+        return Ok(0);
+    }
+    let base: usize = f.events.len();
+    let pad: u16 = f.entries.first().map(|e| e.pad).unwrap_or(0);
+    let starts: Vec<u16> = f.entries.iter().filter(|e| e.name.starts_with(WINDOW_PREFIX)).map(|e| e.main).collect();
+    if starts.is_empty() {
+        return Err(Error::Format("key log: GetPouchContent has no OpenGetWindow entry"));
+    }
+    let mut seen: std::collections::BTreeSet<u16> = std::collections::BTreeSet::new();
+    let mut todo: Vec<u16> = starts;
+    let mut ends: Vec<u16> = Vec::new();
+    while let Some(i) = todo.pop() {
+        if i == NONE || usize::from(i) >= base || !seen.insert(i) {
+            continue;
+        }
+        let k: &Kind = &f.events[usize::from(i)].kind;
+        let nx: Vec<u16> = next_of(k);
+        if !matches!(k, Kind::Fork { .. } | Kind::Label { .. }) && nx.contains(&NONE) {
+            ends.push(i);
+        }
+        todo.extend(nx);
+    }
+    let (a, x): (u16, u16) = crate::start_state::slot(f, "ChallengeSystemActor", "EventExecuteProgressChallengeStep")?;
+    let mut next: u16 = NONE;
+    for e in evs.iter().rev() {
+        next = add_new(f, e, a, x, next)?;
+    }
+    f.entries.push(Entry { name: GET_CHECK.to_string(), subs: Vec::new(), vars: Vec::new(), main: next, pad });
+    let mut n: usize = 0;
+    for i in ends {
+        let call: u16 = push(f, Kind::Sub { next: NONE, params: None, flow: String::new(), entry: GET_CHECK.to_string() })?;
+        for e in f.entries.iter_mut().filter(|e| e.name.starts_with(WINDOW_PREFIX)) {
+            if !e.subs.contains(&call) {
+                e.subs.push(call);
+            }
+        }
+        match &mut f.events[usize::from(i)].kind {
+            Kind::Action { next, .. } | Kind::Sub { next, .. } | Kind::Join { next } => *next = call,
+            Kind::Switch { cases, .. } | Kind::SubSwitch { cases, .. } => {
+                for c in cases.iter_mut().filter(|c| c.ev == NONE) {
+                    c.ev = call;
+                }
+            }
+            _ => {}
+        }
+        n += 1;
+    }
+    Ok(n)
+}
+
+pub fn add_update(b: &mut Bf, evs: &[Ev]) -> Res<u16> {
     let f: &mut Flow = b.flows.iter_mut().find(|f| f.name == BOOT_FLOW).ok_or(Error::Format("key log: DefaultBootEvent has no flow"))?;
     if f.entries.iter().any(|e| e.name == UPDATE) {
         return Err(Error::Format("key log: DefaultBootEvent already has the update"));
     }
     let pad: u16 = f.entries.first().map(|e| e.pad).unwrap_or(0);
     let (a, x): (u16, u16) = crate::start_state::slot(f, "ChallengeSystemActor", "EventExecuteProgressChallengeStep")?;
-    let mut next: u16 = NONE;
-    for q in ids().iter().rev() {
-        next = push(f, Kind::Action { next, actor: a, act: x, params: Some(ask_step(q, STEP)) })?;
+    let mut main: u16 = NONE;
+    for (name, card) in [(INTRO, true), (UPDATE, false)] {
+        let mut next: u16 = NONE;
+        for e in evs.iter().rev() {
+            next = add_event(f, e, a, x, next)?;
+        }
+        next = push(f, Kind::Action { next, actor: a, act: x, params: Some(ask_step_ui(PARENT, DONE, card)) })?;
+        for dn in DUNGEONS.iter().rev() {
+            next = push(f, Kind::Action { next, actor: a, act: x, params: Some(ask_step(&child_id(dn), STEP)) })?;
+        }
+        f.entries.push(Entry { name: name.to_string(), subs: Vec::new(), vars: Vec::new(), main: next, pad });
+        main = next;
     }
-    let main: u16 = next;
-    f.entries.push(Entry { name: UPDATE.to_string(), subs: Vec::new(), vars: Vec::new(), main, pad });
     let boot: usize = f.entries.iter().position(|e| e.name == BOOT_FLOW).ok_or(Error::Format("key log: DefaultBootEvent has no boot entry"))?;
     let old: u16 = f.entries[boot].main;
     let call: u16 = push(f, Kind::Sub { next: old, params: None, flow: String::new(), entry: UPDATE.to_string() })?;
@@ -450,7 +607,7 @@ pub fn hook_opening(b: &mut Bf) -> Res<()> {
     let Kind::Action { next: old, .. } = f.events[at].kind else {
         return Err(Error::Format("key log: the opening hook point is not an action"));
     };
-    let call: u16 = push(f, Kind::Sub { next: old, params: None, flow: BOOT_FLOW.to_string(), entry: UPDATE.to_string() })?;
+    let call: u16 = push(f, Kind::Sub { next: old, params: None, flow: BOOT_FLOW.to_string(), entry: INTRO.to_string() })?;
     if let Kind::Action { next, .. } = &mut f.events[at].kind {
         *next = call;
     }
@@ -462,8 +619,11 @@ pub fn hook_opening(b: &mut Bf) -> Res<()> {
     Ok(())
 }
 
-pub fn stage_flows(rf: &mut Romfs, late: &mut Vec<Out>, work: &std::path::Path) -> Res<()> {
-    crate::story_skip::stage_late(rf, late, work, BOOT_FLOW, |b| add_update(b).map(|_| ()))?;
+pub fn stage_flows(rf: &mut Romfs, late: &mut Vec<Out>, work: &std::path::Path, evs: &[Ev]) -> Res<()> {
+    crate::story_skip::stage_late(rf, late, work, BOOT_FLOW, |b| add_update(b, evs).map(|_| ()))?;
+    if !evs.is_empty() {
+        crate::story_skip::stage_late(rf, late, work, GET_FLOW, |b| add_get_check(b, evs).map(|_| ()))?;
+    }
     crate::story_skip::stage_late(rf, late, work, crate::start_state::FLOW, hook_opening)?;
     Ok(())
 }
@@ -487,11 +647,11 @@ mod tests {
     }
 
     #[test]
-    fn every_game_quest_step_stops_the_next_objective_card_and_ours_stay() {
+    fn every_quest_step_stops_the_next_objective_card() {
         let Some(mut rf) = real() else { return };
         let mut y: Byml = rf.read_byml(TABLE).unwrap();
         let before: usize = y.root.as_arr().unwrap().len();
-        edit_table(&mut y).unwrap();
+        edit_table(&mut y, &[]).unwrap();
         assert!(quiet_steps(&mut y).unwrap() > 100);
         let rows: &[Node] = y.root.as_arr().unwrap();
         assert_eq!(rows.len(), before + ids().len());
@@ -499,7 +659,7 @@ mod tests {
             let q: Vec<bool> = quiet(r);
             assert!(!q.is_empty(), "{} has no steps", id_of(r));
             if id_of(r).starts_with(&format!("Work/Challenge/{OURS}")) {
-                assert!(q.iter().all(|b| !b), "{} was quieted", id_of(r));
+                assert_eq!(q, vec![true, false], "{}", id_of(r));
             } else {
                 assert!(q.iter().all(|b| *b), "{} still shows the card", id_of(r));
             }

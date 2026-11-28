@@ -5,15 +5,15 @@
         "dungeon": "Deku Tree",
         "locations": {
             "Deku Tree Map Chest": "True",
-            "Deku Baba Sticks": "is_adult or Kokiri_Sword or Boomerang",
+            "Deku Baba Sticks": "is_adult or Kokiri_Sword or Boomerang or Slingshot",
             "Deku Baba Nuts": "
                 is_adult or Slingshot or Sticks or
                 has_explosives or Kokiri_Sword or can_use(Dins_Fire)"
         },
         "exits": {
             "KF Outside Deku Tree": "True",
-            "Deku Tree Slingshot Room": "here(can_hit_deku_scrub)",
-            "Deku Tree Basement": "deku_tree_shortcuts or here(is_adult or can_child_attack or Nuts)",
+            "Deku Tree Slingshot Room": "Slingshot or Boomerang or (Deku_Shield and Nuts) or Bombs",
+            "Deku Tree Basement": "can_use(Dins_Fire) or (can_use(Slingshot) or can_use(Boomerang))",
             "Farores Wind Warp": "can_use(Farores_Wind)"
         }
     },
@@ -38,7 +38,8 @@
         "locations": {
             "Deku Tree Compass Chest": "True",
             "Deku Tree Compass Room Side Chest": "True",
-            "Deku Tree GS Compass Room": "True"
+            "Deku Tree GS Compass Room": "
+                (can_use(Slingshot) or can_use(Boomerang)) and (is_adult or can_child_attack)"
         },
         "exits": {
             "Deku Tree Lobby": "True"
@@ -49,17 +50,17 @@
         "dungeon": "Deku Tree",
         "locations": {
             "Deku Tree Basement Chest": "True",
-            "Deku Tree GS Basement Gate": "is_adult or can_child_attack",
+            "Deku Tree GS Basement Gate": "is_adult or can_child_attack or (can_use(Slingshot) and can_use(Boomerang))",
             "Deku Tree GS Basement Vines": "
-                can_use_projectile or can_use(Dins_Fire) or
+                can_use_projectile or
                 (logic_deku_basement_gs and (is_adult or Sticks or Kokiri_Sword))"
         },
         "exits": {
             # The web before the eye switch room gives way to fire or explosives.
             "Deku Tree Basement Water Room": "
                 here(has_fire_source_with_torch or can_use(Bow) or has_explosives) and
-                here(can_use(Slingshot) or can_use(Boomerang) or can_use(Bow))",
-            "Deku Tree Basement Ledge": "deku_tree_shortcuts or here(is_adult) or logic_deku_b1_skip"
+                here(can_use(Slingshot) or can_use(Boomerang) or can_use(Bow) or can_use(Hookshot) or can_use(Longshot))",
+            "Deku Tree Basement Ledge": "is_adult"
         }
     },
     {

@@ -17,10 +17,10 @@
         "dungeon": "Fire Temple",
         "exits": {
             "DMC Fire Temple Entrance": "True",
-            "Fire Temple Near Boss": "logic_fewer_tunic_requirements or can_use(Goron_Tunic)",
+            "Fire Temple Near Boss": "logic_fewer_tunic_requirements or can_use(Goron_Tunic) or can_use(Nayrus_Love)",
             "Fire Temple Big Lava Room": "
                 fire_keys(2) and
-                (logic_fewer_tunic_requirements or can_use(Goron_Tunic))",
+                (logic_fewer_tunic_requirements or can_use(Goron_Tunic) or can_use(Nayrus_Love))",
             # Hammer the pillar in front of the door first.
             "Fire Temple Lower Locked Door": "
                 ((Small_Key_Fire_Temple, 8) or fire_loop_door == 'open') and can_use(Megaton_Hammer)",
@@ -42,7 +42,8 @@
         # The boss door ledge is reached on the pillar that the Hammer drops from
         # the top floor, so the way in is from Fire Temple Upper.
         "exits": {
-            "Fire Temple Lower": "True"
+            "Fire Temple Lower": "True",
+            "Volvagia Boss Room": "Boss_Key_Fire_Temple and is_adult and can_use(Hover_Boots)"
         }
     },
     {

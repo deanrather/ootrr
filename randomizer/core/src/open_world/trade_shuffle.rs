@@ -6,9 +6,10 @@
 //!   chain gifts like any NPC gift (Opts::trades) instead of cloning them.
 //! - The hand ins are item driven and run at any quest step (checked with the flow simulator), but
 //!   Grog and Fado stand only at some steps, Anju offers her first gift only at Ready, and
-//!   Biggoron's sword would end the quest. So the quest step goes by the earliest trade item the
-//!   player holds ([`ORDER`], [`settle`]): every step request of the trade NPCs becomes a settle,
-//!   Anju's first gift is followed by one, and so is every item get (GetPouchContent).
+//!   Biggoron's sword would end the quest. So the quest step goes by the trade item that is out
+//!   (the one on the slot), else the earliest one held ([`ORDER`], [`settle`]): every step request
+//!   of the trade NPCs becomes a settle, Anju's first gift is followed by one, so is every item
+//!   get (GetPouchContent), and every trade NPC's talk starts with one ([`talks`]).
 //! - Only one adult trade item is out at a time. The menu's trade slot, the L/R list and the HUD
 //!   all draw the first trade item of the slot's list whose pouch count is above 0, so the one
 //!   the player picked has count 1 and every other held one is parked at [`PARKED`]; held means
@@ -22,6 +23,8 @@
 //! - The Pocket Egg only hatches when it is held and no Pocket Cucco is ([`EGG_ENTRY`]). It is not
 //!   in the pool: the Pocket Cucco stands in for it ([`pool`]).
 //! - The slot's list is earliest first ([`pouch_order`]).
+//! - Grog and Fado follow the trade item that is out, not the quest step, and swap live when the
+//!   game unpauses ([`woods`]).
 //! - Each age has its own trade items ([`ADULT`], [`CHILD`]). The slot lists the adult ones
 //!   first and draws the first one that is out whatever Link's age, so an adult trade item found
 //!   as a child hid the Weird Egg, the cucco and Zelda's Letter. While Link is a child every adult
@@ -152,7 +155,7 @@ pub const KID_NPCS: [&str; 2] = ["Npc_Hylia_Soldier_003", "Dm_HrlCastle_0020"];
 pub const POUCH_UI: &str = "UI/Pouch/PouchTable/PouchTable.game__ui__PouchTable.bgyml";
 pub const TRADE_BUTTON: &str = "Pa_ItemIcon_23";
 
-pub const NOTE: &str = "Adult trade shuffle: the ten adult trade items, Pocket Cucco to Claim Check, are shuffled and the ten trade hand ins give only their shuffled item (Anju's first gift is in the pool as the Pocket Cucco, there is no Pocket Egg). Every trade item you find stays until its NPC takes it, so you can hand them over in any order. The quest follows the earliest trade item you hold (Grog and Fado appear for it), and only the trade item you picked shows in the menu, the L/R list and on the item button. To switch, press A on the menu's trade slot again, or show the trade item where nobody takes it: the next one you hold comes up. Each age sees its own trade items: as a child the slot holds the Weird Egg, the cucco and Zelda's Letter (switched the same way) and the adult trade items wait for adult Link.";
+pub const NOTE: &str = "Adult trade shuffle: the ten adult trade items, Pocket Cucco to Claim Check, are shuffled and the ten trade hand ins give only their shuffled item (Anju's first gift is in the pool as the Pocket Cucco, there is no Pocket Egg). Every trade item you find stays until its NPC takes it, so you can hand them over in any order. The quest follows the trade item you picked (Grog and Fado stand for it, swapping as soon as you unpause, and every trade NPC talks to it), and only the trade item you picked shows in the menu, the L/R list and on the item button. To switch, press A on the menu's trade slot again, or show the trade item where nobody takes it: the next one you hold comes up. Each age sees its own trade items: as a child the slot holds the Weird Egg, the cucco and Zelda's Letter (switched the same way) and the adult trade items wait for adult Link.";
 
 const PROGRESS: &str = "EventExecuteProgressChallengeStep";
 const ROLLBACK: &str = "EventExecuteRollbackChallengeStep";
@@ -350,20 +353,51 @@ fn request(f: &mut Flow, back: bool, step: &str, next: u16) -> Res<u16> {
     push(f, Kind::Action { next, actor: a, act: x, params: p })
 }
 
+/// Out: the trade item the player picked, on the slot (count 1).
+fn is_out(f: &mut Flow, actor: &str, yes: u16, no: u16) -> Res<u16> {
+    int3(f, &count_name(actor), 1, no, yes, no)
+}
+
 /// Appends the settle and returns its first event, which ends at `then`: once the quest is past
-/// Ready, the first held trade item of [`ORDER`] that has a step moves the quest to that step
-/// (back or forward); with none held the quest stays.
+/// Ready, the trade item that is out (the one on the slot) moves the quest to its step (back or
+/// forward); with none out (or the Pocket Egg, which has no step) the first held trade item of
+/// [`ORDER`] that has a step does; with none held the quest stays.
 pub fn settle(f: &mut Flow, then: u16) -> Res<u16> {
-    let mut at: u16 = then;
-    for x in ORDER.iter().rev() {
+    let mut to: Vec<(&str, u16)> = Vec::new();
+    for x in ORDER.iter() {
         let Some(step) = x.step else { continue };
         let fwd: u16 = request(f, false, step, then)?;
         let back: u16 = request(f, true, step, then)?;
         let dir: u16 = exp(f, &after_exp(step), back, fwd)?;
-        let there: u16 = is_enum(f, STEP, step, then, dir)?;
-        at = holds(f, x.actor, there, at)?;
+        to.push((x.actor, is_enum(f, STEP, step, then, dir)?));
+    }
+    let mut at: u16 = then;
+    for (actor, there) in to.iter().rev() {
+        at = holds(f, actor, *there, at)?;
+    }
+    for (actor, there) in to.iter().rev() {
+        at = is_out(f, actor, *there, at)?;
     }
     exp(f, STARTED, at, then)
+}
+
+/// The talk entries of the trade NPCs: each settles first, so what the NPC says follows the
+/// trade item that is out, whatever was switched since the last settle.
+pub const TALKS: [&str; 4] = ["Talk", "IrregularTalk", "IsAfter_StartSubEvent_Talk", "IsAfter_KakarikoBurned_Talk"];
+
+/// Puts a settle in front of every [`TALKS`] entry of the flow. Returns how many.
+pub fn talks(f: &mut Flow) -> Res<usize> {
+    let mut n: usize = 0;
+    for k in 0..f.entries.len() {
+        if !TALKS.contains(&f.entries[k].name.as_str()) {
+            continue;
+        }
+        let main: u16 = f.entries[k].main;
+        let first: u16 = settle(f, main)?;
+        f.entries[k].main = first;
+        n += 1;
+    }
+    Ok(n)
 }
 
 fn wait(f: &mut Flow, next: u16) -> Res<u16> {
@@ -457,7 +491,8 @@ pub fn npc(f: &mut Flow) -> Res<usize> {
             *next = first;
         }
     }
-    Ok(hits.len() + takes.len())
+    let talked: usize = talks(f)?;
+    Ok(hits.len() + takes.len() + talked)
 }
 
 /// After every take of a child trade item in the flow, another child trade item goes on the
@@ -825,6 +860,8 @@ pub fn stage(rf: &mut Romfs, late: &mut Vec<Out>, work: &std::path::Path) -> Res
     }
     late_plain(rf, late, work, POUCH_UI, pouch_order)?;
     late_plain(rf, late, work, menu::FILE, menu::patch)?;
+    late_plain(rf, late, work, woods::MODULE, woods::module)?;
+    crate::story_skip::stage_late_file(rf, late, work, woods::MAP, woods::map)?;
     for l in crate::hints::languages(rf)? {
         crate::story_skip::stage_late_file(rf, late, work, &l, text::archive)?;
     }
@@ -846,6 +883,7 @@ fn late_plain(rf: &Romfs, late: &mut Vec<Out>, work: &std::path::Path, path: &st
 
 pub mod menu;
 pub mod text;
+pub mod woods;
 
 #[cfg(test)]
 mod tests;

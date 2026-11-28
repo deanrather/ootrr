@@ -7,6 +7,7 @@
     "Longshot": "(Progressive_Hookshot, 2)",
     "Silver_Gauntlets": "(Progressive_Strength_Upgrade, 2)",
     "Golden_Gauntlets": "(Progressive_Strength_Upgrade, 3)",
+    "Golden_Scale": "(Progressive_Scale, 2)",
     "Scarecrow": "Progressive_Hookshot and can_call_scarecrow",
     "Distant_Scarecrow": "(Progressive_Hookshot, 2) and can_call_scarecrow",
     "can_call_scarecrow": "can_play(Scarecrow_Song) or (scarecrow_behavior == 'free' and (Ocarina or can_oi))",

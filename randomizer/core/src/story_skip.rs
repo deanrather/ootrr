@@ -664,6 +664,80 @@ pub fn cut_darunia_talk(b: &mut Bf) -> Res<()> {
     set_next(&mut f.events[*part].kind, *close as u16)
 }
 
+// ---------------------------------------------------------------- Mido after the Deku Tree
+
+/// Mido and Saria's scene after the Deku Tree. Coming back to the village with the Forest Stone
+/// quest done, an EventRequestActor in KokiriForest_Child_Static starts Mido's entry
+/// KokiriForest_Get_StoneOfForest_Completed_Event: Link rolls to a stop, Dm_Kokiri_0145 plays
+/// (Mido blames Link, Saria and the fairies; the scene writes nothing and ends faded out with a
+/// sound ducking held), then the entry clears Mido's blocker flag, sets
+/// Get_StoneOfForest_Complete_Mido_TalkEnd (Mido's post-Deku talk; the logic module that shows
+/// the scene's extra Saria deletes her on it), warps Mido to his schedule anchor and Link to the
+/// scene's end spot, releases the ducking, fades in, Navi says two lines, the camera resets and the
+/// game autosaves. The rolling start now goes to a new chain: 0145's played flag, the two flag
+/// writes, Mido's warp, the camera reset and the autosave. The scene, Link's warp, the sound and
+/// fade pair the scene opened, and Navi's lines are left out. The vanilla events stay in the flow.
+pub const MIDO_FLOW: &str = "Npc_Kokiri_Mido_Child";
+pub const MIDO_ENTRY: &str = "KokiriForest_Get_StoneOfForest_Completed_Event";
+pub const MIDO_SCENE: &str = "Dm_Kokiri_0145";
+pub const MIDO_PREFIX: &str = "OOTRRMido";
+const MIDO_START: &str = "Player_Event.EventTriggerPlayerEventStartWithRolling";
+/// The scene, then the two flag writes it is followed by.
+const MIDO_PLAY: (&str, &str) = ("Event111", TRANSITION);
+const MIDO_WRITES: [(&str, &str); 2] = [("Event29", "KokiriForest_Npc_Kokiri_Mido_Child_Blocker"), ("Event69", "Get_StoneOfForest_Complete_Mido_TalkEnd")];
+/// Mido's branch of the fork after the writes: cancel his sleeping fairy, wait a frame, warp him.
+const MIDO_WARP: [(&str, &str); 3] = [
+    ("Event163", "Npc_Kokiri_Mido_Child.EventTriggerKokiriCancelSleepFairy"),
+    ("Event170", "EventSystemActor.EventWait"),
+    ("Event2", "Npc_Kokiri_Mido_Child.EventAIScheduleWarpToAnchor"),
+];
+/// The entry's close: camera reset, then the autosave that ends it.
+const MIDO_CLOSE: [(&str, &str); 2] = [
+    ("Event127", "EventCamera.EventTriggerSendReserveCameraResetMessageToPlayerCamera"),
+    ("Event102", "GameSystemActor.EventTriggerRequestAutoSave"),
+];
+
+pub fn cut_mido_scene(b: &mut Bf) -> Res<()> {
+    let f: &mut Flow = flow_mut(b, MIDO_FLOW)?;
+    guard(f, MIDO_PREFIX)?;
+    let start: usize = f.entries.iter().find(|e| e.name == MIDO_ENTRY).map(|e| e.main as usize).ok_or_else(|| Error::Msg(format!("story skip: {MIDO_FLOW} has no entry {MIDO_ENTRY}")))?;
+    if action(f, start).as_deref() != Some(MIDO_START) {
+        return Err(Error::Format("story skip: Mido's Forest Stone entry no longer starts with Link's roll, the game files differ"));
+    }
+    let play: usize = find_action(f, MIDO_PLAY)?;
+    if text(&f.events[play], "EventName") != Some(MIDO_SCENE) || next_of(&f.events[start].kind) != Some(idx(play)?) {
+        return Err(Error::Format("story skip: Mido's Forest Stone entry no longer plays his scene first, the game files differ"));
+    }
+    let mut kinds: Vec<Kind> = vec![set_bool(f, &format!("HavePlayedEvent.{MIDO_SCENE}"), true)?];
+    let mut at: usize = play;
+    for (name, data) in MIDO_WRITES {
+        let i: usize = find_action(f, (name, "GameDataActor.EventTriggerSetGameDataBool"))?;
+        if text(&f.events[i], "GameDataName") != Some(data) || next_of(&f.events[at].kind) != Some(idx(i)?) {
+            return Err(Error::Msg(format!("story skip: Mido's scene is no longer followed by the {data} write, the game files differ")));
+        }
+        kinds.push(f.events[i].kind.clone());
+        at = i;
+    }
+    let mut prev: Option<usize> = None;
+    for w in MIDO_WARP {
+        let i: usize = find_action(f, w)?;
+        if let Some(p) = prev {
+            if next_of(&f.events[p].kind) != Some(idx(i)?) {
+                return Err(Error::Format("story skip: Mido's warp after his scene changed, the game files differ"));
+            }
+        }
+        kinds.push(f.events[i].kind.clone());
+        prev = Some(i);
+    }
+    let close: usize = find_action(f, MIDO_CLOSE[0])?;
+    let save: usize = find_action(f, MIDO_CLOSE[1])?;
+    if next_of(&f.events[close].kind) != Some(idx(save)?) || next_of(&f.events[save].kind) != Some(NONE) {
+        return Err(Error::Format("story skip: Mido's Forest Stone entry no longer ends with the camera reset and the autosave"));
+    }
+    let first: u16 = chain(f, MIDO_PREFIX, kinds, idx(close)?)?;
+    set_next(&mut f.events[start].kind, first)
+}
+
 // ---------------------------------------------------------------- Darunia's Joy
 
 /// Darunia's Joy. Saria's Song to child Darunia runs Get_StoneOfFire entry
@@ -2755,6 +2829,45 @@ mod tests {
         let flag = |n: &str| format!("GameDataActor.EventTriggerSetGameDataBool(HavePlayedEvent.{n})");
         assert_eq!(w[at - 3..at].to_vec(), vec![flag("Dm_Kokiri_0080"), flag("Dm_Kokiri_0095"), flag("Dm_Kokiri_0090")]);
         assert_eq!(w[at + 1], flag("Dm_Kokiri_0140"));
+        Bf::parse(&b.write().unwrap()).unwrap();
+    }
+
+    #[test]
+    fn the_real_mido_scene_after_the_deku_tree_is_cut_to_its_writes() {
+        let Some(root) = dump() else {
+            return;
+        };
+        let mut rf: Romfs = Romfs::open(&root).unwrap();
+        let mut b: Bf = Bf::parse(&rf.read_zs(&format!("Event/EventFlow/{MIDO_FLOW}.bfevfl.zs")).unwrap()).unwrap();
+        cut_mido_scene(&mut b).unwrap();
+        assert!(cut_mido_scene(&mut b).is_err());
+        let f: &Flow = b.flows.iter().find(|f| f.name == MIDO_FLOW).unwrap();
+        let main: u16 = f.entries.iter().find(|e| e.name == MIDO_ENTRY).unwrap().main;
+        let w: Vec<String> = walk(f, main, 20);
+        let flag = |n: &str| format!("GameDataActor.EventTriggerSetGameDataBool({n})");
+        assert_eq!(
+            w,
+            vec![
+                format!("{MIDO_START}()"),
+                flag("HavePlayedEvent.Dm_Kokiri_0145"),
+                flag("KokiriForest_Npc_Kokiri_Mido_Child_Blocker"),
+                flag("Get_StoneOfForest_Complete_Mido_TalkEnd"),
+                "Npc_Kokiri_Mido_Child.EventTriggerKokiriCancelSleepFairy()".to_string(),
+                "EventSystemActor.EventWait()".to_string(),
+                "Npc_Kokiri_Mido_Child.EventAIScheduleWarpToAnchor()".to_string(),
+                "EventCamera.EventTriggerSendReserveCameraResetMessageToPlayerCamera()".to_string(),
+                "GameSystemActor.EventTriggerRequestAutoSave()".to_string(),
+            ]
+        );
+        // The flag writes keep their values; nothing reached plays a scene, talks or calls out.
+        let reached: Vec<usize> = reach(f, main);
+        let val = |n: &str| reached.iter().find(|&&i| text(&f.events[i], "GameDataName") == Some(n)).and_then(|&i| f.events[i].kind.params().and_then(|c| c.get("Value")).cloned());
+        assert_eq!(val("KokiriForest_Npc_Kokiri_Mido_Child_Blocker"), Some(Val::Bool(FALSE)));
+        assert_eq!(val("Get_StoneOfForest_Complete_Mido_TalkEnd"), Some(Val::Bool(TRUE)));
+        assert!(reached.iter().all(|&i| !matches!(&f.events[i].kind, Kind::Sub { .. } | Kind::Fork { .. })));
+        assert!(reached.iter().all(|&i| action(f, i).is_none_or(|a| a != TRANSITION && !a.ends_with(".EventTalk"))));
+        // The open forest edit of Mido's flow still applies on top.
+        crate::open_world::kokiri::mido_flow(&mut b).unwrap();
         Bf::parse(&b.write().unwrap()).unwrap();
     }
 

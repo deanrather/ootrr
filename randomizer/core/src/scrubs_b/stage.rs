@@ -46,13 +46,16 @@ pub fn jobs(d: &Data, seed: &SeedFile) -> Res<Vec<Job>> {
         if !crate::scrubs_b::fits(d, loc, i) {
             return Err(E::Msg(format!("{loc} cannot sell {item}")));
         }
-        // An upgrade sells the tier the reach order fixes for this sale (crate::slice::tier_order).
-        let a: String = match d.family(item) {
-            Some(_) => tiers.get(loc).cloned().ok_or_else(|| E::Msg(format!("{loc} sells {item}, but the tier order fixed no tier for it")))?,
-            None => i.actor.clone().ok_or_else(|| E::Msg(format!("{item} has no remake item actor and cannot be placed")))?,
+        // An upgrade sells the next tier the player lacks (flow::add wraps the sale), or the tier
+        // the reach order fixed when the family's chain cannot be used (crate::slice::tier_order).
+        let (a, family): (String, Option<&'static str>) = match (d.family(item), tiers.get(loc)) {
+            (Some(_), Some(t)) => (t.clone(), None),
+            (Some(f), None) => (crate::progressive::tiers(f)?.first().map(|t| t.to_string()).ok_or_else(|| E::Msg(format!("{f} has no tier")))?, Some(f)),
+            (None, _) => (i.actor.clone().ok_or_else(|| E::Msg(format!("{item} has no remake item actor and cannot be placed")))?, None),
         };
+        let forms: Vec<String> = family.map(|f| crate::ocarina_hold::forms(d, loc, f)).unwrap_or_default();
         let actor: String = dest_form(d, item, loc, a);
-        out.push(Job { scrub: s.clone(), item: item.clone(), sale: Sale { entry: s.entry(), flag: s.flag.clone(), actor, price: s.price } });
+        out.push(Job { scrub: s.clone(), item: item.clone(), sale: Sale { entry: s.entry(), flag: s.flag.clone(), actor, price: s.price, family, forms } });
     }
     out.sort_by(|x, y| x.scrub.key.cmp(&y.scrub.key));
     Ok(out)

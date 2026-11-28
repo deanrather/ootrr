@@ -5,7 +5,7 @@ use crate::error::{Error as E, Res};
 pub const FILE: &str = "Enemy_Scrub_Business_Common.bfevfl";
 const POUCH: &str = "SimpleShopRoot_Enemy_Scrub_Business_Pouch";
 const ONE: &str = "SimpleShopSub_Scrub_Business_OneTime";
-const SALE: (usize, &str) = (155, "Event293");
+pub(crate) const SALE: (usize, &str) = (155, "Event293");
 const ROWS: [(usize, &str); 3] = [(327, "Event578"), (172, "Event6"), (171, "Event309")];
 const LEAVE: (usize, &str) = (154, "Event305");
 const HEART: &str = "Enemy_Scrub_Business_Heart_02";
@@ -21,6 +21,11 @@ pub struct Sale {
     pub flag: String,
     pub actor: String,
     pub price: i32,
+    /// The upgrade family the sale sells tier by tier (progressive::wrap_sale_as), when the
+    /// reach order fixed no tier for it.
+    pub family: Option<&'static str>,
+    /// The actor each tier's branch sells, when it is not the tier (crate::ocarina_hold).
+    pub forms: Vec<String>,
 }
 
 fn idx(n: usize) -> Res<u16> {
@@ -143,6 +148,10 @@ pub fn add(f: &mut Flow, s: &Sale, label: &str) -> Res<()> {
     let sub: u16 = push(f, Kind::Sub { next: chk, params: Some(Cont { items }), flow: String::new(), entry: POUCH.to_string() })?;
     let gate: u16 = push(f, Kind::Switch { actor: qa, query: qi, cases: vec![Case { val: 0, ev: idx(LEAVE.0)? }, Case { val: 1, ev: sub }], params: Some(flag(&s.flag)) })?;
     f.entries.push(Entry { name: s.entry.clone(), subs: vec![sub], vars: Vec::new(), main: gate, pad });
+    if let Some(fam) = s.family {
+        let name: String = f.events[usize::from(sub)].name.clone();
+        crate::progressive::wrap_sale_as(f, usize::from(sub), &name, "SaleActor", fam, &s.forms)?;
+    }
     Ok(())
 }
 
@@ -209,7 +218,7 @@ pub(crate) mod tests {
     }
 
     fn sale() -> Sale {
-        Sale { entry: "OOTRR_Scrub_T".to_string(), flag: "HavePlayedEvent.X".to_string(), actor: "Item_Hookshot".to_string(), price: 30 }
+        Sale { entry: "OOTRR_Scrub_T".to_string(), flag: "HavePlayedEvent.X".to_string(), actor: "Item_Hookshot".to_string(), price: 30, family: None, forms: Vec::new() }
     }
 
     #[test]

@@ -4,8 +4,10 @@
         "scene": "Lost Woods",
         "hint": "LOST_WOODS",
         "events": {
-            "Odd Mushroom Access": "is_adult and (('Cojiro Access' and not adult_trade_shuffle) or (Cojiro and 'Adult Trade Takers'))",
-            "Poachers Saw Access": "is_adult and (('Odd Potion Access' and not adult_trade_shuffle) or (Odd_Potion and 'Adult Trade Takers'))"
+            # Adult trade shuffle: Grog stands while Cojiro is the trade item picked, Fado while
+            # the Odd Potion is, whatever else is held.
+            "Odd Mushroom Access": "is_adult and (('Cojiro Access' and not adult_trade_shuffle) or Cojiro)",
+            "Poachers Saw Access": "is_adult and (('Odd Potion Access' and not adult_trade_shuffle) or Odd_Potion)"
         },
         "locations": {
             "LW Skull Kid": "is_child and can_play(Sarias_Song)",

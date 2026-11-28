@@ -58,7 +58,7 @@
         "exits": {
             # Climb the vines, then Hookshot across the gap to the target over the arch.
             "Forest Temple Outdoors High Balconies": "can_use(Hookshot)",
-            "Forest Temple Well": "Forest_Temple_Drain_Well",
+            "Forest Temple Well": "Forest_Temple_Drain_Well or (can_use(Iron_Boots) and can_use(Zora_Tunic))",
             "Forest Temple NW Outdoors Freestandings": "logic_forest_courtyard_hearts and can_use(Boomerang)"
         }
     },
@@ -101,7 +101,7 @@
         "exits": {
             # The floor switch in front of the east gate opens it from this side.
             "Forest Temple Central Area": "True",
-            "Forest Temple Well": "Forest_Temple_Drain_Well"
+            "Forest Temple Well": "Forest_Temple_Drain_Well or (can_use(Iron_Boots) and can_use(Zora_Tunic))"
         }
     },
     {
@@ -182,7 +182,7 @@
         },
         "exits": {
             # A floor switch raises a lit torch. An arrow through it melts the ice.
-            "Forest Temple Falling Room": "can_use(Bow) or can_use(Dins_Fire)"
+            "Forest Temple Falling Room": "can_use(Bow)"
         }
     },
     {

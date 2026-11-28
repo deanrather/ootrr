@@ -11,7 +11,7 @@
         "exits": {
             "Lake Hylia": "True",
             "Water Temple Dive": "
-                is_adult and Iron_Boots and (Zora_Tunic or logic_fewer_tunic_requirements)",
+                is_adult and Iron_Boots and (Zora_Tunic or logic_fewer_tunic_requirements or can_use(Nayrus_Love))",
             # The boss door hangs above the 3F water line, so the water must be raised again
             # once it was lowered.
             "Water Temple Before Boss": "can_use(Longshot) and Raise_Water_Level",

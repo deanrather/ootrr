@@ -27,7 +27,7 @@ pub struct Ctx<'a> {
 
 pub type Stage = fn(&mut Romfs, &Ctx, &mut Vec<Out>) -> Res<()>;
 
-pub const STAGES: [(&str, Stage); 29] = [
+pub const STAGES: [(&str, Stage); 30] = [
     ("boss heart chests", boss_hearts),
     ("trap chests", trap_chests),
     ("songs", songs),
@@ -47,6 +47,7 @@ pub const STAGES: [(&str, Stage); 29] = [
     ("bombchu alley", bombchu),
     ("water temple gate", water_gate),
     ("lake hylia tree wall", lake_tree_wall),
+    ("zora river front wall", zr_front_wall),
     ("medallion gate", medal_gate),
     ("fire temple gorons", fire_gorons),
     ("start reward and flags", start_reward),
@@ -60,7 +61,9 @@ pub const STAGES: [(&str, Stage); 29] = [
 ];
 
 fn key_log(rf: &mut Romfs, c: &Ctx, more: &mut Vec<Out>) -> Res<()> {
-    crate::key_log::stage(rf, more, &crate::key_log::plan(c.d, c.seed)?)
+    let mut kp: crate::key_log::Plan = crate::key_log::plan(c.d, c.seed)?;
+    kp.events = crate::quest_events::plan(c.p);
+    crate::key_log::stage(rf, more, &kp)
 }
 
 pub fn run(rf: &mut Romfs, c: &Ctx, more: &mut Vec<Out>) -> Res<()> {
@@ -170,6 +173,10 @@ fn water_gate(rf: &mut Romfs, c: &Ctx, more: &mut Vec<Out>) -> Res<()> {
 
 fn lake_tree_wall(rf: &mut Romfs, c: &Ctx, more: &mut Vec<Out>) -> Res<()> {
     crate::lake_tree_wall::stage(rf, more, c.work)
+}
+
+fn zr_front_wall(rf: &mut Romfs, c: &Ctx, more: &mut Vec<Out>) -> Res<()> {
+    crate::zr_front_wall::stage(rf, more, c.work)
 }
 
 fn pedestal(rf: &mut Romfs, c: &Ctx, more: &mut Vec<Out>) -> Res<()> {

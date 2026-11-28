@@ -149,12 +149,19 @@ pub fn build_for(seed: &SeedFile, romfs: &P, load: &P, mod_name: &str, host: Hos
 }
 
 pub fn build_for_with(seed: &SeedFile, romfs: &P, load: &P, mod_name: &str, host: Host, hook: Option<&mut Hook>) -> Res<Built> {
+    // The race hash is the checksum of the seed as it was generated, before the build's own passes.
+    let race: Option<SeedFile> = crate::race::is_race(seed).then(|| seed.clone());
     let (seed, cold): (SeedFile, Vec<crate::frost::Trap>) = crate::frost::prepare(seed)?;
     let b: Built = crate::slice::seed_packs::build_hooked(&seed, romfs, load, mod_name, host, hook)?;
     let b: Built = crate::shelf::seed::after(&seed, romfs, load, mod_name, host, b)?;
     let b: Built = crate::frost::after(&cold, &seed.seed, romfs, load, mod_name, host, b)?;
     let on: bool = crate::slice::support::plan(&seed.settings()?.settings)?.full_wallet;
-    crate::full_wallet::after(on, romfs, load, mod_name, host, b)
+    let mut b: Built = crate::full_wallet::after(on, romfs, load, mod_name, host, b)?;
+    if let Some(full) = &race {
+        b.report = crate::race::build_report(&b.root, full);
+        b.chests.clear();
+    }
+    Ok(b)
 }
 
 pub type Hook<'a> = dyn FnMut(&mut Romfs, &P, &mut Vec<crate::staging::Out>) -> Res<()> + 'a;
@@ -345,7 +352,7 @@ pub fn build_data(d: Data, seed: &SeedFile, romfs: &P, load: &P, mod_name: &str,
             }
         }
     }
-    let mut staged: Stage = flow_locations::stage_merged(&mut rf, &d.flow, &flows, &gs, &FlowOpts { songs: p.songs != Songs::Off, untested: true, trades: p.rewards.trade_items })?;
+    let mut staged: Stage = flow_locations::stage_merged(&mut rf, &d.flow, &flows, &gs, &placed, &FlowOpts { songs: p.songs != Songs::Off, untested: true, trades: p.rewards.trade_items })?;
     crate::scrubs_b::stage_flow(&mut rf, &scrub_jobs, &mut staged.files)?;
     crate::scrub_prices::stage(&mut rf, &d, seed, p.rewards.scrub_prices, &mut staged.files)?;
     crate::merchant_prices::stage_medigoron(&mut rf, seed, p.rewards.merchant_prices, p.rewards.medigoron, &mut staged.files)?;
@@ -417,7 +424,8 @@ pub fn build_data(d: Data, seed: &SeedFile, romfs: &P, load: &P, mod_name: &str,
         crate::gift_keys::Item::Other(k) => Some((k, c.dungeon)),
         crate::gift_keys::Item::Small => None,
     }));
-    let traps: Vec<u64> = ts.iter().filter(|t| t.old_actor == crate::slice::trap_chests::ACTOR).map(|t| t.hash).collect();
+    let mut traps: Vec<u64> = ts.iter().filter(|t| t.old_actor == crate::slice::trap_chests::ACTOR).map(|t| t.hash).collect();
+    traps.extend(crate::slice::silver::trap_hashes(&d, seed));
     let c: crate::slice::stages::Ctx = crate::slice::stages::Ctx {
         d: &d,
         seed,
@@ -486,7 +494,7 @@ pub fn build_data(d: Data, seed: &SeedFile, romfs: &P, load: &P, mod_name: &str,
         if p.gates.zelda {
             outs.push(crate::start_state::stage_free_quest(&mut rf)?);
         }
-        crate::key_log::stage_table(&mut rf, &mut outs)?;
+        crate::key_log::stage_table(&mut rf, &mut outs, &crate::quest_events::plan(&p))?;
         for o in outs {
             pk.write_romfs(&o.path, &o.z)?;
             extra += 1;
@@ -548,6 +556,9 @@ pub fn build_data(d: Data, seed: &SeedFile, romfs: &P, load: &P, mod_name: &str,
         let gives: Vec<(&str, &[&str], crate::story_skip::SceneGive)> = crate::story_skip::REWARD_SCENES.iter().map(|(loc, scene, extra)| (*scene, *extra, give_for(loc))).collect();
         crate::story_skip::stage_reward_gives(&mut rf, &mut late, &gives)?;
         crate::story_skip::stage_late(&mut rf, &mut late, &work, crate::story_skip::ARROWS_FLOW, crate::story_skip::patch_last_sage)?;
+        // Mido and Saria's scene on the way back from the Deku Tree (the open forest edit of
+        // Mido's flow, staged later, applies on top).
+        crate::story_skip::stage_late(&mut rf, &mut late, &work, crate::story_skip::MIDO_FLOW, crate::story_skip::cut_mido_scene)?;
     }
     crate::fairy_prices::stage(&mut rf, &mut late, &work, p.rewards.fairy_prices, seed)?;
     if p.bridge {
@@ -597,6 +608,7 @@ pub fn build_data(d: Data, seed: &SeedFile, romfs: &P, load: &P, mod_name: &str,
     crate::dungeon_packs::stage(&mut rf, &mut late, &work, &crate::dungeon_packs::credits(&d, seed))?;
     crate::pickup_tiers::stage(&mut rf, &mut late, &work, &crate::pickup_tiers::families(&d, seed))?;
     crate::ocarina_hold::stage(&mut rf, &mut late, &work, crate::ocarina_hold::picked_up(&d, seed))?;
+    crate::ocarina_hold::stage_sales(&mut rf, &mut late, &work, &crate::ocarina_hold::sale_events(&d, &flows, &scrub_jobs))?;
     if let Some(t) = ts.iter().find(|t| t.hash == crate::slice::treasure::FIRST && t.key.is_none() && crate::progressive::guarded(&t.new_actor)) {
         crate::slice::treasure::stage_guard(&mut rf, &mut late, &work, &t.new_actor)?;
     }
@@ -606,7 +618,7 @@ pub fn build_data(d: Data, seed: &SeedFile, romfs: &P, load: &P, mod_name: &str,
         crate::short_get::stage(&mut rf, &mut late, &work)?;
     }
     crate::entr::story::stage(&mut rf, seed, &mut late, &work)?;
-    crate::key_log::stage_flows(&mut rf, &mut late, &work)?;
+    crate::key_log::stage_flows(&mut rf, &mut late, &work, &crate::quest_events::plan(&p))?;
     crate::open_world::stage_last(&mut rf, &mut late, &work)?;
     // The forest exit's first-visit write is cleared on top of the castle flow as the build left it
     // (it holds Malon's gift, Saria's gift and the owl cuts): rewriting it from the game's file here
