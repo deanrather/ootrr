@@ -22,8 +22,30 @@ struct Work<'a> {
 /// The roles whose change hands the placed item to the player.
 const GIVES: [&str; 2] = ["grant", "give"];
 
+/// Once one frog song's payout is edited, every song's payout caller must pass an actor
+/// (flow_locations::build::plan completes the unchosen ones). A song wrapped as a tier chain makes
+/// no Choice, so plan misses it: complete the songs that are neither chosen nor wrapped here, and
+/// leave a wrapped song to its own wrap (its ops bind its caller to the first tier).
+fn frogs_with_wraps(d: &Data, cs: &[Choice], wrapped: &BM<String, &'static str>, changes: &mut Vec<Change>) -> Res<()> {
+    use crate::flow_extra::frogs;
+    if !wrapped.keys().any(|n| frogs::is_song(n)) {
+        return Ok(());
+    }
+    changes.retain(|c| !(c.role == frogs::ROLE && wrapped.contains_key(&c.location)));
+    for n in frogs::SONGS {
+        if wrapped.contains_key(n) || cs.iter().any(|c| c.location == n) || changes.iter().any(|c| c.location == n) {
+            continue;
+        }
+        if let Some(l) = d.by_name(n) {
+            changes.extend(frogs::changes(l, l.item.as_deref().unwrap_or(frogs::PURPLE))?);
+        }
+    }
+    Ok(())
+}
+
 pub fn stage_merged(rf: &mut Romfs, d: &Data, cs: &[Choice], gs: &[Grant], wrapped: &BM<String, &'static str>, o: &Opts) -> Res<Stage> {
-    let (changes, same, untested): (Vec<Change>, usize, Vec<String>) = plan(d, cs, o)?;
+    let (mut changes, same, untested): (Vec<Change>, usize, Vec<String>) = plan(d, cs, o)?;
+    frogs_with_wraps(d, cs, wrapped, &mut changes)?;
     let mut by: BM<String, Work> = BM::new();
     for c in changes.iter().filter(|c| crate::flow_extra::trade::plain(c)) {
         by.entry(c.file.clone()).or_default().reqs.push(Req {

@@ -39,7 +39,7 @@
     "can_refill_bombchus": "Buy_Bombchu_5 or Buy_Bombchu_10 or Buy_Bombchu_20 or Bombchu_Drop",
     "has_bombchus": "(free_bombchu_drops and found_bombchus) or (not free_bombchu_drops and can_refill_bombchus and Bomb_Bag)",
     "found_bombchus": "(free_bombchu_drops and (Bombchus or Bombchus_5 or Bombchus_10 or Bombchus_20)) or (not free_bombchu_drops and Bomb_Bag)",
-    "has_explosives": "Bombs or (free_bombchu_drops and has_bombchus)",
+    "has_explosives": "Bombs",
     "has_both_explosives": "Bombs and (free_bombchu_drops and has_bombchus)",
     "is_child": "age == 'child'",
     "is_adult": "age == 'adult'",
@@ -48,7 +48,7 @@
     "can_blast_or_smash": "has_explosives or can_use(Megaton_Hammer)",
     "can_break_mud_wall": "can_blast_or_smash or (blue_fire_arrows and can_use(Blue_Fire_Arrows))",
     "can_child_attack": "is_child and (Slingshot or Boomerang or Sticks or Kokiri_Sword or has_explosives or can_use(Dins_Fire) or can_use(Megaton_Hammer))",
-    "can_child_damage": "is_child and (Slingshot or Sticks or Kokiri_Sword or has_explosives or can_use(Dins_Fire) or can_use(Megaton_Hammer))",
+    "can_child_damage": "is_child and (Slingshot or Boomerang or Sticks or Kokiri_Sword or has_explosives or can_use(Dins_Fire) or can_use(Megaton_Hammer))",
     "can_cut_shrubs": "is_adult or Sticks or Kokiri_Sword or Boomerang or has_explosives or can_use(Megaton_Hammer)",
     "can_dive": "Progressive_Scale",
     "can_leave_forest": "open_forest != 'closed' or is_adult or 'Defeat Queen Gohma'

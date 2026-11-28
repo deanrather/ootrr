@@ -366,6 +366,31 @@ fn with_param(k: &Kind, param: &str, value: &str) -> Res<Kind> {
     Ok(out)
 }
 
+/// The parameters of one give that name the item it hands out. A shop call names both the sold
+/// actor and its display model (SimpleShop's ActorName and DisplayItemActor, as at GC Medigoron).
+const ITEM_PARAMS: [&str; 2] = ["ActorName", "DisplayItemActor"];
+
+/// with_param for a tier's give: the other item parameter follows the tier too when it named the
+/// same item or any of `chain` (the family's tiers and their forms), so a sale wrapped on its
+/// display model also sells the tier it shows. At GC Medigoron the gated edit already set ActorName
+/// to the first tier while DisplayItemActor still held the vanilla model.
+fn with_item(k: &Kind, param: &str, value: &str, chain: &[&str]) -> Res<Kind> {
+    let was: Option<Val> = k.params().and_then(|c| c.get(param)).cloned();
+    let mut out: Kind = with_param(k, param, value)?;
+    if let (true, Some(c)) = (ITEM_PARAMS.contains(&param), out.params_mut()) {
+        for (n, v) in c.items.iter_mut() {
+            let follows: bool = match &*v {
+                Val::Str(s) => chain.contains(&s.as_str()) || matches!(&was, Some(Val::Str(o)) if o == s),
+                _ => false,
+            };
+            if n != param && ITEM_PARAMS.contains(&n.as_str()) && follows {
+                *v = Val::Str(value.to_string());
+            }
+        }
+    }
+    Ok(out)
+}
+
 pub fn wrap_grant(f: &mut Flow, index: usize, event: &str, param: &str, family: &str) -> Res<()> {
     wrap_grant_as(f, index, event, param, family, &[])
 }
@@ -401,9 +426,10 @@ fn wrap_with(f: &mut Flow, index: usize, event: &str, param: &str, family: &str,
         e.kind.clone()
     };
     let (a, q) = ensure_query(f)?;
+    let named: Vec<&str> = tiers_of.iter().chain(t.iter()).copied().collect();
     let mut gives: Vec<u16> = Vec::new();
     for (k, (x, tier)) in t.iter().zip(tiers_of).enumerate() {
-        let mut give: Kind = with_param(&base, param, x)?;
+        let mut give: Kind = with_item(&base, param, x, &named)?;
         let then: Option<u16> = next_of(&give);
         // A pickup actor handed out in place of a tier with no animation (crate::ocarina_hold) is
         // followed by the tier item added like Saria's gift.

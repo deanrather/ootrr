@@ -850,4 +850,43 @@ mod tests {
         assert_eq!(max(&b, NEW), 1);
         assert_eq!(broken(&b), broken(&a));
     }
+
+    #[test]
+    fn a_chained_medigoron_sells_the_tier_it_shows() {
+        // Each tier's copy of the SimpleShop call named the tier as DisplayItemActor only, and
+        // ActorName (the item sold) stayed at the first tier: an Adult's Wallet owner bought it again.
+        let Some(r) = root() else { return };
+        let loc: &str = "GC Medigoron";
+        let fl: HM<String, Flow> = chained(&r, loc);
+        let ts: &[&str] = crate::progressive::tiers("Wallet").unwrap();
+        for (i, owned) in std::iter::once(None).chain(ts.iter().take(ts.len() - 1).map(Some)).enumerate() {
+            let own: Vec<(&str, i64)> = owned.map(|o| vec![(*o, 1)]).unwrap_or_default();
+            let sc: Scene = scene("Npc_Goron_Medigoron_Adult", "Talk", &[("PlayerStatus.CurrentRupee", "300")], &own);
+            let (_, b): (Vec<Fin>, Vec<Fin>) = chain_run(&r, loc, &fl, &sc, None);
+            let want: &str = ts[i];
+            assert!(b.iter().any(|f| f.end == End::Done && granted(f, want) == 1), "{loc} owning {owned:?}: no path sells {want}");
+            for t in ts.iter().filter(|t| **t != want) {
+                assert_eq!(max(&b, t), 0, "{loc} owning {owned:?} sells {t}, not {want}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_chained_frog_song_leaves_every_other_song_naming_its_payout() {
+        // The payout swap makes every TeachNewMusic caller pass ActorName. A wrapped song makes no
+        // Choice, so the other songs' callers were not completed and handed out an unset actor.
+        let Some(r) = root() else { return };
+        for (i, loc) in crate::flow_extra::frogs::SONGS.iter().enumerate() {
+            let fl: HM<String, Flow> = chained(&r, loc);
+            let f: &Flow = fl.get("MiniGame_FrogTenors").unwrap();
+            let callers: Vec<&crate::bfevfl::Event> = f.events.iter().filter(|e| matches!(&e.kind, crate::bfevfl::Kind::Sub { entry, flow, .. } if entry == "TeachNewMusic" && flow.is_empty())).collect();
+            for (j, flag) in FROG_FLAGS.iter().enumerate().filter(|(j, _)| *j != i) {
+                let named: bool = callers.iter().any(|e| {
+                    let p = e.kind.params();
+                    p.and_then(|c| c.get("GameDataName")).is_some_and(|v| matches!(v, crate::bfevfl::Val::Str(s) if s == flag)) && p.and_then(|c| c.get("ActorName")).is_some()
+                });
+                assert!(named, "{loc} wrapped: the song {j} caller ({flag}) passes no ActorName");
+            }
+        }
+    }
 }
