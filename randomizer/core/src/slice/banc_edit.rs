@@ -65,7 +65,7 @@ pub fn edit_file_with(file: &str, raw: &[u8], ts: &[Target], keys: bool, small: 
                 touched.push(t.hash);
             }
             if let Some(f) = t.family {
-                if special::of(t.hash).is_some() {
+                if special::sized(t.hash).is_some() {
                     let g: String = find(&y, file, t.hash).into_iter().next().map(|x| x.gyaml).unwrap_or_default();
                     used.push((f.to_string(), Size::of_gyaml(&g)));
                     wraps.push((t.hash, f.to_string()));
@@ -166,5 +166,53 @@ mod tests {
         let list: &[Node] = back.root.get("Actors").and_then(|a| a.as_arr()).unwrap();
         let other: &Node = list.iter().find(|a| crate::placement::hash_of(a) == Some(OTHER)).unwrap();
         assert_eq!(other.get("Dynamic").and_then(|d| d.get("GetEventName")).and_then(|v| v.as_str()), Some("Story"));
+    }
+
+    #[test]
+    fn an_upgrade_in_a_story_chest_keeps_the_story_event_and_takes_its_wrapper() {
+        let ev: crate::slice::data::Events = crate::slice::data::parse_events(crate::slice::data::EVENTS_JSON).unwrap();
+        let keep: Vec<u64> = ev.keep.iter().copied().collect();
+        assert_eq!(keep.len(), 8);
+        let mut cases: usize = 0;
+        let mut lost: Vec<(u64, &str)> = Vec::new();
+        for h in &keep {
+            assert!(special::sized(*h).is_some(), "keep_event chest {h} has no story transition to wrap");
+            for (fam, tiers) in crate::progressive::FAMILIES {
+                let raw: Vec<u8> = Byml { root: Node::Map(vec![("Actors".to_string(), Node::Arr(vec![chest(*h, "Item_IceArrow", "Obj_TBox_A_02")]))]), version: 7, big: false }.write().unwrap();
+                let mut t: Target = target(*h, "Item_IceArrow", tiers[0]);
+                t.family = Some(fam);
+                let e: Edited = edit_file("Banc/Area/a.bcett.byml.zs", &raw, &[t]).unwrap().unwrap();
+                let back: Byml = Byml::parse(&e.bytes).unwrap();
+                let list: &[Node] = back.root.get("Actors").and_then(|a| a.as_arr()).unwrap();
+                let name: Option<&str> = list[0].get("Dynamic").and_then(|d| d.get("GetEventName")).and_then(|v| v.as_str());
+                cases += 1;
+                if name != Some("Story") || e.wraps != vec![(*h, fam.to_string())] || e.used != vec![(fam.to_string(), Size::Big)] {
+                    lost.push((*h, fam));
+                }
+            }
+        }
+        println!("upgrade in a keep_event chest: {} of {cases} placements lose the story event or the wrapper", lost.len());
+        assert_eq!(cases, 8 * crate::progressive::FAMILIES.len());
+        assert_eq!(lost, Vec::new());
+    }
+
+    #[test]
+    fn default_seeds_put_upgrades_in_story_chests() {
+        let d: crate::slice::data::Data = crate::slice::data::Data::load().unwrap();
+        let story: Vec<&str> = d.cat.locs.iter().filter(|l| !l.refs.is_empty() && l.refs.iter().all(|r| special::sized(r.hash).is_some() && special::of(r.hash).is_none())).map(|l| l.name.as_str()).collect();
+        let o: crate::slice::generate::GenOpts = crate::slice::generate::GenOpts { extras: true, ..Default::default() };
+        let mut got: BM<String, String> = BM::new();
+        let mut hit: usize = 0;
+        for n in 1..=20 {
+            let g: crate::slice::generate::Generated = crate::slice::generate::generate_data(&d, &crate::settings::Settings::default(), &n.to_string(), &o).unwrap();
+            let here: Vec<String> = story.iter().filter_map(|l| g.seed_file.placements.get(*l).filter(|i| d.family(i).is_some()).map(|i| format!("{l}={i}"))).collect();
+            if !here.is_empty() {
+                hit += 1;
+            }
+            got.insert(format!("default {n}"), if here.is_empty() { "none".to_string() } else { here.join("; ") });
+        }
+        println!("default seeds 1 to 20: {hit} put an upgrade in a summoned story chest");
+        crate::slice::pins::verify("story_chest_upgrades", &got);
+        assert!(got.get("default 20").is_some_and(|v| v.contains("Ice Cavern Iron Boots Chest=")));
     }
 }
