@@ -269,7 +269,7 @@ fn keeps(p: &Plan, k: Kind) -> Vec<Keep> {
 
 pub fn grants(d: &Data, seed: &SeedFile, p: &Plan) -> Res<Grants> {
     let skip: Vec<Kind> = KINDS.iter().copied().filter(|k| keeps(p, *k).into_iter().any(credited)).collect();
-    let sweep: Vec<Kind> = KINDS.iter().copied().filter(|k| keeps(p, *k).into_iter().any(|x| credited(x) && x != Keep::Start)).collect();
+    let sweep: Vec<Kind> = skip.iter().copied().filter(|k| !keeps(p, *k).into_iter().all(|x| x == Keep::Start)).collect();
     let mut credits: BM<u64, (Kind, &'static str)> = BM::new();
     let mut wrapped: std::collections::BTreeSet<u64> = std::collections::BTreeSet::new();
     for (loc, item) in &seed.placements {
@@ -737,5 +737,149 @@ mod tests {
         let pr = crate::settings::presets::builtin().unwrap().into_iter().find(|p| p.id == "keysanity").unwrap();
         let s: Settings = pr.apply(&Settings::default()).unwrap();
         check(&d, &s, "preset keysanity", 3);
+    }
+
+    fn vanilla_boss_chests(d: &Data) -> Vec<(String, Item, Vec<(u64, String)>)> {
+        d.cat
+            .locs
+            .iter()
+            .filter(|l| l.kind == "chest")
+            .filter_map(|l| {
+                let i: &Item = d.vanilla_of(&l.name).and_then(|n| d.item(n)).filter(|i| matches!(i.kind.as_str(), "BossKey" | "GanonBossKey"))?;
+                Some((l.name.clone(), i.clone(), l.refs.iter().flat_map(|r| r.files.iter().map(|f| (r.hash, f.clone()))).collect()))
+            })
+            .collect()
+    }
+
+    fn uncredited_pairs(d: &Data, base: &SeedFile) -> (usize, Vec<String>) {
+        let chests: Vec<(String, Item, Vec<(u64, String)>)> = vanilla_boss_chests(d);
+        assert_eq!(chests.len(), BOSS_DUNGEONS.len() + 1);
+        let mut planned: usize = 0;
+        let mut bad: Vec<String> = Vec::new();
+        for m in ["off", "overworld", "dungeons", "all"] {
+            for b in BOSS_OK {
+                for g in GANON_OK {
+                    let Ok(p) = plan(&with(&[("shuffle_chests", m), ("shuffle_bosskeys", b), ("shuffle_ganon_bosskey", g)])) else {
+                        continue;
+                    };
+                    planned += 1;
+                    let gr: Grants = grants(d, base, &p).unwrap();
+                    let starts: Vec<(String, bool)> = start_flags(&p);
+                    let mut miss: Vec<&str> = Vec::new();
+                    for (loc, i, files) in &chests {
+                        let want: &str = i.dungeon.as_deref().and_then(struct_of).unwrap();
+                        let ok: bool = match keep_of(&p, &i.kind) {
+                            Some(Keep::Vanilla) => {
+                                !gr.skip.contains(&Kind::Boss)
+                                    || (gr.sweep.contains(&Kind::Boss) && files.iter().all(|(_, f)| crate::dungeon_grant::scene_of(f) == Some(want)))
+                            }
+                            Some(Keep::Start) => starts.iter().any(|(n, v)| *v && *n == flag(want, Kind::Boss.member())),
+                            _ => continue,
+                        };
+                        if !ok {
+                            miss.push(loc);
+                        }
+                    }
+                    if !miss.is_empty() {
+                        bad.push(format!("chests {m}, boss {b}, ganon {g}: {}", miss.join(", ")));
+                    }
+                }
+            }
+        }
+        (planned, bad)
+    }
+
+    #[test]
+    fn every_boss_and_ganon_key_pair_credits_the_chests_that_keep_their_vanilla_boss_key() {
+        let d: Data = Data::load().unwrap();
+        let mut base: SeedFile = generate_data(&d, &Settings::default(), "boss pairs", &GenOpts::default()).unwrap().seed_file;
+        base.placements.clear();
+        let (planned, bad): (usize, Vec<String>) = uncredited_pairs(&d, &base);
+        eprintln!("boss and ganon key pairs planned: {planned}, uncredited: {}", bad.len());
+        for b in &bad {
+            eprintln!("  {b}");
+        }
+        assert!(planned >= BOSS_OK.len() * GANON_OK.len(), "{planned}");
+        assert!(bad.is_empty(), "{bad:#?}");
+        let p: Plan = plan(&with(&[("shuffle_bosskeys", "vanilla"), ("shuffle_ganon_bosskey", "remove")])).unwrap();
+        let gr: Grants = grants(&d, &base, &p).unwrap();
+        assert!(gr.skip.contains(&Kind::Boss) && gr.sweep.contains(&Kind::Boss));
+        let q: Plan = plan(&with(&[("shuffle_bosskeys", "remove"), ("shuffle_ganon_bosskey", "remove")])).unwrap();
+        let both: Grants = grants(&d, &base, &q).unwrap();
+        assert!(both.skip.contains(&Kind::Boss) && !both.sweep.contains(&Kind::Boss));
+    }
+
+    fn built_vanilla_boss_chests(root: &std::path::Path, s: &Settings, seed: &str, name: &str) -> (usize, usize) {
+        use crate::bfevfl::{Bf, Val};
+        use crate::progressive::{Size, BIG_FLOW, SETTING_TABLE};
+        let d: Data = Data::load().unwrap();
+        let p: Plan = plan(s).unwrap();
+        let g: Generated = generate_data(&d, s, seed, &GenOpts::default()).unwrap();
+        let load: std::path::PathBuf = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/dungeon_items_mods");
+        let b: crate::slice::edit::Built = crate::slice::edit::build(&g.seed_file, root, &load, name).unwrap();
+        let out: std::path::PathBuf = b.root.join("romfs");
+        let mut rf: crate::romfs::Romfs = crate::romfs::Romfs::open(root).unwrap();
+        let mut read = |rel: &str| -> Vec<u8> {
+            let at: std::path::PathBuf = if out.join(rel).is_file() { out.join(rel) } else { root.join(rel) };
+            rf.zs.decompress(&std::fs::read(at).unwrap()).unwrap()
+        };
+        let big: Bf = Bf::parse(&read(BIG_FLOW)).unwrap();
+        let f: &crate::bfevfl::Flow = &big.flows[0];
+        let native = |i: u16| -> bool {
+            matches!(&f.events.get(usize::from(i)).map(|e| &e.kind), Some(crate::bfevfl::Kind::Action { actor, act, .. })
+                if f.actors.get(usize::from(*actor)).and_then(|a| a.actions.get(usize::from(*act))).is_some_and(|n| n == Kind::Boss.native()))
+        };
+        let reached: bool = f.events.iter().any(|e| match &e.kind {
+            crate::bfevfl::Kind::Switch { cases, .. } => cases.iter().any(|c| native(c.ev)),
+            _ => false,
+        });
+        let table: Byml = Byml::parse(&read(SETTING_TABLE)).unwrap();
+        let shared: std::collections::BTreeMap<(String, u64), u64> = crate::slice::copies::shared(&d, &g.seed_file.placements);
+        let mut seen: usize = 0;
+        let mut bad: usize = 0;
+        for (loc, i, files) in vanilla_boss_chests(&d) {
+            if keep_of(&p, &i.kind) != Some(Keep::Vanilla) {
+                continue;
+            }
+            let want: &str = i.dungeon.as_deref().and_then(struct_of).unwrap();
+            for (hash, file) in files {
+                let y: Byml = Byml::parse(&read(&file)).unwrap();
+                let h: u64 = shared.get(&(file.clone(), hash)).copied().unwrap_or(hash);
+                let a: &crate::byml::Node = actor(&y, h).unwrap_or_else(|| panic!("{loc}: no chest {h} in {file}"));
+                assert_eq!(dy(a, crate::dungeon_credit::DROP), Kind::Boss.actor(), "{loc}");
+                seen += 1;
+                let ev: &str = dy(a, "GetEventName");
+                let size: Size = Size::of_gyaml(a.get("Gyaml").and_then(|x| x.as_str()).unwrap_or(""));
+                let credit: bool = ev == crate::dungeon_grant::event_name(Kind::Boss, want, size)
+                    && table.root.as_arr().unwrap().iter().any(|r| {
+                        r.get("__RowId").and_then(|x| x.as_str()) == Some(ev) && r.get("EntryPointName").and_then(|x| x.as_str()) == Some(crate::dungeon_grant::entry_name(Kind::Boss, want).as_str())
+                    })
+                    && f.entries.iter().any(|e| {
+                        e.name == crate::dungeon_grant::entry_name(Kind::Boss, want)
+                            && f.events[usize::from(e.main)].kind.params().and_then(|c| c.get("GameDataName")) == Some(&Val::Str(flag(want, Kind::Boss.member())))
+                    });
+                if !credit && !reached {
+                    eprintln!("{name}: {loc} in {file} runs {ev}, which sets no boss key flag");
+                    bad += 1;
+                }
+            }
+        }
+        (seen, bad)
+    }
+
+    #[test]
+    fn built_mods_credit_the_vanilla_boss_key_chests_when_the_other_key_is_removed() {
+        let Some(root) = dump() else {
+            return;
+        };
+        let mut total: usize = 0;
+        for (b, g, n) in [("vanilla", "remove", 5), ("remove", "vanilla", 1), ("vanilla", "vanilla", 6), ("vanilla", "dungeon", 5)] {
+            let s: Settings = with(&[("shuffle_bosskeys", b), ("shuffle_ganon_bosskey", g)]);
+            let (seen, bad): (usize, usize) = built_vanilla_boss_chests(&root, &s, &format!("boss pair {b} {g}"), &format!("OOTRR Boss Pair {b} {g}"));
+            eprintln!("boss {b}, ganon {g}: {seen} vanilla boss key chests, {bad} uncredited");
+            assert!(seen >= n, "boss {b} ganon {g}: {seen}");
+            total += bad;
+        }
+        assert_eq!(total, 0);
     }
 }
