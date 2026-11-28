@@ -361,11 +361,13 @@ pub fn build_data(d: Data, seed: &SeedFile, romfs: &P, load: &P, mod_name: &str,
     }
     // Dungeon items in reward events: window-only copies of their give routines and the credit
     // (crate::gift_keys). The Light Arrows item get wants the copy of its routine too.
-    let arrows_key: bool = gift_keys.iter().any(|g| {
-        (p.story && (crate::story_skip::DROPPED.contains(&g.location.as_str()) || crate::story_skip::FAIRIES.iter().any(|f| f.0 == g.location))) || (p.endings && crate::story_skip::REWARD_SCENES.iter().any(|r| r.0 == g.location))
-    });
-    let windows: Vec<(&str, &str)> = if arrows_key { vec![crate::story_skip::ITEM_GET] } else { Vec::new() };
-    crate::gift_keys::apply(&mut rf, &mut staged.files, &gift_keys, &windows)?;
+    let key_at = |loc: &str| -> Option<(crate::gift_keys::Item, &'static str)> {
+        gift_keys.iter().find(|g| g.location == loc).map(|g| (g.item, g.dungeon)).or_else(|| flow_cs.iter().find(|c| c.loc == loc && crate::flow_extra::scripted(loc)).map(|c| (c.item, c.dungeon)))
+    };
+    let held_keys: Vec<crate::gift_keys::Item> = crate::story_skip::item_get_checks(p.story, p.endings, !p.gates.zelda).iter().filter_map(|l| key_at(l)).map(|k| k.0).collect();
+    let windows: Vec<(&str, &str)> = if held_keys.is_empty() { Vec::new() } else { vec![crate::story_skip::ITEM_GET] };
+    let small_held: bool = held_keys.contains(&crate::gift_keys::Item::Small);
+    crate::gift_keys::apply(&mut rf, &mut staged.files, &gift_keys, &windows, small_held)?;
     // A special chest in a flow the location edits also changed (the Iron Boots chest next to King
     // Zora's thaw gift in SageOfWater) takes its edit on top of them: its own copy was rebuilt
     // from the game's file and, written later, put King Zora's Zora Tunic back.
@@ -527,7 +529,7 @@ pub fn build_data(d: Data, seed: &SeedFile, romfs: &P, load: &P, mod_name: &str,
                     crate::slice::flow_wrap::PRIZES.iter().find(|x| x.0 == loc).map(|x| x.1)
                 }
             }),
-            key: gift_keys.iter().find(|g| g.location == loc).map(|g| (g.item, g.dungeon)).or_else(|| flow_cs.iter().find(|c| c.loc == loc && crate::flow_extra::scripted(loc)).map(|c| (c.item, c.dungeon))),
+            key: key_at(loc),
             line: if p.debug_names { crate::debug_names::scene_line(&d, loc) } else { None },
         }
     };
@@ -764,6 +766,7 @@ pub fn build_data(d: Data, seed: &SeedFile, romfs: &P, load: &P, mod_name: &str,
             }
         }
     }
+    crate::flow_extra::entries::check(&mut rf, &pk.work.join("romfs"))?;
     let loads: Option<(crate::staging::Out, crate::flow_extra::analyzed::Added)> = crate::flow_extra::analyzed::worked(&mut rf, &pk.work.join("romfs"))?;
     if let Some((o, _)) = &loads {
         pk.write_romfs(&o.path, &o.z)?;
@@ -1223,5 +1226,169 @@ mod tests {
         for l in &homes {
             assert!(ts.iter().any(|t| t.name == l.name && t.new_actor == l.item), "{}", l.name);
         }
+    }
+
+    fn code(rel: &str) -> String {
+        let p: PB = PB::from(env!("CARGO_MANIFEST_DIR")).join("src").join(rel);
+        let t: String = std::fs::read_to_string(&p).unwrap().replace("\r\n", "\n");
+        t.split("#[cfg(test)]\nmod tests").next().unwrap().to_string()
+    }
+
+    fn args_of(text: &str, call: &str) -> Vec<String> {
+        let mut out: Vec<String> = Vec::new();
+        for (i, _) in text.match_indices(call) {
+            let before: Option<char> = text[..i].chars().last();
+            if before.is_some_and(|c| c.is_alphanumeric() || c == '_') || text[..i].ends_with("fn ") {
+                continue;
+            }
+            let rest: &str = &text[i + call.len()..];
+            let mut depth: usize = 1;
+            let end: usize = rest
+                .char_indices()
+                .find(|(_, c)| {
+                    match c {
+                        '(' => depth += 1,
+                        ')' => depth -= 1,
+                        _ => {}
+                    }
+                    depth == 0
+                })
+                .map(|(j, _)| j)
+                .unwrap();
+            out.push(rest[..end].to_string());
+        }
+        out
+    }
+
+    #[test]
+    fn every_check_given_through_the_item_get_is_an_item_get_check() {
+        use crate::story_skip::{FAIRIES, REWARD_SCENES, SONG_TRIGGERS};
+        let listed: Vec<&str> = crate::story_skip::item_get_checks(true, true, true);
+        let fairies_and_rewards: Vec<&str> = FAIRIES.iter().map(|f| f.0).chain(REWARD_SCENES.iter().map(|r| r.0)).collect();
+        let known: Vec<(&str, Vec<&str>)> = vec![
+            ("crate::lacs_key::LOC", vec![crate::lacs_key::LOC]),
+            ("crate::slice::flow_rules::SARIA", vec![crate::slice::flow_rules::SARIA]),
+            ("crate::story_skip::RAURU_LOC", vec![crate::story_skip::RAURU_LOC]),
+            ("loc", fairies_and_rewards),
+            ("l", SONG_TRIGGERS.iter().flat_map(|t| t.also.iter().copied()).collect()),
+            ("t.loc", SONG_TRIGGERS.iter().map(|t| t.loc).collect()),
+            ("crate::flow_extra::sun::LOC", vec![crate::flow_extra::sun::LOC]),
+            ("crate::flow_extra::goron_pot::LOC", vec![crate::flow_extra::goron_pot::LOC]),
+            ("LETTER_LOC", vec![crate::open_world::zelda::LETTER_LOC]),
+            ("SONG_LOC", vec![crate::open_world::zelda::SONG_LOC]),
+        ];
+        let mut seen: Vec<String> = args_of(&code("slice/edit.rs"), "give_for(");
+        seen.sort();
+        seen.dedup();
+        let mut want: Vec<String> = known.iter().map(|k| k.0.to_string()).collect();
+        want.sort();
+        assert_eq!(seen, want, "a give_for call was added or changed: add its checks to story_skip::item_get_checks and to this test");
+        for (arg, locs) in &known {
+            for l in locs {
+                assert!(listed.contains(l), "{l} (give_for({arg})) is given through the item get but not in item_get_checks");
+            }
+        }
+        let skip: String = code("story_skip.rs");
+        assert_eq!(args_of(&skip, "item_get(").len(), 9, "an item_get call was added or removed: check its checks are in item_get_checks");
+        let grants: Vec<String> = args_of(&skip, "patch_song_grant(");
+        assert_eq!(grants, vec!["b, REQUIEM, REQUIEM_GRANT".to_string()]);
+        assert!(listed.contains(&crate::story_skip::REQUIEM_LOC));
+        let mut outside: usize = 0;
+        for e in walkdir(&PB::from(env!("CARGO_MANIFEST_DIR")).join("src")) {
+            let rel: String = e.strip_prefix(PB::from(env!("CARGO_MANIFEST_DIR")).join("src")).unwrap().to_string_lossy().replace('\\', "/");
+            if rel == "story_skip.rs" {
+                continue;
+            }
+            let t: String = code(&rel);
+            outside += args_of(&t, "story_skip::give_item(").len() + args_of(&t, "story_skip::patch_song_grant(").len();
+        }
+        assert_eq!(outside, 2, "a give_item call was added or removed outside story_skip: check its checks are in item_get_checks");
+        assert_eq!(args_of(&code("open_world/zelda.rs"), "story_skip::give_item(").len(), 2);
+    }
+
+    fn walkdir(d: &P) -> Vec<PB> {
+        let mut out: Vec<PB> = Vec::new();
+        for e in std::fs::read_dir(d).unwrap() {
+            let p: PB = e.unwrap().path();
+            if p.is_dir() {
+                out.extend(walkdir(&p));
+            } else if p.extension().is_some_and(|x| x == "rs") {
+                out.push(p);
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn a_small_key_at_song_from_impa_gets_the_key_copy_it_calls() {
+        song_check_key("Song from Impa", "Small Key (Forest Temple)", &crate::item_window::key_name(crate::story_skip::ITEM_GET.1), &["DoorOfTime", "Goto_HyruleCastle"], "impa");
+    }
+
+    #[test]
+    fn a_boss_key_at_the_ocarina_of_time_gets_the_window_copy_it_calls() {
+        song_check_key("HF Ocarina of Time Item", "Boss Key (Forest Temple)", &crate::item_window::name(crate::story_skip::ITEM_GET.1), &["DoorOfTime"], "ocarina");
+    }
+
+    fn song_check_key(loc: &str, item: &str, entry: &str, callers: &[&str], dir: &str) {
+        use crate::settings::{Settings, Value};
+        use crate::slice::generate::{generate_data, GenOpts};
+        let Some(root) = real() else { return };
+        let d: Data = Data::load().unwrap();
+        let mut s: Settings = Settings::default();
+        for (k, v) in [("shuffle_rewards", "supported"), ("shuffle_songs", "anywhere"), ("shuffle_smallkeys", "keysanity"), ("shuffle_bosskeys", "keysanity"), ("shuffle_mapcompass", "keysanity"), ("skip_cutscenes", "all")] {
+            s.set(k, Value::s(v)).unwrap();
+        }
+        for k in ["shuffle_ocarinas", "skip_intro", "faster_chests"] {
+            s.set(k, Value::Bool(true)).unwrap();
+        }
+        s.set("starting_hearts", Value::Int(20)).unwrap();
+        let s: Settings = s.finish().unwrap();
+        let mut hearts: Vec<&str> = vec![crate::slice::flow_rules::SARIA, crate::story_skip::REQUIEM_LOC, crate::open_world::zelda::LETTER_LOC];
+        hearts.extend(crate::story_skip::FAIRIES.iter().map(|f| f.0));
+        hearts.extend(crate::story_skip::SONG_TRIGGERS.iter().map(|t| t.loc));
+        let mut plan: Vec<String> = hearts.iter().filter(|h| **h != loc).map(|h| format!("{h}=Piece of Heart")).collect();
+        plan.push(format!("{}=Light Arrows", crate::lacs_key::LOC));
+        plan.push(format!("{loc}={item}"));
+        let o: GenOpts = GenOpts { extras: true, plando: plan.iter().map(|l| crate::slice::plando::parse(l).unwrap()).collect(), ..GenOpts::default() };
+        let mut g: crate::slice::generate::Generated = generate_data(&d, &s, "1", &o).unwrap();
+        assert_eq!(g.seed_file.placements.get(loc).map(|x| x.as_str()), Some(item));
+        let dungeon = |i: &str| -> bool { d.item(i).is_some_and(|x| crate::gift_keys::Item::of(&x.kind).is_some()) };
+        let gives = |l: &str| -> bool { l != loc && (crate::gift_keys::spot(&d, l) || crate::flow_extra::scripted(l)) };
+        let others: Vec<String> = g.seed_file.placements.iter().filter(|(l, i)| gives(l) && dungeon(i)).map(|(l, _)| l.clone()).collect();
+        let mut spare: Vec<String> = g.seed_file.placements.iter().filter(|(l, i)| d.cat.locs.iter().any(|c| c.name == **l && c.kind == "chest") && i.starts_with("Rupee")).map(|(l, _)| l.clone()).collect();
+        for l in &others {
+            let c: String = spare.pop().unwrap();
+            let (a, b): (String, String) = (g.seed_file.placements[l].clone(), g.seed_file.placements[&c].clone());
+            g.seed_file.placements.insert(l.clone(), b);
+            g.seed_file.placements.insert(c, a);
+        }
+        assert!(!g.seed_file.placements.iter().any(|(l, i)| gives(l) && dungeon(i)));
+        let load: PB = PB::from(env!("CARGO_MANIFEST_DIR")).join("../../target/song_check_key_mods").join(dir);
+        let _ = std::fs::remove_dir_all(&load);
+        let built: Res<Built> = build(&g.seed_file, &root, &load, "mod");
+        let b: Built = match built {
+            Ok(b) => b,
+            Err(e) => {
+                let n: usize = e.to_string().lines().filter(|l| l.contains(", which ")).count();
+                println!("{loc} = {item}: the build stopped, {n} calls into a missing entry");
+                panic!("{e}");
+            }
+        };
+        let mut rf: Romfs = Romfs::open(&root).unwrap();
+        let flows: std::collections::HashMap<String, crate::bfevfl::Flow> = crate::flow_extra::analyzed::flows_in(&mut rf, &b.root.join("romfs")).unwrap();
+        let get: &crate::bfevfl::Flow = flows.get(crate::story_skip::ITEM_GET.0).unwrap();
+        assert!(get.entries.iter().any(|e| e.name == entry), "{loc}: {} has no {entry}", crate::story_skip::ITEM_GET.0);
+        let calls: Vec<&str> = flows
+            .iter()
+            .flat_map(|(name, f)| f.events.iter().filter(|e| matches!(&e.kind, crate::bfevfl::Kind::Sub { flow, entry: en, .. } if flow == crate::story_skip::ITEM_GET.0 && en == entry)).map(move |_| name.as_str()))
+            .collect();
+        let mut src: crate::flow_extra::sim::Over = crate::flow_extra::sim::Over { disk: crate::flow_sim::load::Disk::new(Romfs::open(&root).unwrap(), None, Vec::new()), flows: std::collections::HashMap::new() };
+        let bad: Vec<String> = crate::flow_extra::entries::missing(&mut src, &flows).unwrap();
+        println!("{loc} = {item}: {} calls into {entry}, {} calls into a missing entry", calls.len(), bad.len());
+        for c in callers {
+            assert!(calls.contains(c), "{loc}: no call from {c} into {entry}: {calls:?}");
+        }
+        assert!(bad.is_empty(), "{bad:#?}");
+        let _ = std::fs::remove_dir_all(&load);
     }
 }

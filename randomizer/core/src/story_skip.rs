@@ -973,6 +973,26 @@ pub const DROPPED: [&str; 3] = ["ToT Light Arrows Cutscene", "LW Gift from Saria
 /// that the minigames run with no NPC.
 pub const ITEM_GET: (&str, &str) = ("Dm_SY_GetInEvent", "GetInEvent_NotTurn_NotNpc");
 
+pub fn item_get_checks(story: bool, endings: bool, meeting: bool) -> Vec<&'static str> {
+    let mut out: Vec<&'static str> = vec![crate::flow_extra::sun::LOC, crate::flow_extra::goron_pot::LOC];
+    if story {
+        out.extend(DROPPED);
+        out.extend(FAIRIES.iter().map(|f| f.0));
+        for t in &SONG_TRIGGERS {
+            out.push(t.loc);
+            out.extend(t.also.iter().copied());
+        }
+        out.push(REQUIEM_LOC);
+    }
+    if endings {
+        out.extend(REWARD_SCENES.iter().map(|r| r.0));
+    }
+    if meeting {
+        out.extend([crate::open_world::zelda::LETTER_LOC, crate::open_world::zelda::SONG_LOC]);
+    }
+    out
+}
+
 /// Adds the item get for `g` to `f`, ending on `then`, and returns its first event. A dungeon item
 /// runs the item get's window-only copy (crate::item_window), then its credit; an upgrade gets its
 /// tier checks. The call joins the preload list (subs) of `entries`.

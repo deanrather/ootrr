@@ -208,7 +208,7 @@ fn stem(file: &str) -> &str {
 /// Edits the scenes in `files` (the location patcher's staged flows), or the game's if not staged,
 /// adding the window-only copies of the give routines they call. `extra` names more routines
 /// (flow, entry) whose copies are wanted (the Light Arrows item get).
-pub fn apply(rf: &mut Romfs, files: &mut Vec<StagedFile>, gs: &[Gift], extra: &[(&str, &str)]) -> Res<()> {
+pub fn apply(rf: &mut Romfs, files: &mut Vec<StagedFile>, gs: &[Gift], extra: &[(&str, &str)], small: bool) -> Res<()> {
     let mut c: crate::item_window::Cache = crate::item_window::Cache::new();
     for g in gs {
         let here: &str = stem(&g.file);
@@ -229,7 +229,7 @@ pub fn apply(rf: &mut Romfs, files: &mut Vec<StagedFile>, gs: &[Gift], extra: &[
     }
     for (fl, en) in extra {
         crate::item_window::window(&mut c, rf, files, fl, en)?;
-        if gs.iter().any(|g| g.item == Item::Small) {
+        if small || gs.iter().any(|g| g.item == Item::Small) {
             crate::item_window::key_window(&mut c, rf, files, fl, en)?;
         }
     }

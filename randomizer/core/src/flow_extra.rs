@@ -3,6 +3,7 @@ mod apply;
 mod clone;
 pub mod cows;
 mod data;
+pub mod entries;
 pub mod frogs;
 mod gate;
 pub mod goron_pot;
