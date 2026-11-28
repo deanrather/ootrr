@@ -77,7 +77,7 @@ export function restore(schema) {
     if (!["eden", "hookshot", "longshot", "nx2navi"].includes(state.paths.host)) state.paths.host = "eden";
   }
   if (s && s.cosmetic && typeof s.cosmetic === "object") {
-    if (["off", "grouped", "anywhere"].includes(s.cosmetic.music)) state.cosmetic.music = s.cosmetic.music;
+    if (["off", "grouped", "anywhere", "none"].includes(s.cosmetic.music)) state.cosmetic.music = s.cosmetic.music;
     if (["off", "grouped", "anywhere"].includes(s.cosmetic.sfx)) state.cosmetic.sfx = s.cosmetic.sfx;
     if (typeof s.cosmetic.seed === "string") state.cosmetic.seed = s.cosmetic.seed.slice(0, 64);
     if (typeof s.cosmetic.title === "boolean") state.cosmetic.title = s.cosmetic.title;

@@ -140,7 +140,7 @@ pub fn plan(b: &Json) -> Hr<Plan> {
 pub fn cosmetics(b: &Json) -> Hr<Cosmetics> {
     let music: Music = match body::opt_text(b, "music")? {
         None | Some("") => Music::Off,
-        Some(s) => Music::parse(s).ok_or_else(|| refuse("Music: use off, grouped or anywhere."))?,
+        Some(s) => Music::parse(s).ok_or_else(|| refuse("Music: use off, grouped, anywhere or none."))?,
     };
     let sfx: Sfx = match body::opt_text(b, "sfx")? {
         None | Some("") => Sfx::Off,
@@ -234,7 +234,7 @@ pub fn run(jobs: &Arc<Jobs>, b: &Json) -> Hr<Json> {
         if let Some(s) = p.source.step() {
             c.begin(s);
         }
-        let game: Prepared = match game_source::prepare(&p.source, p.cos.music != Music::Off || p.cos.sfx != Sfx::Off) {
+        let game: Prepared = match game_source::prepare(&p.source, p.cos.music.shuffles() || p.cos.sfx != Sfx::Off) {
             Ok(g) => g,
             Err(e) => {
                 c.mark("failed");
@@ -482,6 +482,7 @@ mod tests {
         assert_eq!(p.cos.music, Music::Grouped);
         assert_eq!(p.cos.seed, "tune");
         assert!(plan(&base().with("music", "loud".into())).is_err());
+        assert_eq!(plan(&base().with("music", "none".into())).unwrap().cos.music, Music::Silent);
         let c: Plan = plan(&base().with("colors", "shared".into())).unwrap();
         assert_eq!(c.cos.colors, Colors::Shared);
         assert!(c.cos.any());

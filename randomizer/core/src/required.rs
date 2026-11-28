@@ -87,6 +87,7 @@ pub fn unpack(d: &Data, sound: bool) -> Unpack {
     let mut files: BS<String> = list(d).into_iter().collect();
     files.extend(crate::qol::low_health::FILES.iter().map(|s| s.to_string()));
     files.extend(crate::colors::files());
+    files.insert(crate::silence::GROUP_FILE.to_string());
     files.extend(crate::gerudo_card::MEMBERS.iter().map(|n| crate::gerudo_card::schedule_path(n)));
     files.extend(crate::open_world::fortress::CARPENTERS.iter().map(|n| crate::open_world::fortress::own_schedule(n)));
     files.insert(crate::gerudo_card::schedule_path(crate::open_world::rolling_goron::OWN));
@@ -155,6 +156,7 @@ mod tests {
             crate::song_models::tex_file(crate::song_models::ALBEDO),
             crate::song_models::NAMES.to_string(),
             crate::difficulty::elink::FILE.to_string(),
+            crate::silence::GROUP_FILE.to_string(),
             crate::open_world::trade_shuffle::POUCH_UI.to_string(),
             format!("{}/Banc/BancBasedResource/StartPos.byml.zs", crate::difficulty::extras::MORE_SCENES),
         ] {
