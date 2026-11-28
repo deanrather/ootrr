@@ -1,3 +1,5 @@
+use std::collections::BTreeSet as BS;
+
 use crate::bfevfl::{Flow, Kind, Val};
 use crate::error::{Error as E, Res};
 use crate::full_wallet::fill::{asked, fill, named, ours, Show};
@@ -110,13 +112,58 @@ pub fn pickup(f: &mut Flow, event: &str) -> Res<bool> {
     if ours(f, then) {
         return Ok(false);
     }
-    let tails: Vec<usize> = (0..f.events.len()).filter(|&i| i == at || (f.events[i].name.starts_with(crate::pickup_tiers::PREFIX) && next_of(f, i) == Some(then))).collect();
-    let hit: u16 = fill(f, Show::Popup, then)?;
-    let head: u16 = asked(f, &names()?, hit, then)?;
-    for i in tails {
+    let tails: Vec<(usize, u16)> = tails(f, at, then);
+    let ns: Vec<String> = names()?;
+    let mut heads: Vec<(u16, u16)> = Vec::new();
+    for (i, to) in tails {
+        let head: u16 = match heads.iter().find(|h| h.0 == to) {
+            Some(h) => h.1,
+            None => {
+                let hit: u16 = fill(f, Show::Popup, to)?;
+                let h: u16 = asked(f, &ns, hit, to)?;
+                heads.push((to, h));
+                h
+            }
+        };
         set_next(f, i, head);
     }
     Ok(true)
+}
+
+fn reach(f: &Flow, from: u16) -> BS<u16> {
+    let mut seen: BS<u16> = BS::new();
+    let mut todo: Vec<u16> = vec![from];
+    while let Some(i) = todo.pop() {
+        let Some(e) = f.events.get(usize::from(i)) else {
+            continue;
+        };
+        if !seen.insert(i) {
+            continue;
+        }
+        match &e.kind {
+            Kind::Action { next, .. } | Kind::Sub { next, .. } | Kind::Join { next } => todo.push(*next),
+            Kind::Switch { cases, .. } | Kind::SubSwitch { cases, .. } => todo.extend(cases.iter().map(|c| c.ev)),
+            Kind::Fork { join, forks } => {
+                todo.push(*join);
+                todo.extend(forks.iter().copied());
+            }
+            _ => {}
+        }
+    }
+    seen
+}
+
+pub fn tails(f: &Flow, at: usize, then: u16) -> Vec<(usize, u16)> {
+    let after: BS<u16> = reach(f, then);
+    let mut out: Vec<(usize, u16)> = vec![(at, then)];
+    for i in 0..f.events.len() {
+        let tier: bool = f.events[i].name.starts_with(crate::pickup_tiers::PREFIX) && u16::try_from(i).is_ok_and(|x| !after.contains(&x));
+        match next_of(f, i) {
+            Some(to) if tier && after.contains(&to) => out.push((i, to)),
+            _ => {}
+        }
+    }
+    out
 }
 
 pub fn literal(f: &Flow, i: usize) -> bool {
@@ -310,6 +357,63 @@ mod tests {
                 bf.flows[k] = f.clone();
                 assert_eq!(Bf::parse(&bf.write().unwrap()).unwrap().flows[k], f);
             }
+        }
+    }
+
+    fn tier(f: &Flow, i: u16) -> bool {
+        f.events.get(usize::from(i)).is_some_and(|e| e.name.starts_with(crate::pickup_tiers::PREFIX))
+    }
+
+    fn exits(f: &Flow) -> Vec<(usize, u16)> {
+        (0..f.events.len()).filter(|&i| tier(f, i as u16) && !is(f, i, GUEST, "EventTriggerSetOwnNameToMessage")).filter_map(|i| next_of(f, i).filter(|n| !tier(f, *n)).map(|n| (i, n))).collect()
+    }
+
+    #[test]
+    fn a_tiered_ground_pickup_fills_when_a_later_hook_sits_after_its_pouch_add() {
+        let Some(p) = real() else {
+            return;
+        };
+        let mut rf: Romfs = Romfs::open(&p).unwrap();
+        let fams: BS<&str> = ["Wallet"].into_iter().collect();
+        for ((name, event), (gf, gi, gn)) in PICKUPS.iter().zip(crate::pickup_tiers::GETS) {
+            assert_eq!((*name, *event), (gf, gn));
+            let mut bf: Bf = Bf::parse(&rf.read_zs(&path_of(name)).unwrap()).unwrap();
+            let k: usize = bf.flows.iter().position(|x| x.name == *name).unwrap();
+            assert!(crate::pickup_tiers::patch(&mut bf.flows[k], gi, gn, &fams).unwrap());
+            crate::open_world::zelda::egg_get(&mut bf, name, gi, gn).unwrap();
+            let mut f: Flow = bf.flows[k].clone();
+            let at: usize = unique(&f, event).unwrap();
+            let then: u16 = next_of(&f, at).unwrap();
+            let was: Vec<(usize, u16)> = exits(&f);
+            assert_eq!(was.len(), 4, "{name}");
+            let to: u16 = was[0].1;
+            assert!(was.iter().all(|e| e.1 == to && to != then), "{name}: {was:?}");
+            let old: Vec<Event> = f.events.clone();
+            assert!(pickup(&mut f, event).unwrap());
+            for (i, e) in old.iter().enumerate() {
+                let tail: Option<u16> = if i == at { Some(then) } else { was.iter().find(|w| w.0 == i).map(|w| w.1) };
+                let mut back: Flow = f.clone();
+                if let Some(n) = tail {
+                    assert_ne!(next_of(&f, i), Some(n), "{name} tail {i} was not moved");
+                    set_next(&mut back, i, n);
+                }
+                assert_eq!(&back.events[i], e, "{name} event {i} changed beyond its next");
+            }
+            let mut filled: usize = 0;
+            for (i, n) in &was {
+                let head: u16 = next_of(&f, *i).unwrap();
+                if ours(&f, head) {
+                    check_fill(&f, asks(&f, head, *n), *n, Show::Popup);
+                    filled += 1;
+                }
+            }
+            eprintln!("{name}: {filled} of {} tier tails reach the fill", was.len());
+            assert_eq!(filled, was.len(), "{name}");
+            let head: u16 = next_of(&f, at).unwrap();
+            check_fill(&f, asks(&f, head, then), then, Show::Popup);
+            assert!(!pickup(&mut f, event).unwrap());
+            bf.flows[k] = f.clone();
+            assert_eq!(Bf::parse(&bf.write().unwrap()).unwrap().flows[k], f);
         }
     }
 
