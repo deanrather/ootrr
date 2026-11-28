@@ -5,7 +5,7 @@ use crate::error::{Error as E, Res};
 use crate::flow_locations::build::{plan, Change, Choice, Opts, Stage, StagedFile, FRAME_DICT};
 use crate::flow_locations::data::{path_of, Data};
 use crate::flow_locations::edit::{set_param, Req};
-use crate::flow_extra::{apply_op, ops_for, Op};
+use crate::flow_extra::{apply_op, ops_for, wrapped_ops, Op};
 use crate::progressive::Grant;
 use crate::romfs::Romfs;
 use crate::zs;
@@ -22,7 +22,7 @@ struct Work<'a> {
 /// The roles whose change hands the placed item to the player.
 const GIVES: [&str; 2] = ["grant", "give"];
 
-pub fn stage_merged(rf: &mut Romfs, d: &Data, cs: &[Choice], gs: &[Grant], o: &Opts) -> Res<Stage> {
+pub fn stage_merged(rf: &mut Romfs, d: &Data, cs: &[Choice], gs: &[Grant], wrapped: &BM<String, &'static str>, o: &Opts) -> Res<Stage> {
     let (changes, same, untested): (Vec<Change>, usize, Vec<String>) = plan(d, cs, o)?;
     let mut by: BM<String, Work> = BM::new();
     for c in changes.iter().filter(|c| crate::flow_extra::trade::plain(c)) {
@@ -42,6 +42,14 @@ pub fn stage_merged(rf: &mut Romfs, d: &Data, cs: &[Choice], gs: &[Grant], o: &O
     }
     for (file, os) in ops_for(&changes)? {
         by.entry(file).or_default().ops.extend(os);
+    }
+    for (file, os) in wrapped_ops(wrapped)? {
+        let list: &mut Vec<Op> = &mut by.entry(file).or_default().ops;
+        for x in os {
+            if !list.contains(&x) {
+                list.push(x);
+            }
+        }
     }
     for g in gs {
         by.entry(g.file.clone()).or_default().grants.push(g);
@@ -154,7 +162,7 @@ mod tests {
             .collect();
         let o: Opts = Opts::default();
         let plain: Stage = crate::flow_locations::stage(&mut rf, &sd.flow, &cs, &o).unwrap();
-        let merged: Stage = stage_merged(&mut rf, &sd.flow, &cs, &[], &o).unwrap();
+        let merged: Stage = stage_merged(&mut rf, &sd.flow, &cs, &[], &BM::new(), &o).unwrap();
         assert_eq!(plain.files.len(), merged.files.len());
         for (a, b) in plain.files.iter().zip(&merged.files) {
             assert_eq!(a.path, b.path);
@@ -163,7 +171,7 @@ mod tests {
         let fam: &'static str = sd.family("Progressive Wallet").unwrap();
         let gs: Vec<Grant> = sd.grants(fam).into_iter().filter(|g| g.file == "GatheringTokenGold.bfevfl").collect();
         assert!(!gs.is_empty());
-        let both: Stage = stage_merged(&mut rf, &sd.flow, &cs, &gs, &o).unwrap();
+        let both: Stage = stage_merged(&mut rf, &sd.flow, &cs, &gs, &BM::new(), &o).unwrap();
         assert_eq!(both.files.len(), merged.files.len());
         let at: usize = both.files.iter().position(|f| f.path.contains("GatheringTokenGold")).unwrap();
         let raw: Vec<u8> = rf.zs.decompress(&both.files[at].z).unwrap();

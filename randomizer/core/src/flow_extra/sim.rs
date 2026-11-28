@@ -571,6 +571,261 @@ mod tests {
         assert!(crate::slice::silver::refs(&mut rf, &names).unwrap().is_empty());
     }
 
+    const WALLET: &str = "Progressive Wallet";
+
+    fn chained(r: &P, loc: &str) -> HM<String, Flow> {
+        let sd: crate::slice::data::Data = crate::slice::data::Data::load().unwrap();
+        let mut map: BM<String, String> = BM::new();
+        map.insert(loc.to_string(), WALLET.to_string());
+        let s: crate::settings::seed::SeedFile = crate::settings::seed::SeedFile::new("t", &crate::settings::Settings::default(), &sd.scan.game, map).unwrap();
+        let w: BM<String, &'static str> = crate::slice::flow_wrap::wraps(&sd, &s);
+        assert_eq!(w.get(loc), Some(&"Wallet"), "{loc}");
+        let gs: Vec<crate::progressive::Grant> = crate::slice::flow_wrap::grants(&sd, &s, &std::collections::BTreeSet::new(), &w);
+        let mut rf: Romfs = Romfs::open(r).unwrap();
+        let st: crate::flow_locations::Stage = crate::flow_locations::stage_merged(&mut rf, &sd.flow, &[], &gs, &w, &FlowOpts::default()).unwrap();
+        let mut out: HM<String, Flow> = HM::new();
+        for f in &st.files {
+            let mut b: Bf = Bf::parse(&rf.zs.decompress(&f.z).unwrap()).unwrap();
+            let name: String = f.path.rsplit('/').next().and_then(|n| n.split('.').next()).unwrap().to_string();
+            out.insert(name, b.flows.remove(0));
+        }
+        out
+    }
+
+    fn wallets(f: &Fin) -> i64 {
+        crate::progressive::tiers("Wallet").unwrap().iter().map(|t| granted(f, t)).sum()
+    }
+
+    fn gifts(f: &Fin) -> i64 {
+        f.m.gr.values().filter(|n| **n > 0).sum()
+    }
+
+    fn chain_run(r: &P, loc: &str, fl: &HM<String, Flow>, sc: &Scene, empty: Option<bool>) -> (Vec<Fin>, Vec<Fin>) {
+        let mut a: Sim = sim(r, HM::new()).unwrap();
+        let mut b: Sim = sim(r, fl.clone()).unwrap();
+        if let Some(e) = empty {
+            a.opts.answers.insert("EventQueryIsAnyBottleEmpty".to_string(), u32::from(!e));
+            b.opts.answers.insert("EventQueryIsAnyBottleEmpty".to_string(), u32::from(!e));
+        }
+        let (va, vb): (Vec<Fin>, Vec<Fin>) = (run(&mut a, sc).unwrap(), run(&mut b, sc).unwrap());
+        let paid: usize = vb.iter().filter(|f| f.end == End::Done && wallets(f) == 1).count();
+        eprintln!("{loc} {} {}: chained paths {} paid {paid} most {} broken {} vanilla paths {} broken {}", sc.entry, sc.set.iter().map(|(k, v)| format!("{k}={v}")).collect::<Vec<String>>().join(","), vb.len(), vb.iter().map(gifts).max().unwrap_or(0), broken(&vb), va.len(), broken(&va));
+        assert!(!vb.is_empty(), "{loc}");
+        assert!(vb.iter().all(|f| wallets(f) <= 1 && gifts(f) <= 1), "{loc}: more than one grant on one visit");
+        assert!(broken(&vb) <= broken(&va), "{loc}: {} broken chained paths, {} vanilla", broken(&vb), broken(&va));
+        (va, vb)
+    }
+
+    fn pays(loc: &str, b: &[Fin]) {
+        assert!(b.iter().any(|f| f.end == End::Done && wallets(f) == 1), "{loc}: no path hands over the wallet");
+    }
+
+    fn pays_nothing(loc: &str, b: &[Fin]) {
+        assert!(b.iter().all(|f| gifts(f) == 0), "{loc}: the return visit grants again");
+    }
+
+    fn sets(f: &Fin, flag: &str) -> bool {
+        f.m.writes.get(flag).map(|v| v.as_str()) == Some("true")
+    }
+
+    #[test]
+    fn a_chained_kak_20_reward_pays_once_and_skips_the_agony_guide() {
+        let Some(r) = root() else { return };
+        let loc: &str = "Kak 20 Gold Skulltula Reward";
+        let fl: HM<String, Flow> = chained(&r, loc);
+        let first: Scene = scene("GatheringTokenGold", "Reward20", &[("KakarikoVillage_GatheringTokenGold_GetReward10", "true"), ("KakarikoVillage_GatheringTokenGold_GetReward20", "false")], &[("Item_Token_Gold", 20)]);
+        let (_, b): (Vec<Fin>, Vec<Fin>) = chain_run(&r, loc, &fl, &first, None);
+        pays(loc, &b);
+        assert!(!b.iter().any(|f| called(f, "ActionGuide:OpenActionGuideSceen")), "{loc}");
+        assert!(b.iter().filter(|f| wallets(f) == 1).all(|f| sets(f, "KakarikoVillage_GatheringTokenGold_GetReward20")), "{loc}");
+        let again: Scene = scene("GatheringTokenGold", "Reward20", &[("KakarikoVillage_GatheringTokenGold_GetReward10", "true"), ("KakarikoVillage_GatheringTokenGold_GetReward20", "true")], &[("Item_Token_Gold", 20)]);
+        let (_, b): (Vec<Fin>, Vec<Fin>) = chain_run(&r, loc, &fl, &again, None);
+        pays_nothing(loc, &b);
+    }
+
+    #[test]
+    fn a_chained_rolling_goron_pays_once_without_a_bomb_bag() {
+        let Some(r) = root() else { return };
+        let loc: &str = "GC Rolling Goron as Child";
+        let flag: &str = "GoronCity_GetBombBag_fromGoron006";
+        let fl: HM<String, Flow> = chained(&r, loc);
+        let owns: [&[(&str, i64)]; 2] = [&[], &[("Item_BombBag_Small", 1)]];
+        for own in owns {
+            let first: Scene = scene("Npc_Goron_006_Child", "Talk", &[("GoronCity_StopGoron006", "true"), (flag, "false")], own);
+            let (_, b): (Vec<Fin>, Vec<Fin>) = chain_run(&r, loc, &fl, &first, None);
+            pays(loc, &b);
+            assert!(b.iter().all(|f| granted(f, "Item_BombBag_Medium") == 0), "{loc} {own:?}");
+            assert!(b.iter().filter(|f| wallets(f) == 1).all(|f| sets(f, flag)), "{loc} {own:?}");
+            let again: Scene = scene("Npc_Goron_006_Child", "Talk", &[("GoronCity_StopGoron006", "true"), (flag, "true")], own);
+            let (_, b): (Vec<Fin>, Vec<Fin>) = chain_run(&r, loc, &fl, &again, None);
+            pays_nothing(loc, &b);
+        }
+    }
+
+    #[test]
+    fn a_chained_biggoron_pays_once_and_keeps_the_knife() {
+        let Some(r) = root() else { return };
+        let loc: &str = "DMT Biggoron";
+        let fl: HM<String, Flow> = chained(&r, loc);
+        let sc: Scene = scene("Npc_Goron_Biggoron_Adult", "SubEvent_GetSwordBigGoron_Step11", &[("Step_SubEvent_GetSwordBigGoron", "Step11")], &[("Weapon_Sword_Giant", 1)]);
+        let (_, b): (Vec<Fin>, Vec<Fin>) = chain_run(&r, loc, &fl, &sc, None);
+        pays(loc, &b);
+        assert_eq!(min(&b, "Weapon_Sword_Giant"), 0, "{loc}");
+        assert!(!b.iter().any(|f| called(f, "Dm_SY_GetInEvent:GetInEventItemSwordBiggoron")), "{loc}");
+        assert!(b.iter().filter(|f| wallets(f) == 1).all(|f| f.m.reqs.iter().any(|q| q.starts_with("SubEvent_GetSwordBigGoron -> Complete"))), "{loc}");
+    }
+
+    const FROG_FLAGS: [&str; 5] = ["MiniGame_FrogTenors_ZeldaLullaby", "MiniGame_FrogTenors_EponaSong", "MiniGame_FrogTenors_SariaSong", "MiniGame_FrogTenors_SunSong", "MiniGame_FrogTenors_TimeSong"];
+
+    fn frog_song(i: usize) {
+        let Some(r) = root() else { return };
+        let loc: &str = crate::flow_extra::frogs::SONGS[i];
+        let fl: HM<String, Flow> = chained(&r, loc);
+        let state = |done: bool| -> Vec<(String, String)> {
+            let mut v: Vec<(String, String)> = vec![
+                ("MiniGame_FrogTenors_SongClear".to_string(), "false".to_string()),
+                ("MiniGame_FrogTenors_StormSong".to_string(), "true".to_string()),
+                ("PlayerStatus.CurrentRupee".to_string(), "0".to_string()),
+                ("MiniGame_FrogTenors_GetCount".to_string(), u8::from(done).to_string()),
+            ];
+            for (j, f) in FROG_FLAGS.iter().enumerate() {
+                v.push((f.to_string(), (done && j == i).to_string()));
+            }
+            v
+        };
+        let at = |done: bool| Scene { flow: "MiniGame_FrogTenors".to_string(), entry: "PlayOcarinaForFrogMiniGame_Melody".to_string(), set: state(done), own: Vec::new() };
+        let (_, b): (Vec<Fin>, Vec<Fin>) = chain_run(&r, loc, &fl, &at(false), None);
+        pays(loc, &b);
+        assert!(b.iter().filter(|f| wallets(f) == 1).all(|f| sets(f, FROG_FLAGS[i])), "{loc}");
+        let (_, b): (Vec<Fin>, Vec<Fin>) = chain_run(&r, loc, &fl, &at(true), None);
+        assert!(b.iter().all(|f| wallets(f) == 0), "{loc}: a played song pays the wallet again");
+    }
+
+    parts!(
+        frog_song,
+        a_chained_zeldas_lullaby_frog_pays_once = 0,
+        a_chained_eponas_song_frog_pays_once = 1,
+        a_chained_sarias_song_frog_pays_once = 2,
+        a_chained_suns_song_frog_pays_once = 3,
+        a_chained_song_of_time_frog_pays_once = 4,
+    );
+
+    #[test]
+    fn a_chained_frog_bug_game_pays_once_on_both_entries() {
+        let Some(r) = root() else { return };
+        let loc: &str = crate::flow_extra::frogs::BUG;
+        let repel: &str = "MiniGame_FrogTenors_InsectRepellent";
+        let fl: HM<String, Flow> = chained(&r, loc);
+        for entry in ["FrogMiniGame_Insectrepellent", "FrogMiniGame_RetryFlow"] {
+            let at = |won: bool| -> Scene {
+                let w: &str = if won { "true" } else { "false" };
+                let n: &str = if won { "1" } else { "0" };
+                scene("MiniGame_FrogTenors", entry, &[("MiniGame_FrogTenors_SongClear", "true"), (repel, w), ("MiniGame_FrogTenors_InsectRepellent_Explanation", "true"), ("MiniGame_FrogTenors_InsectRepellent_Clearnumber", n)], &[])
+            };
+            let (_, b): (Vec<Fin>, Vec<Fin>) = chain_run(&r, loc, &fl, &at(false), None);
+            pays(loc, &b);
+            assert!(b.iter().all(|f| granted(f, "Obj_Heart_Piece") == 0), "{loc} {entry}");
+            assert!(b.iter().filter(|f| f.end == End::Done && wallets(f) == 1).all(|f| sets(f, repel)), "{loc} {entry}");
+            let (_, b): (Vec<Fin>, Vec<Fin>) = chain_run(&r, loc, &fl, &at(true), None);
+            assert!(b.iter().all(|f| wallets(f) == 0), "{loc} {entry}: a later win pays the wallet again");
+        }
+    }
+
+    #[test]
+    fn a_chained_potion_shop_free_bottle_pays_once_with_an_empty_bottle() {
+        let Some(r) = root() else { return };
+        let loc: &str = "Market Potion Shop Free Bottle";
+        let started: &str = "Market_Item_Bottle_TutorialEvent_Started";
+        let fl: HM<String, Flow> = chained(&r, loc);
+        let at = |given: &str| scene("Npc_Hylia_020_Shop_Child", "Item_Bottle_TutorialEvent_Talk", &[(started, given)], &[]);
+        let (_, b): (Vec<Fin>, Vec<Fin>) = chain_run(&r, loc, &fl, &at("false"), Some(true));
+        pays(loc, &b);
+        assert!(b.iter().all(|f| granted(f, "Item_Bottle") == 0 && (wallets(f) == 1) == sets(f, started)), "{loc}");
+        let (_, b): (Vec<Fin>, Vec<Fin>) = chain_run(&r, loc, &fl, &at("false"), Some(false));
+        assert!(b.iter().all(|f| gifts(f) == 0 && !sets(f, started)), "{loc}: paid without an empty bottle");
+        let (_, b): (Vec<Fin>, Vec<Fin>) = chain_run(&r, loc, &fl, &at("true"), Some(true));
+        pays_nothing(loc, &b);
+    }
+
+    #[test]
+    fn a_chained_potion_shop_red_potion_pays_once_without_pouring_into_a_bottle() {
+        let Some(r) = root() else { return };
+        let loc: &str = "Market Potion Shop Red Potion";
+        let cleared: &str = "Market_Item_Bottle_TutorialEvent_Cleared";
+        let fl: HM<String, Flow> = chained(&r, loc);
+        let sc: Scene = scene("Npc_Hylia_020_Shop_Child", "Item_Bottle_TutorialEvent_Animal_Insect_GetEvent", &[("Market_Item_Bottle_TutorialEvent_Started", "true"), (cleared, "false")], &[]);
+        let (_, b): (Vec<Fin>, Vec<Fin>) = chain_run(&r, loc, &fl, &sc, None);
+        pays(loc, &b);
+        assert!(!b.iter().any(|f| called(f, "Dm_SY_GetInEvent:GetInEventInEquipedBottle")), "{loc}");
+        assert!(b.iter().filter(|f| f.end == End::Done).all(|f| (wallets(f) == 1) == sets(f, cleared)), "{loc}");
+    }
+
+    #[test]
+    fn a_fountain_with_a_progressive_reward_gives_it_once_whether_or_not_the_player_owns_her_vanilla_gift() {
+        let Some(r) = root() else { return };
+        let sd: crate::slice::data::Data = crate::slice::data::Data::load().unwrap();
+        let x: crate::flow_extra::Extra = crate::flow_extra::Extra::load().unwrap();
+        for (loc, fountain) in FOUNTAINS {
+            let gift: String = sd.flow.by_name(loc).and_then(|l| l.item.clone()).unwrap();
+            let fl: HM<String, Flow> = chained(&r, loc);
+            let flag: String = x
+                .by_name(loc)
+                .unwrap()
+                .ops
+                .iter()
+                .find_map(|o| match &o.how {
+                    crate::flow_extra::op::How::Insert { flag } => Some(flag.clone()),
+                    _ => None,
+                })
+                .unwrap();
+            let played: String = format!("HavePlayedEvent.{fountain}");
+            for owned in [true, false] {
+                let own: Vec<(&str, i64)> = if owned { vec![(gift.as_str(), 1)] } else { Vec::new() };
+                let visit = |given: &str| scene(fountain, "EntryPoint0", &[("PlayerStatus.CurrentRupee", "500"), ("PlayerStatus.MPMax", "240"), ("GreatFairy_MeetFirst", "true"), (&played, "true"), (&flag, given)], &own);
+                let (_, first): (Vec<Fin>, Vec<Fin>) = chain_run(&r, loc, &fl, &visit("false"), None);
+                pays(loc, &first);
+                assert!(first.iter().filter(|f| wallets(f) == 1).all(|f| sets(f, &flag)), "{loc} owned={owned}");
+                let mut sm: Sim = sim(&r, fl.clone()).unwrap();
+                let again: Vec<Fin> = run(&mut sm, &visit("true")).unwrap();
+                assert!(!again.is_empty(), "{loc} owned={owned}");
+                pays_nothing(loc, &again);
+                for f in first.iter().filter(|f| f.end == End::Done && wallets(f) == 1).take(3) {
+                    let back: Vec<Fin> = run_from(&mut sm, &visit("false"), f.m.st.clone()).unwrap();
+                    pays_nothing(loc, &back);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn every_extra_location_that_a_tier_chain_hands_out_builds_with_its_edits() {
+        let Some(r) = root() else { return };
+        let sd: crate::slice::data::Data = crate::slice::data::Data::load().unwrap();
+        let x: crate::flow_extra::Extra = crate::flow_extra::Extra::load().unwrap();
+        let mut rf: Romfs = Romfs::open(&r).unwrap();
+        let mut chained: Vec<String> = Vec::new();
+        for s in &x.specs {
+            let mut map: BM<String, String> = BM::new();
+            map.insert(s.name.clone(), "Progressive Wallet".to_string());
+            let Ok(seed) = crate::settings::seed::SeedFile::new("t", &crate::settings::Settings::default(), &sd.scan.game, map) else { continue };
+            let w: BM<String, &'static str> = crate::slice::flow_wrap::wraps(&sd, &seed);
+            if !w.contains_key(&s.name) {
+                continue;
+            }
+            let gs: Vec<crate::progressive::Grant> = crate::slice::flow_wrap::grants(&sd, &seed, &std::collections::BTreeSet::new(), &w);
+            let st: crate::flow_locations::Stage = crate::flow_locations::stage_merged(&mut rf, &sd.flow, &[], &gs, &w, &FlowOpts::default()).unwrap_or_else(|e| panic!("{}: {e}", s.name));
+            for f in &st.files {
+                let b: Bf = Bf::parse(&rf.zs.decompress(&f.z).unwrap()).unwrap();
+                assert_eq!(Bf::parse(&b.write().unwrap()).unwrap(), b, "{} {}", s.name, f.path);
+            }
+            chained.push(s.name.clone());
+        }
+        eprintln!("chained: {chained:?}");
+        for (loc, _) in FOUNTAINS {
+            assert!(chained.iter().any(|c| c == loc), "{loc}");
+        }
+    }
+
     #[test]
     fn medigoron_sells_once_even_with_the_biggoron_sword() {
         let Some(r) = root() else { return };
