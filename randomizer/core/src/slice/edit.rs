@@ -494,7 +494,7 @@ pub fn build_data(d: Data, seed: &SeedFile, romfs: &P, load: &P, mod_name: &str,
         if p.gates.zelda {
             outs.push(crate::start_state::stage_free_quest(&mut rf)?);
         }
-        crate::key_log::stage_table(&mut rf, &mut outs)?;
+        crate::key_log::stage_table(&mut rf, &mut outs, &crate::quest_events::plan(&p))?;
         for o in outs {
             pk.write_romfs(&o.path, &o.z)?;
             extra += 1;
@@ -618,7 +618,7 @@ pub fn build_data(d: Data, seed: &SeedFile, romfs: &P, load: &P, mod_name: &str,
         crate::short_get::stage(&mut rf, &mut late, &work)?;
     }
     crate::entr::story::stage(&mut rf, seed, &mut late, &work)?;
-    crate::key_log::stage_flows(&mut rf, &mut late, &work)?;
+    crate::key_log::stage_flows(&mut rf, &mut late, &work, &crate::quest_events::plan(&p))?;
     crate::open_world::stage_last(&mut rf, &mut late, &work)?;
     // The forest exit's first-visit write is cleared on top of the castle flow as the build left it
     // (it holds Malon's gift, Saria's gift and the owl cuts): rewriting it from the game's file here

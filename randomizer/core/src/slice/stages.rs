@@ -61,7 +61,9 @@ pub const STAGES: [(&str, Stage); 30] = [
 ];
 
 fn key_log(rf: &mut Romfs, c: &Ctx, more: &mut Vec<Out>) -> Res<()> {
-    crate::key_log::stage(rf, more, &crate::key_log::plan(c.d, c.seed)?)
+    let mut kp: crate::key_log::Plan = crate::key_log::plan(c.d, c.seed)?;
+    kp.events = crate::quest_events::plan(c.p);
+    crate::key_log::stage(rf, more, &kp)
 }
 
 pub fn run(rf: &mut Romfs, c: &Ctx, more: &mut Vec<Out>) -> Res<()> {
