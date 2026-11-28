@@ -71,9 +71,9 @@ pub const SPOTS: [Spot; 3] = [
     },
 ];
 
-/// Summoned chests whose story flow starts the chest open event itself. They take no
-/// progressive wrapper, but chest size matches contents retargets their transition, and ammo
-/// there starts the bomb bag guard.
+/// Summoned chests whose story flow starts the chest open event itself. An upgrade or ammo there
+/// points the transition at its wrapper or guard, and chest size matches contents retargets it,
+/// so the chest keeps its story event.
 pub const MORE: [Spot; 5] = [
     Spot {
         hash: ICE_ARROWS,
@@ -330,9 +330,6 @@ fn plan(wraps: &[(u64, String)], sizes: &[(u64, Size)], touched: &[u64]) -> Res<
     for h in hashes {
         let s: &Spot = sized(h).ok_or(Error::Format("special: a wrapped chest is not a known special chest"))?;
         let fam: Option<&str> = wraps.iter().find(|w| w.0 == h).map(|w| w.1.as_str());
-        if fam.is_some_and(|f| !crate::progressive::is_guard(f)) && of(h).is_none() {
-            return Err(Error::Format("special: only the special chests take a progressive wrapper"));
-        }
         let size: Size = sizes.iter().find(|x| x.0 == h).map(|x| x.1).unwrap_or_else(|| base_size(s));
         let to: String = target(fam, size);
         if to == s.base {
@@ -514,13 +511,18 @@ mod tests {
     }
 
     #[test]
-    fn a_summoned_story_chest_takes_the_ammo_guard_but_no_upgrade_wrapper() {
+    fn a_summoned_story_chest_takes_the_ammo_guard_and_the_upgrade_wrapper() {
         let fam: String = crate::progressive::guard_family("Item_BombBundle_Small");
         let (by, kids, _) = plan(&[(ICE_ARROWS, fam.clone())], &[], &[]).unwrap();
         let ice: &Spot = sized(ICE_ARROWS).unwrap();
         assert_eq!(by.get(ice.flow).map(|w| w.iter().map(|(s, to)| (s.hash, to.clone())).collect::<Vec<_>>()), Some(vec![(ICE_ARROWS, event_name(&fam, Size::Big))]));
         assert_eq!(kids, vec![(ice.parent.to_string(), event_name(&fam, Size::Big))]);
-        assert!(plan(&[(ICE_ARROWS, "Hookshot".to_string())], &[], &[]).is_err());
+        for s in MORE {
+            let (by, kids, _) = plan(&[(s.hash, "Hookshot".to_string())], &[], &[]).unwrap();
+            let to: String = event_name("Hookshot", base_size(&s));
+            assert_eq!(by.get(s.flow).map(|w| w.iter().map(|(x, t)| (x.hash, t.clone())).collect::<Vec<_>>()), Some(vec![(s.hash, to.clone())]));
+            assert_eq!(kids, vec![(s.parent.to_string(), to)]);
+        }
         let (by, _, gate) = plan(&[(DAMPE_HOOK, fam.clone())], &[], &[DAMPE_HOOK]).unwrap();
         assert_eq!(gate, Some(DAMPE_HOOK));
         assert_eq!(by.get(SPOTS[0].flow).map(|w| w[0].1.clone()), Some(event_name(&fam, Size::Big)));
