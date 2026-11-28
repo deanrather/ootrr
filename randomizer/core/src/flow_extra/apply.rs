@@ -3,7 +3,7 @@ use std::collections::BTreeMap as BM;
 use crate::bfevfl::Bf;
 use crate::error::{Error as E, Res};
 use crate::flow_extra::data::{Extra, Spec};
-use crate::flow_extra::op::{apply, Op};
+use crate::flow_extra::op::{apply, How, Op};
 use crate::flow_locations::{edit_bytes as plain, set_param, Change, Req};
 
 pub fn always_ops() -> Res<BM<String, Vec<Op>>> {
@@ -36,6 +36,25 @@ pub fn ops_for(changes: &[Change]) -> Res<BM<String, Vec<Op>>> {
         };
         for o in &s.ops {
             let b: Op = o.bind(&c.new);
+            let list: &mut Vec<Op> = out.entry(o.file.clone()).or_default();
+            if !list.contains(&b) {
+                list.push(b);
+            }
+        }
+    }
+    Ok(out)
+}
+
+pub fn wrapped_ops(wrapped: &BM<String, &'static str>) -> Res<BM<String, Vec<Op>>> {
+    let x: Extra = Extra::load()?;
+    let mut out: BM<String, Vec<Op>> = BM::new();
+    for (loc, family) in wrapped {
+        let Some(s) = x.by_name(loc) else {
+            continue;
+        };
+        let first: &str = crate::progressive::tiers(family)?.first().copied().ok_or(E::Format("flow extra: a progressive family has no tiers"))?;
+        for o in s.ops.iter().filter(|o| !matches!(o.how, How::Once(_) | How::Clone { .. })) {
+            let b: Op = o.bind(first);
             let list: &mut Vec<Op> = out.entry(o.file.clone()).or_default();
             if !list.contains(&b) {
                 list.push(b);
